@@ -88,11 +88,15 @@ app.get('/api/admin/pipeline-status', async (_req, res) => {
 });
 
 // ─── Global auth middleware (all /api/admin/* routes require auth + ADMIN) ─
-const auth = requireAuth(config.jwtSecret);
-const admin = requireAdmin();
-
-// Apply auth + admin to all /api/admin routes
-app.use("/api/admin", auth, admin);
+// In development mode, skip auth so the dashboard works without token
+if (process.env.NODE_ENV !== 'development') {
+  const auth = requireAuth(config.jwtSecret);
+  const admin = requireAdmin();
+  app.use("/api/admin", auth, admin);
+  console.log('[admin] Auth middleware enabled');
+} else {
+  console.log('[admin] ⚠️  DEV MODE — auth middleware disabled');
+}
 
 // ─── Routes ─────────────────────────────────────────────────────────
 app.use("/api/admin", kpiRouter);
