@@ -35,10 +35,22 @@ export function MapView() {
 
     const globe = new Globe(containerRef.current)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
       .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
       .width(width)
       .height(height)
-      .pointOfView({ lat: -38.4, lng: -63.6, altitude: 4.5 });
+      .pointOfView({ lat: -38.4, lng: -63.6, altitude: 2.5 })
+      // Limit rotation to focus on Argentina
+      .onGlobeRotate(({ lat, lng }: { lat: number; lng: number }) => {
+        // Clamp latitude to Argentina region (-55 to -22)
+        const clampedLat = Math.max(-55, Math.min(-22, lat));
+        // Clamp longitude to Argentina region (-75 to -53)
+        const clampedLng = Math.max(-75, Math.min(-53, lng));
+        globe.pointOfView({ lat: clampedLat, lng: clampedLng, altitude: globe.pointOfView().altitude });
+      })
+      // Limit zoom
+      .minZoom(1.5)
+      .maxZoom(4);
 
     globeRef.current = globe;
     setGlobeReady(true);

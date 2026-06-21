@@ -75,8 +75,8 @@ app.get('/api/news/geolocated', (req, res) => {
       params.push(category);
     }
     if (province) {
-      sql += ' AND json_extract(location, \'$.province\') = ?';
-      params.push(province);
+      sql += ' AND json_extract(location, \'$.province\') LIKE ?';
+      params.push(`%${province}%`);
     }
 
     sql += ' ORDER BY published_at DESC LIMIT ? OFFSET ?';
