@@ -89,7 +89,7 @@ app.post('/api/publish/:id', async (req, res) => {
 
 app.post('/api/publish-text', async (req, res) => {
   try {
-    const { article_id, text } = req.body;
+    const { article_id, text, image_url } = req.body;
 
     if (!article_id || !text) {
       res.status(400).json({ error: 'article_id and text are required' });
@@ -101,7 +101,13 @@ app.post('/api/publish-text', async (req, res) => {
       return;
     }
 
-    const result = await publishText(article_id, text.trim());
+    // Validate image_url if provided
+    if (image_url !== undefined && typeof image_url !== 'string') {
+      res.status(400).json({ error: 'image_url must be a string if provided' });
+      return;
+    }
+
+    const result = await publishText(article_id, text.trim(), image_url || undefined);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Publish failed', details: String(err) });

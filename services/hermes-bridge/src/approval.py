@@ -34,14 +34,16 @@ from typing import Any, Literal
 import httpx
 
 from src.config import (
+    AI_PROCESSOR_URL,
+    APPROVAL_AUTO_PUBLISH_THRESHOLD,
+    APPROVAL_EVENT_POLL_INTERVAL,
+    APPROVAL_POLL_INTERVAL,
     DB_PATH,
+    EVENT_DETECTOR_URL,
+    IMAGE_GEN_IMPACT_THRESHOLD,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_CHAT_ID,
     TWITTER_PUBLISHER_URL,
-    EVENT_DETECTOR_URL,
-    APPROVAL_POLL_INTERVAL,
-    APPROVAL_EVENT_POLL_INTERVAL,
-    APPROVAL_AUTO_PUBLISH_THRESHOLD,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,6 +51,8 @@ from src.config import (
 # ---------------------------------------------------------------------------
 
 _ACTION_APPROVE = "approve"
+_ACTION_APPROVE_IMG = "approve_img"
+_ACTION_APPROVE_TEXT = "approve_text"
 _ACTION_REJECT = "reject"
 _ACTION_EDIT = "edit"
 _ACTION_SCHEDULE = "schedule"
@@ -114,6 +118,8 @@ def _ensure_approval_table() -> None:
                 reviewed_by          TEXT,
                 reviewed_at          TEXT,
                 edited_text          TEXT,
+                image_url            TEXT,
+                image_prompt         TEXT,
                 created_at           TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (article_id) REFERENCES news_items(id)
             );
@@ -124,6 +130,17 @@ def _ensure_approval_table() -> None:
             CREATE INDEX IF NOT EXISTS idx_approval_queue_article
                 ON approval_queue(article_id);
         """)
+
+        # Migration: add columns for existing databases (ignore if already present)
+        try:
+            conn.execute("ALTER TABLE approval_queue ADD COLUMN image_url TEXT")
+        except Exception:
+            pass  # Column already exists
+        try:
+            conn.execute("ALTER TABLE approval_queue ADD COLUMN image_prompt TEXT")
+        except Exception:
+            pass  # Column already exists
+
         conn.commit()
     finally:
         conn.close()
@@ -157,17 +174,21 @@ def _upsert_approval_entry(
     article_id: str,
     event_id: str | None,
     draft_tweet: str,
+    image_url: str | None = None,
+    image_prompt: str | None = None,
 ) -> None:
     """Insert or update an approval_queue entry."""
     conn = _get_writable_conn()
     try:
         conn.execute(
-            """INSERT INTO approval_queue (id, article_id, event_id, draft_tweet)
-               VALUES (?, ?, ?, ?)
+            """INSERT INTO approval_queue (id, article_id, event_id, draft_tweet, image_url, image_prompt)
+               VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET
                    draft_tweet = excluded.draft_tweet,
+                   image_url = COALESCE(excluded.image_url, image_url),
+                   image_prompt = COALESCE(excluded.image_prompt, image_prompt),
                    status = 'pending'""",
-            (entry_id, article_id, event_id, draft_tweet),
+            (entry_id, article_id, event_id, draft_tweet, image_url, image_prompt),
         )
         conn.commit()
     finally:
@@ -241,6 +262,52 @@ def _set_telegram_msg_id(entry_id: str, message_id: int, chat_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Image generation (via ai-processor)
+# ---------------------------------------------------------------------------
+
+
+async def _generate_image_for_event(
+    title: str,
+    style: str = "news",
+) -> tuple[str | None, str | None]:
+    """
+    Generate a news-themed image for a tweet draft.
+
+    Calls the ai-processor's image generation endpoint. Returns
+    (image_url, prompt_used) or (None, None) on failure / if not available.
+
+    Args:
+        title: News headline to illustrate.
+        style: Visual style ('news', 'minimal', 'flag').
+
+    Returns:
+        Tuple of (image_url | None, prompt_used | None).
+    """
+    if not AI_PROCESSOR_URL:
+        return None, None
+
+    url = f"{AI_PROCESSOR_URL}/api/image/generate"
+    async with httpx.AsyncClient(timeout=30) as client:
+        try:
+            resp = await client.post(
+                url,
+                json={"title": title, "style": style},
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("image_url"), data.get("prompt_used")
+            else:
+                print(
+                    f"[approval] ⚠️  Image generation failed: HTTP {resp.status_code}"
+                )
+                return None, None
+        except httpx.RequestError as exc:
+            print(f"[approval] ⚠️  Image generation request failed: {exc}")
+            return None, None
+
+
+# ---------------------------------------------------------------------------
 # Telegram API helpers
 # ---------------------------------------------------------------------------
 
@@ -283,6 +350,7 @@ async def send_approval_request(
 ) -> int | None:
     """
     Send a tweet draft to Telegram with inline keyboard for approval.
+    Text-only version (no image).
 
     Returns the Telegram message_id on success, None on failure.
     """
@@ -318,6 +386,57 @@ async def send_approval_request(
     if result:
         msg_id = result.get("message_id")
         chat_id = str(result["chat"]["id"])
+        return msg_id
+    return None
+
+
+async def send_approval_request_with_image(
+    article_id: str,
+    event_id: str | None,
+    draft: str,
+    article_title: str,
+    image_url: str,
+    article_url: str = "",
+) -> int | None:
+    """
+    Send a tweet draft WITH image preview to Telegram for approval.
+
+    The image is sent as a photo with the draft text as caption,
+    plus inline keyboard with image-toggle options.
+
+    Returns the Telegram message_id on success, None on failure.
+    """
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "🖼️ Con imagen", "callback_data": f"{_ACTION_APPROVE_IMG}:{article_id}"},
+                {"text": "📝 Solo texto", "callback_data": f"{_ACTION_APPROVE_TEXT}:{article_id}"},
+            ],
+            [
+                {"text": "❌ Descartar", "callback_data": f"{_ACTION_REJECT}:{article_id}"},
+                {"text": "✏️ Editar", "callback_data": f"{_ACTION_EDIT}:{article_id}"},
+            ],
+        ]
+    }
+
+    caption = (
+        f"📝 *Propuesta con imagen*\n\n"
+        f"{draft}\n\n"
+        f"📰 {article_title}\n"
+        f"{'🔗 ' + article_url if article_url else ''}\n\n"
+        f"Elegí si publicar con imagen o solo texto:"
+    )
+
+    result = await _telegram_request("sendPhoto", {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "photo": image_url,
+        "caption": caption,
+        "parse_mode": "Markdown",
+        "reply_markup": keyboard,
+    })
+
+    if result:
+        msg_id = result.get("message_id")
         return msg_id
     return None
 
@@ -563,6 +682,18 @@ async def _process_callback(
     if action == _ACTION_APPROVE:
         await _handle_approve(entry_id, article_id, draft, chat_id, message_id, reviewer, callback_id)
 
+    elif action == _ACTION_APPROVE_IMG:
+        # Approve WITH image
+        image_url = entry.get("image_url")
+        await _handle_approve(
+            entry_id, article_id, draft, chat_id, message_id, reviewer,
+            callback_id, image_url=image_url,
+        )
+
+    elif action == _ACTION_APPROVE_TEXT:
+        # Approve WITHOUT image (image was generated but user chose text-only)
+        await _handle_approve(entry_id, article_id, draft, chat_id, message_id, reviewer, callback_id)
+
     elif action == _ACTION_REJECT:
         await _handle_reject(entry_id, article_id, chat_id, message_id, reviewer, callback_id)
 
@@ -585,12 +716,14 @@ async def _handle_approve(
     message_id: int,
     reviewer: str,
     callback_id: str,
+    image_url: str | None = None,
 ) -> None:
     """Approve a draft: publish via twitter-publisher, update DB."""
-    print(f"[approval] ✅ Approving article {article_id[:8]}… by @{reviewer}")
+    img_label = " 🖼️" if image_url else ""
+    print(f"[approval] ✅ Approving article {article_id[:8]}… by @{reviewer}{img_label}")
 
-    # Call twitter-publisher to publish the draft
-    success, error_msg = await _publish_draft(article_id, draft)
+    # Call twitter-publisher to publish the draft (with optional image)
+    success, error_msg = await _publish_draft(article_id, draft, image_url=image_url)
 
     if success:
         _update_approval_status(entry_id, "approved", reviewed_by=reviewer)
@@ -764,9 +897,18 @@ async def _handle_edit_reply(
 # ---------------------------------------------------------------------------
 
 
-async def _publish_draft(article_id: str, text: str) -> tuple[bool, str]:
+async def _publish_draft(
+    article_id: str,
+    text: str,
+    image_url: str | None = None,
+) -> tuple[bool, str]:
     """
     Publish a tweet draft by calling the twitter-publisher service.
+
+    Args:
+        article_id: UUID of the article.
+        text: Tweet text to publish.
+        image_url: Optional URL of a generated image to attach.
 
     Returns (success: bool, error_message: str).
     """
@@ -774,12 +916,13 @@ async def _publish_draft(article_id: str, text: str) -> tuple[bool, str]:
         return False, "TWITTER_PUBLISHER_URL not configured"
 
     url = f"{TWITTER_PUBLISHER_URL}/api/publish-text"
-    async with httpx.AsyncClient(timeout=30) as client:
+    body: dict[str, object] = {"article_id": article_id, "text": text}
+    if image_url:
+        body["image_url"] = image_url
+
+    async with httpx.AsyncClient(timeout=60) as client:
         try:
-            resp = await client.post(
-                url,
-                json={"article_id": article_id, "text": text},
-            )
+            resp = await client.post(url, json=body)
             if resp.status_code == 200:
                 return True, ""
             else:
@@ -830,6 +973,7 @@ async def _send_approvals_for_events(events: list[dict[str, Any]]) -> None:
     """
     Process a list of events from the event-detector:
     - Generate drafts for events in the approval range (50 to threshold-1)
+    - For high-impact events (>= IMAGE_GEN_IMPACT_THRESHOLD), generate image
     - Send them to Telegram for approval
     """
     processed = _load_processed_event_ids()
@@ -867,24 +1011,57 @@ async def _send_approvals_for_events(events: list[dict[str, Any]]) -> None:
         # Generate draft
         draft = await generate_draft(event)
 
+        # ── Image generation for high-impact events ───────────────
+        image_url: str | None = None
+        image_prompt: str | None = None
+        should_generate_image = (
+            impact >= IMAGE_GEN_IMPACT_THRESHOLD
+        )
+        if should_generate_image:
+            print(
+                f"[approval] 🎨 Generating image for impact={impact} event "
+                f"'{title[:50]}…'"
+            )
+            image_url, image_prompt = await _generate_image_for_event(
+                title=title, style="news",
+            )
+            if image_url:
+                print(f"[approval] 🖼️  Image generated: {image_url[:80]}…")
+            else:
+                print("[approval] ℹ️  No image generated (local mode or failure)")
+
         # Create approval entry
         entry_id = f"app_{event_id[:8]}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        _upsert_approval_entry(entry_id, article_id, event_id, draft)
+        _upsert_approval_entry(
+            entry_id, article_id, event_id, draft,
+            image_url=image_url, image_prompt=image_prompt,
+        )
 
         # Also update news_items status to pending_approval
         _mark_article_status(article_id, "pending_approval")
 
-        # Send to Telegram
+        # Send to Telegram (with or without image)
         article_url = ""
         if articles and isinstance(articles[0], dict):
             article_url = articles[0].get("url", "")
-        msg_id = await send_approval_request(
-            article_id=article_id,
-            event_id=event_id,
-            draft=draft,
-            article_title=title,
-            article_url=article_url,
-        )
+
+        if image_url:
+            msg_id = await send_approval_request_with_image(
+                article_id=article_id,
+                event_id=event_id,
+                draft=draft,
+                article_title=title,
+                image_url=image_url,
+                article_url=article_url,
+            )
+        else:
+            msg_id = await send_approval_request(
+                article_id=article_id,
+                event_id=event_id,
+                draft=draft,
+                article_title=title,
+                article_url=article_url,
+            )
 
         if msg_id:
             _set_telegram_msg_id(entry_id, msg_id, str(TELEGRAM_CHAT_ID))

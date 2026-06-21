@@ -102,3 +102,13 @@ RATE_LIMIT_RPM: int = int(os.environ.get("RATE_LIMIT_RPM", "10"))
 
 # --- Batch limits ---
 MAX_BATCH_SIZE: int = int(os.environ.get("MAX_BATCH_SIZE", "20"))
+
+# --- Image Generation (DALL-E) ---
+IMAGE_GEN_ENABLED: bool = os.environ.get("IMAGE_GEN_ENABLED", "true").lower() == "true"
+IMAGE_GEN_MODEL: str = os.environ.get("IMAGE_GEN_MODEL", "dall-e-3")
+IMAGE_GEN_SIZE: str = os.environ.get("IMAGE_GEN_SIZE", "1024x1024")
+IMAGE_GEN_QUALITY: str = os.environ.get("IMAGE_GEN_QUALITY", "standard")
+IMAGE_GEN_COST_STANDARD: float = float(os.environ.get("IMAGE_GEN_COST_STANDARD", "0.04"))
+IMAGE_GEN_COST_HD: float = float(os.environ.get("IMAGE_GEN_COST_HD", "0.08"))
+"""Minimum event impact threshold for image generation (0-100)."""
+IMAGE_GEN_IMPACT_THRESHOLD: int = int(os.environ.get("IMAGE_GEN_IMPACT_THRESHOLD", "80"))

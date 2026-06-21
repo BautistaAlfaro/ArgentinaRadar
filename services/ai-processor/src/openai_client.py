@@ -31,6 +31,12 @@ from src.config import (
     FALLBACK_INPUT_PRICE_PER_1M,
     FALLBACK_MODEL,
     FALLBACK_OUTPUT_PRICE_PER_1M,
+    IMAGE_GEN_ENABLED,
+    IMAGE_GEN_MODEL,
+    IMAGE_GEN_QUALITY,
+    IMAGE_GEN_SIZE,
+    IMAGE_GEN_COST_STANDARD,
+    IMAGE_GEN_COST_HD,
     LOCAL_MODELS,
     MAX_BATCH_SIZE,
     NER_INPUT_PRICE_PER_1M,
@@ -382,5 +388,99 @@ class OpenAIClient:
             "embeddings": embeddings,
             "model": EMBEDDING_MODEL,
             "tokens_used": total_tokens,
+            "cost": round(cost, 8),
+        }
+
+    # ------------------------------------------------------------------
+    # Image Generation (DALL-E)
+    # ------------------------------------------------------------------
+
+    async def generate_image(
+        self,
+        title: str,
+        style: str = "news",
+    ) -> dict[str, Any]:
+        """
+        Generate a news-themed image using DALL-E 3.
+
+        In local mode, returns a placeholder response with zero cost.
+
+        Args:
+            title: News headline to illustrate.
+            style: Visual style ("news" | "minimal" | "flag").
+
+        Returns:
+            Dict with 'image_url', 'prompt_used', 'model', 'cost'.
+            'image_url' is None in local mode.
+        """
+        # ── Local / disabled mode ──────────────────────────────────
+        if not IMAGE_GEN_ENABLED or AI_MODE == "local":
+            return {
+                "image_url": None,
+                "prompt_used": None,
+                "model": "placeholder",
+                "cost": 0.0,
+            }
+
+        # ── Build prompt ──────────────────────────────────────────
+        if style == "minimal":
+            style_desc = "Minimalist, clean vector art, simple shapes"
+        elif style == "flag":
+            style_desc = (
+                "Argentine flag colors (light blue, white), "
+                "patriotic theme, bold composition"
+            )
+        else:
+            style_desc = (
+                "Professional news graphic, clean, modern, "
+                "photo-realistic"
+            )
+
+        prompt = (
+            f"Argentine news illustration for: {title}\n"
+            f"Style: {style_desc}\n"
+            f"Colors: Argentine flag theme (light blue, white)\n"
+            f"No text on the image\n"
+            f"Aspect ratio: 1:1 (1024x1024)"
+        )
+
+        # ── Determine cost ────────────────────────────────────────
+        is_hd = IMAGE_GEN_QUALITY == "hd"
+        cost = IMAGE_GEN_COST_HD if is_hd else IMAGE_GEN_COST_STANDARD
+
+        # ── Hybrid mode: try Ollama first (skip — no image gen) ──
+        # Image generation is not available via Ollama, so we always
+        # use the paid API when enabled.
+
+        self.budget.check()
+        await self.rate_limiter.acquire()
+
+        client = self._resolve_client(use_fallback=False)
+
+        try:
+            response = await client.images.generate(
+                model=IMAGE_GEN_MODEL,
+                prompt=prompt,
+                size=IMAGE_GEN_SIZE,
+                quality=IMAGE_GEN_QUALITY,
+                n=1,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Image generation failed: {exc}") from exc
+
+        image_url: str | None = None
+        if response.data and len(response.data) > 0:
+            image_url = response.data[0].url
+
+        self.budget.cost_tracker.log_call(
+            model=IMAGE_GEN_MODEL,
+            tokens=0,
+            cost=cost,
+        )
+
+        return {
+            "image_url": image_url,
+            "prompt_used": prompt,
+            "model": IMAGE_GEN_MODEL,
             "cost": round(cost, 8),
         }

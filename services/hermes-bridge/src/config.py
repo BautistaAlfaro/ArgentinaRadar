@@ -71,3 +71,11 @@ APPROVAL_AUTO_PUBLISH_THRESHOLD: int = int(
 # --- AI draft generation (OpenRouter) ---
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "mistral-nemo")
+
+# --- Image Generation (via ai-processor) ---
+AI_PROCESSOR_URL: str = os.environ.get("AI_PROCESSOR_URL", "http://localhost:3013")
+"""Minimum event impact threshold for auto-generating images (0-100). Events
+at or above this threshold will have an image generated for the approval draft."""
+IMAGE_GEN_IMPACT_THRESHOLD: int = int(
+    os.environ.get("IMAGE_GEN_IMPACT_THRESHOLD", "80")
+)

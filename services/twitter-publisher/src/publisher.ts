@@ -11,7 +11,7 @@
 
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { TwitterApiError, postTweet } from './twitterClient.js';
+import { TwitterApiError, postTweet, uploadMedia } from './twitterClient.js';
 import { formatTweet } from './formatter.js';
 import { canPublish, getQuotaInfo } from './rateLimiter.js';
 import { moveToDeadLetter } from './deadLetter.js';
@@ -177,6 +177,7 @@ export async function publishArticle(
 export async function publishText(
   articleId: string,
   text: string,
+  imageUrl?: string,
 ): Promise<PublishResult> {
   // ── 1. Check monthly rate limit ─────────────────────────────────
   if (!canPublish()) {
@@ -197,18 +198,32 @@ export async function publishText(
 
   const headline = text.slice(0, 60); // For logging only
 
-  // ── 3. Record attempt in tweet_history ─────────────────────────
+  // ── 3. Upload image (if provided) ──────────────────────────────
+  let mediaIds: string[] | undefined;
+  if (imageUrl) {
+    console.log(`[publisher] 🖼️  Uploading image for ${articleId.slice(0, 8)}…: ${imageUrl.slice(0, 80)}…`);
+    try {
+      const mediaId = await uploadMedia(imageUrl);
+      mediaIds = [mediaId];
+      console.log(`[publisher] ✅ Image uploaded: media_id=${mediaId}`);
+    } catch (err) {
+      // Image upload failed — log warning and proceed with text-only
+      console.warn(`[publisher] ⚠️  Image upload failed, publishing text-only: ${String(err)}`);
+    }
+  }
+
+  // ── 4. Record attempt in tweet_history ─────────────────────────
   const d = getDb();
   const { lastInsertRowid: historyId } = d
     .prepare("INSERT INTO tweet_history (article_id, status) VALUES (?, 'pending')")
     .run(articleId);
 
-  // ── 4. Attempt posting with retries ────────────────────────────
+  // ── 5. Attempt posting with retries ────────────────────────────
   let lastError: string | null = null;
 
   for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
-      const result = await postTweet(text);
+      const result = await postTweet(text, mediaIds);
 
       // ✅ Success
       d.prepare(

@@ -27,6 +27,7 @@ from src.config import AI_MODE, LOCAL_MODELS, PORT, OPENAI_API_KEY, OPENROUTER_A
 from src.cost_tracker import CostTracker
 from src.embeddings import EmbeddingRequest, EmbeddingResponse, run_embedding
 from src.filter import FilterRequest, FilterResponse, run_filter
+from src.images import ImageRequest, ImageResponse, run_image_generation
 from src.ner import NERRequest, NERResponse, run_ner
 from src.openai_client import BudgetExceededError, OpenAIClient
 from src.political import (
@@ -352,6 +353,38 @@ async def protest_classify_endpoint(req: ProtestClassifyRequest):
         estimated_duration_hours=result["estimated_duration_hours"],
         confidence=result["confidence"],
         tokens_used=result["tokens_used"],
+        cost=result["cost"],
+    )
+
+
+@app.post("/api/image/generate", response_model=ImageResponse)
+async def image_generate_endpoint(req: ImageRequest):
+    """Generate a news-themed image for a tweet draft."""
+    try:
+        result = await run_image_generation(
+            openai_client,
+            title=req.title,
+            style=req.style,
+        )
+    except BudgetExceededError:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "budget_exceeded",
+                "message": "Daily cost cap exceeded — try again tomorrow",
+                "usage": cost_tracker.get_stats(),
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "image_generation_failed", "message": str(exc)},
+        )
+
+    return ImageResponse(
+        image_url=result["image_url"],
+        prompt_used=result["prompt_used"],
+        model=result["model"],
         cost=result["cost"],
     )
 
