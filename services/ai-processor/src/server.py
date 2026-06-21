@@ -38,6 +38,11 @@ from src.political import (
 from src.process import ProcessRequest, ProcessResponse, run_process
 from src.security import SecurityClassifyRequest, SecurityClassifyResponse, run_security_classify
 from src.protest import ProtestClassifyRequest, ProtestClassifyResponse, run_protest_classify
+from src.translate import (
+    TranslateRequest,
+    TranslateResponse,
+    translate_to_spanish,
+)
 
 # ---------------------------------------------------------------------------
 # Globals — initialised once at startup
@@ -386,6 +391,41 @@ async def image_generate_endpoint(req: ImageRequest):
         prompt_used=result["prompt_used"],
         model=result["model"],
         cost=result["cost"],
+    )
+
+
+@app.post("/api/translate", response_model=TranslateResponse)
+async def translate_endpoint(req: TranslateRequest):
+    """Translate non-Spanish text into Spanish using Google or OpenAI."""
+    try:
+        result = await translate_to_spanish(
+            text=req.text,
+            source=req.source,
+            provider=req.provider,
+            openai_client=openai_client,
+        )
+    except BudgetExceededError:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "budget_exceeded",
+                "message": "Daily cost cap exceeded — try again tomorrow",
+                "usage": cost_tracker.get_stats(),
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "translation_failed",
+                "message": str(exc),
+            },
+        )
+
+    return TranslateResponse(
+        translated_text=result.translated_text,
+        detected_language=result.detected_language,
+        provider=result.provider,
     )
 
 

@@ -1,5 +1,8 @@
 import express from 'express';
 import { getDb } from './db.js';
+import { getTrendingTopics } from '../../../shared/trending.js';
+import { clusterArticles } from '../../../shared/clustering.js';
+import type { NewsItem } from '../../../shared/types/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -78,6 +81,89 @@ export function startServer(
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch article', details: String(err) });
     }
+  });
+
+  // ─── GET /api/quality/stats — quality metrics dashboard ────
+  app.get('/api/quality/stats', (_req, res) => {
+    try {
+      const db = getDb();
+
+      // Average quality scores over time (grouped by day, last 30 days)
+      const avgScores = db.prepare(`
+        SELECT DATE(ingested_at) as day,
+               AVG(quality_score) as avg_quality,
+               AVG(engagement_score) as avg_engagement,
+               AVG(relevance_score) as avg_relevance,
+               COUNT(*) as article_count
+        FROM news_items
+        WHERE quality_score > 0
+          AND ingested_at >= datetime('now', '-30 days')
+        GROUP BY DATE(ingested_at)
+        ORDER BY day DESC
+        LIMIT 30
+      `).all() as Array<{
+        day: string; avg_quality: number; avg_engagement: number;
+        avg_relevance: number; article_count: number;
+      }>;
+
+      // Top 10 highest quality articles
+      const topArticles = db.prepare(`
+        SELECT id, title, source, category, quality_score, engagement_score, relevance_score, ingested_at
+        FROM news_items
+        WHERE quality_score > 0
+        ORDER BY quality_score DESC
+        LIMIT 10
+      `).all() as Array<{
+        id: string; title: string; source: string; category: string | null;
+        quality_score: number; engagement_score: number; relevance_score: number;
+        ingested_at: string;
+      }>;
+
+      // Source quality ranking
+      const sourceRanking = db.prepare(`
+        SELECT source,
+               AVG(quality_score) as avg_quality,
+               AVG(engagement_score) as avg_engagement,
+               AVG(relevance_score) as avg_relevance,
+               COUNT(*) as article_count
+        FROM news_items
+        WHERE quality_score > 0
+        GROUP BY source
+        ORDER BY avg_quality DESC
+      `).all() as Array<{
+        source: string; avg_quality: number; avg_engagement: number;
+        avg_relevance: number; article_count: number;
+      }>;
+
+      // Summary stats
+      const summary = db.prepare(`
+        SELECT
+          AVG(quality_score) as avg_quality,
+          AVG(engagement_score) as avg_engagement,
+          AVG(relevance_score) as avg_relevance,
+          COUNT(*) as scored_articles,
+          SUM(CASE WHEN quality_score >= 60 THEN 1 ELSE 0 END) as high_quality,
+          SUM(CASE WHEN quality_score >= 40 AND quality_score < 60 THEN 1 ELSE 0 END) as medium_quality,
+          SUM(CASE WHEN quality_score > 0 AND quality_score < 40 THEN 1 ELSE 0 END) as low_quality
+        FROM news_items
+        WHERE quality_score > 0
+      `).get() as {
+        avg_quality: number; avg_engagement: number; avg_relevance: number;
+        scored_articles: number; high_quality: number; medium_quality: number; low_quality: number;
+      };
+
+      res.json({ avgScores, topArticles, sourceRanking, summary });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch quality stats', details: String(err) });
+    }
+  });
+
+  // ─── GET /api/quality/thresholds — current quality config ──
+  app.get('/api/quality/thresholds', (_req, res) => {
+    res.json({
+      min_quality_threshold: parseInt(process.env.MIN_QUALITY_THRESHOLD ?? '40', 10),
+      min_engagement_prediction: parseInt(process.env.MIN_ENGAGEMENT_PREDICTION ?? '30', 10),
+    });
   });
 
   // ─── GET /api/pipeline/stats — pipeline dashboard stats ──────
@@ -165,11 +251,68 @@ export function startServer(
     }
   });
 
+  // ─── GET /api/trending — trending topics ────────────────────────
+  app.get('/api/trending', (req, res) => {
+    try {
+      const hoursAgo = parseInt(String(req.query.hours ?? '24'), 10);
+      const db = getDb();
+
+      const rows = db.prepare(
+        `SELECT * FROM news_items
+         WHERE ingested_at >= datetime('now', ?)
+         ORDER BY published_at DESC`
+      ).all(`-${hoursAgo} hours`) as Array<Record<string, unknown>>;
+
+      const articles: NewsItem[] = rows.map(rowToJson) as unknown as NewsItem[];
+      const topics = getTrendingTopics(articles);
+
+      res.json({
+        topics,
+        totalArticles: articles.length,
+        window: `${hoursAgo}h`,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to compute trending topics', details: String(err) });
+    }
+  });
+
+  // ─── GET /api/clusters — article clusters ───────────────────────
+  app.get('/api/clusters', (req, res) => {
+    try {
+      const hoursAgo = parseInt(String(req.query.hours ?? '24'), 10);
+      const threshold = parseFloat(String(req.query.threshold ?? '0.3'));
+      const db = getDb();
+
+      const rows = db.prepare(
+        `SELECT * FROM news_items
+         WHERE ingested_at >= datetime('now', ?)
+         ORDER BY published_at DESC`
+      ).all(`-${hoursAgo} hours`) as Array<Record<string, unknown>>;
+
+      const articles: NewsItem[] = rows.map(rowToJson) as unknown as NewsItem[];
+      const clusters = clusterArticles(articles, threshold);
+      const multiSource = clusters.filter((c) => c.articleCount > 1);
+
+      res.json({
+        clusters: multiSource,
+        totalClusters: clusters.length,
+        multiSourceClusters: multiSource.length,
+        window: `${hoursAgo}h`,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to compute clusters', details: String(err) });
+    }
+  });
+
   const server = app.listen(PORT, () => {
     console.log(`[server] REST API listening on http://localhost:${PORT}`);
     console.log(`[server]   GET /api/news            — paginated news list`);
     console.log(`[server]   GET /api/news/:id         — single article`);
     console.log(`[server]   GET /api/pipeline/stats   — pipeline dashboard stats`);
+    console.log(`[server]   GET /api/trending         — trending topics`);
+    console.log(`[server]   GET /api/clusters         — article clusters`);
     console.log(`[server]   GET /health               — service health`);
   });
 
@@ -196,6 +339,10 @@ function rowToJson(row: Record<string, unknown>): Record<string, unknown> {
     embedding: row.embedding ? safeParseJson(row.embedding) : null,
     entities: row.entities ? safeParseJson(row.entities) : null,
     aiCategory: row.ai_category ?? null,
+    // Quality scores (v2)
+    qualityScore: row.quality_score ?? null,
+    engagementScore: row.engagement_score ?? null,
+    relevanceScore: row.relevance_score ?? null,
   };
 }
 

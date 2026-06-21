@@ -15,6 +15,7 @@ import { PipelineView } from '../components/admin/PipelineView';
 import { CategoryChart } from '../components/admin/CategoryChart';
 import { ActivityFeed } from '../components/admin/ActivityFeed';
 import { ServiceCards } from '../components/admin/ServiceCards';
+import { QualityMetrics } from '../components/admin/QualityMetrics';
 
 // Lazy-load admin components to code-split heavy chart libraries (recharts)
 const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
@@ -31,6 +32,7 @@ const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').t
 const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
 const ServiceControlPanel = lazy(() => import('../components/admin/ServiceControlPanel').then(m => ({ default: m.ServiceControlPanel })));
 const SourceManager = lazy(() => import('../components/admin/SourceManager').then(m => ({ default: m.SourceManager })));
+const TrendingTopics = lazy(() => import('../components/admin/TrendingTopics').then(m => ({ default: m.TrendingTopics })));
 
 // ─── Suspense fallbacks ──────────────────────────────────────────
 const EMPTY_ARRAY: [] = [];
@@ -40,7 +42,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'overview' | 'briefing' | 'services' | 'sources';
+type Tab = 'overview' | 'briefing' | 'services' | 'sources' | 'trending' | 'quality';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -51,6 +53,8 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
 const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'overview', label: 'Overview', icon: '📊' },
   { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
+  { value: 'trending', label: 'Trending', icon: '📈' },
+  { value: 'quality', label: 'Quality', icon: '⭐' },
   { value: 'services', label: 'Servicios', icon: '⚙️' },
   { value: 'sources', label: 'Fuentes', icon: '📡' },
 ];
@@ -125,6 +129,8 @@ export function AdminDashboard() {
             <p className="text-xs text-slate-500 mt-0.5">
               {activeTab === 'overview' && 'System overview &amp; performance metrics'}
               {activeTab === 'briefing' && 'Nightly digest &amp; today\'s predictions'}
+              {activeTab === 'trending' && 'Trending topics &amp; article clusters'}
+              {activeTab === 'quality' && 'Article quality scoring &amp; source ranking'}
               {activeTab === 'services' && 'Start, stop &amp; monitor all backend services'}
               {activeTab === 'sources' && 'Manage RSS &amp; scrape news sources'}
             </p>
@@ -339,6 +345,20 @@ export function AdminDashboard() {
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <SourceManager />
               </Suspense>
+            </div>
+          )}
+
+          {activeTab === 'trending' && (
+            <div>
+              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
+                <TrendingTopics />
+              </Suspense>
+            </div>
+          )}
+
+          {activeTab === 'quality' && (
+            <div>
+              <QualityMetrics />
             </div>
           )}
       </div>

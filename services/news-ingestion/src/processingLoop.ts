@@ -2,12 +2,14 @@
  * Processing Loop — permanent pipeline for processing ingested articles.
  *
  * Runs continuously, polling for new articles and pushing them through:
+ *   0. Language detection + Auto-translation → detects non-Spanish articles, translates them
  *   1. Categorization → assigns category
  *   2. Keyword alert check → notifies users on keyword matches
  *   3. Geolocation → adds location data
  *   4. Province alert check → notifies users on location matches
  *   5. AI Filter → classifies PUBLISH/DISCARD
  *   6. Approval Queue → creates entries for Telegram approval / auto-publish
+ *   7. Periodic Clustering → groups similar articles every 30 minutes
  *
  * Uses createLoop() for graceful shutdown handling.
  */
@@ -16,6 +18,11 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { createRequire } from 'module';
 import { categorizeArticle } from '../../../shared/categorizer';
+import { scoreArticleQuality } from '../../../shared/qualityScorer';
+import { predictEngagement } from '../../../shared/engagementPredictor';
+import { clusterArticles } from '../../../shared/clustering.js';
+import type { NewsItem } from '../../../shared/types/index.js';
+import { detectLanguage } from '../../../shared/language';
 
 // Import the alerts module (CommonJS → ESM bridge)
 const cRequire = createRequire(import.meta.url);
@@ -26,8 +33,18 @@ const GEO_API = process.env.GEO_API ?? 'http://127.0.0.1:3002';
 const AI_API = process.env.AI_API ?? 'http://127.0.0.1:3013';
 const POLL_INTERVAL = parseInt(process.env.PROCESS_INTERVAL ?? '30000', 10); // 30 seconds
 
+// ─── Translation Settings ──────────────────────────────────────────────
+const AUTO_TRANSLATE = process.env.AUTO_TRANSLATE === 'true';
+const TRANSLATION_PROVIDER = process.env.TRANSLATION_PROVIDER ?? 'google';
+
+// ─── Periodic Clustering ────────────────────────────────────────────────
+const CLUSTER_INTERVAL = parseInt(process.env.CLUSTER_INTERVAL ?? '1800000', 10); // 30 min
+const CLUSTER_WINDOW = parseInt(process.env.CLUSTER_WINDOW ?? '2', 10); // hours to look back
+
 // ─── High-Impact Auto-Publish ──────────────────────────────────────────
 const AUTO_PUBLISH_THRESHOLD = parseInt(process.env.AUTO_PUBLISH_THRESHOLD ?? '80', 10);
+const MIN_QUALITY_THRESHOLD = parseInt(process.env.MIN_QUALITY_THRESHOLD ?? '40', 10);
+const MIN_ENGAGEMENT_PREDICTION = parseInt(process.env.MIN_ENGAGEMENT_PREDICTION ?? '30', 10);
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
 const TWITTER_PUBLISHER_URL = process.env.TWITTER_PUBLISHER_URL ?? 'http://127.0.0.1:3004';
@@ -63,6 +80,7 @@ interface Article {
   title: string;
   summary: string;
   source: string;
+  sources?: string; // JSON array of dedup source names
   url: string;
   category: string;
   location: string | null;
@@ -198,12 +216,124 @@ async function processBatch(): Promise<void> {
 
     for (const article of articles) {
       try {
-        // 2. Categorize (if not already set)
+        // ── Step 0: Language detection + Auto-translation ──────────
+        if (AUTO_TRANSLATE) {
+          const combinedText = `${article.title} ${article.summary || ''}`;
+          const detectedLang = detectLanguage(combinedText);
+
+          if (detectedLang !== 'es' && detectedLang !== 'other') {
+            console.log(`  🌐 ${article.id.slice(0, 8)} → detected ${detectedLang}, translating...`);
+
+            const originalTitle = article.title;
+            const originalSummary = article.summary || '';
+
+            try {
+              // Translate title
+              const titleResp = await fetch(`${AI_API}/api/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  text: article.title,
+                  source: detectedLang,
+                  provider: TRANSLATION_PROVIDER,
+                }),
+              });
+
+              if (titleResp.ok) {
+                const titleResult = await titleResp.json();
+                const translatedTitle = titleResult.translated_text;
+
+                // Translate summary if present
+                let translatedSummary = article.summary || '';
+                if (article.summary) {
+                  const summaryResp = await fetch(`${AI_API}/api/translate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      text: article.summary,
+                      source: detectedLang,
+                      provider: TRANSLATION_PROVIDER,
+                    }),
+                  });
+                  if (summaryResp.ok) {
+                    const summaryResult = await summaryResp.json();
+                    translatedSummary = summaryResult.translated_text;
+                  }
+                }
+
+                // Store originals and update with translations in DB
+                d.prepare(`
+                  UPDATE news_items
+                  SET title_en = ?, summary_en = ?,
+                      title = ?, summary = ?,
+                      translated = 1, detected_language = ?
+                  WHERE id = ?
+                `).run(
+                  originalTitle,
+                  originalSummary,
+                  translatedTitle,
+                  translatedSummary,
+                  detectedLang,
+                  article.id,
+                );
+
+                // Update in-memory article for downstream steps
+                article.title = translatedTitle;
+                article.summary = translatedSummary;
+
+                console.log(`  🌐 Translated: "${originalTitle.slice(0, 60)}…" → "${translatedTitle.slice(0, 60)}…"`);
+              } else {
+                console.warn(`  ⚠️ ${article.id.slice(0, 8)} → translate API returned ${titleResp.status}`);
+              }
+            } catch (e) {
+              console.warn(`  ⚠️ ${article.id.slice(0, 8)} → translation failed: ${(e as Error).message}`);
+            }
+          }
+        }
+
+        // 1. Categorize (if not already set)
         if (!article.category || article.category === 'general') {
           const category = categorizeArticle(article.title, article.summary || '', article.source);
           d.prepare('UPDATE news_items SET category = ? WHERE id = ?').run(category, article.id);
           article.category = category;
           console.log(`  🏷️ ${article.id.slice(0, 8)} → ${category}`);
+        }
+
+        // ── 1b. Quality scoring + engagement prediction ──────────────
+        try {
+          const quality = scoreArticleQuality(article.title, article.summary || '', article.source);
+
+          // Parse sources JSON safely
+          let sourcesList: string[] | undefined;
+          try {
+            sourcesList = article.sources ? JSON.parse(article.sources) : undefined;
+          } catch {
+            // ignore parse errors
+          }
+
+          const engagement = predictEngagement({
+            title: article.title,
+            category: article.category || 'general',
+            source: article.source,
+            sources: sourcesList,
+            publishedAt: article.published_at,
+          });
+
+          d.prepare(
+            `UPDATE news_items SET quality_score = ?, engagement_score = ? WHERE id = ?`
+          ).run(quality, engagement, article.id);
+
+          // Auto-discard low-quality articles early
+          if (quality < MIN_QUALITY_THRESHOLD) {
+            d.prepare("UPDATE news_items SET status = ? WHERE id = ?")
+              .run('discarded', article.id);
+            console.log(`  ⚠️ ${article.id.slice(0, 8)} → DISCARDED (quality: ${quality} < ${MIN_QUALITY_THRESHOLD})`);
+            continue; // skip remaining processing for this article
+          }
+
+          console.log(`  📊 ${article.id.slice(0, 8)} → quality: ${quality}, engagement: ${engagement}`);
+        } catch (e) {
+          console.warn(`  ⚠️ ${article.id.slice(0, 8)} → quality scoring failed: ${(e as Error).message}`);
         }
 
         // ── Alert check: keyword alerts ──────────────────────────────
@@ -266,12 +396,21 @@ async function processBatch(): Promise<void> {
             const aiResult = await aiResp.json();
             const verdict = aiResult.verdict; // PUBLISH or DISCARD
 
+            // Extract relevance_score from AI result (v2 format: 0-10 scale)
+            const scores: Record<string, number> = (aiResult.scores as Record<string, number>) ?? {};
+            const relevanceScore = scores.relevance ?? 0;
+            const combined = (aiResult.combined as number) ?? 0;
+
+            // Save relevance_score to DB
+            if (relevanceScore > 0) {
+              d.prepare('UPDATE news_items SET relevance_score = ? WHERE id = ?')
+                .run(relevanceScore, article.id);
+            }
+
             if (verdict === 'PUBLISH') {
               // ── Check for high-impact auto-publish ──────────────
-              const scores: Record<string, number> = (aiResult.scores as Record<string, number>) ?? {};
-              const combined = (aiResult.combined as number) ?? 0;
-              // Normalize combined (0-40) to 0-100 scale
-              const impact = Math.round((combined / 40) * 100);
+              // combined is now 0-10 (v2 avg), convert to 0-100 impact scale
+              const impact = Math.round((combined / 10) * 100);
               // Proxy for PUBLISH_URGENT: all individual scores >= 8/10
               const isUrgent =
                 (scores.political ?? 0) >= 8 &&
@@ -335,22 +474,146 @@ async function processBatch(): Promise<void> {
   }
 }
 
+// ─── Periodic Clustering Runner ─────────────────────────────────────────
+
+/**
+ * Run clustering on recent articles and store results in article_clusters table.
+ * Groups articles from the last CLUSTER_WINDOW hours, then persists clusters
+ * and marks cluster_id on each news_item that belongs to a cluster.
+ */
+async function runClustering(): Promise<void> {
+  try {
+    const d = getDb();
+
+    // Ensure table exists
+    d.exec(`
+      CREATE TABLE IF NOT EXISTS article_clusters (
+        id           TEXT PRIMARY KEY,
+        topic        TEXT NOT NULL,
+        article_ids  TEXT NOT NULL,
+        source_count INTEGER DEFAULT 0,
+        created_at   TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Add cluster_id column if not present
+    try {
+      d.exec(`ALTER TABLE news_items ADD COLUMN cluster_id TEXT`);
+    } catch {
+      // Already exists
+    }
+
+    // Fetch recent articles
+    const rows = d.prepare(
+      `SELECT * FROM news_items
+       WHERE ingested_at >= datetime('now', ?)
+       ORDER BY published_at DESC`
+    ).all(`-${CLUSTER_WINDOW} hours`) as Array<Record<string, unknown>>;
+
+    if (rows.length < 2) {
+      console.log(`[clustering] Only ${rows.length} articles — skipping clustering`);
+      return;
+    }
+
+    // Convert rows to NewsItem-like objects
+    const articles: NewsItem[] = rows.map((row) => ({
+      id: row.id as string,
+      title: row.title as string,
+      summary: (row.summary as string) || '',
+      source: row.source as string,
+      sources: row.sources ? JSON.parse(row.sources as string) : [row.source],
+      url: row.url as string,
+      category: (row.category as string) as NewsItem['category'],
+      publishedAt: (row.published_at as string) || (row.ingested_at as string),
+      ingestedAt: row.ingested_at as string,
+      location: row.location ? JSON.parse(row.location as string) : null,
+      aiScore: row.ai_score ? JSON.parse(row.ai_score as string) : null,
+      tweetId: (row.tweet_id as string) || null,
+      status: row.status as NewsItem['status'],
+    }));
+
+    const clusters = clusterArticles(articles, 0.3);
+    const multiSource = clusters.filter((c) => c.articleCount > 1);
+
+    if (multiSource.length === 0) {
+      console.log(`[clustering] No multi-source clusters found in the last ${CLUSTER_WINDOW}h`);
+      return;
+    }
+
+    // Clear old clusters for this window to avoid duplicates
+    const clearBefore = new Date();
+    clearBefore.setHours(clearBefore.getHours() - CLUSTER_WINDOW);
+    d.prepare('DELETE FROM article_clusters WHERE created_at >= ?').run(clearBefore.toISOString());
+
+    // Clear old cluster_id markings
+    d.prepare('UPDATE news_items SET cluster_id = NULL WHERE cluster_id IS NOT NULL');
+    // Focus on the window
+    d.prepare(
+      `UPDATE news_items SET cluster_id = NULL
+       WHERE ingested_at >= datetime('now', ?)`
+    ).run(`-${CLUSTER_WINDOW} hours`);
+
+    // Insert clusters and mark articles
+    const insertCluster = d.prepare(
+      `INSERT OR REPLACE INTO article_clusters (id, topic, article_ids, source_count, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+    );
+
+    const updateArticle = d.prepare(
+      'UPDATE news_items SET cluster_id = ? WHERE id = ?'
+    );
+
+    const insertAll = d.transaction((cls: Array<{
+      clusterId: string; mainTopic: string; articleIds: string[]; sourceCount: number;
+    }>) => {
+      for (const cluster of cls) {
+        insertCluster.run(
+          cluster.clusterId,
+          cluster.mainTopic,
+          JSON.stringify(cluster.articleIds),
+          cluster.sourceCount,
+        );
+        for (const articleId of cluster.articleIds) {
+          updateArticle.run(cluster.clusterId, articleId);
+        }
+      }
+    });
+
+    insertAll(multiSource);
+
+    console.log(`[clustering] ✅ ${multiSource.length} clusters from ${rows.length} articles (${CLUSTER_WINDOW}h window)`);
+  } catch (e) {
+    console.error('[clustering] Error:', (e as Error).message);
+  }
+}
+
 // Use plain setInterval since createLoop might not be available
 let interval: ReturnType<typeof setInterval> | null = null;
+
+let clusteringInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startProcessingLoop(): void {
   console.log(`[processing] Starting processing loop (every ${POLL_INTERVAL / 1000}s)`);
   console.log(`[processing] Geo API: ${GEO_API}`);
   console.log(`[processing] AI API: ${AI_API}`);
+  console.log(`[processing] Clustering every ${Math.round(CLUSTER_INTERVAL / 1000)}s (${CLUSTER_WINDOW}h window)`);
   
   processBatch(); // Run immediately
   interval = setInterval(processBatch, POLL_INTERVAL);
+
+  // Start periodic clustering
+  runClustering(); // Run immediately
+  clusteringInterval = setInterval(runClustering, CLUSTER_INTERVAL);
 }
 
 export function stopProcessingLoop(): void {
   if (interval) {
     clearInterval(interval);
     interval = null;
+  }
+  if (clusteringInterval) {
+    clearInterval(clusteringInterval);
+    clusteringInterval = null;
   }
   if (db) {
     db.close();

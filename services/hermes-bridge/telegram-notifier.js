@@ -251,11 +251,36 @@ async function checkPendingApprovals() {
   }
 }
 
+// ─── Trending / Clusters helpers ───────────────────────────────────────
+
+const NEWS_SERVICE_URL = 'http://127.0.0.1:3001';
+
+async function fetchTrending() {
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_URL}/api/trending?hours=24`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchClusters() {
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_URL}/api/clusters?hours=24`, { signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Menus ────────────────────────────────────────────────────────────
 
 const MAIN_MENU = {
   inline_keyboard: [
     [{ text: '🚨 Breaking News', callback_data: 'menu:breaking' }],
+    [{ text: '📈 Trending', callback_data: 'menu:trending' }],
     [{ text: '🔔 Alertas', callback_data: 'menu:alerts' }],
     [
       { text: '📰 Revisión Pendiente', callback_data: 'menu:pending' },
@@ -521,7 +546,22 @@ async function handleMenuAction(action, chatId, messageId) {
       '_Los servicios se gestionan desde el Dashboard_',
       { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
     );
-  } else if (action === 'alerts') {
+      } else if (action === 'trending') {
+        const trending = await fetchTrending();
+        if (!trending || !trending.topics || trending.topics.length === 0) {
+          await editMsg('📈 *Trending Topics*\n\nNo hay suficientes datos para calcular tendencias en las últimas 24hs.', {
+            inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+          });
+        } else {
+          const lines = trending.topics.map((t, i) => {
+            const score = t.trendingScore.toFixed(0);
+            return `${i + 1}. *${t.topic}*\n   📰 ${t.articleCount} artículos · ${t.sourceCount} fuentes · 🏷️ ${t.category}\n   🔥 Score: ${score}`;
+          });
+          await editMsg(`📈 *Trending Topics — Últimas 24hs*\n\n${lines.slice(0, 10).join('\n\n')}`, {
+            inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+          });
+        }
+      } else if (action === 'alerts') {
     const alerts = listAlerts(chatId);
     if (alerts.length === 0) {
       await editMsg(
@@ -657,6 +697,21 @@ async function checkCallbacks() {
           const ok = await sendMorningBriefing(msg.chat.id);
           if (!ok) {
             // sendMorningBriefing already sent a "no articles" message
+          }
+        } else if (txt === '/trending') {
+          const trending = await fetchTrending();
+          if (!trending || !trending.topics || trending.topics.length === 0) {
+            await sendMsg('📈 *Trending Topics*\n\nNo hay suficientes datos para calcular tendencias en las últimas 24hs.', {
+              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+            });
+          } else {
+            const lines = trending.topics.map((t, i) => {
+              const score = t.trendingScore.toFixed(0);
+              return `${i + 1}. *${t.topic}*\n   📰 ${t.articleCount} artículos · ${t.sourceCount} fuentes · 🏷️ ${t.category}\n   🔥 Score: ${score}`;
+            });
+            await sendMsg(`📈 *Trending Topics — Últimas 24hs*\n\n${lines.slice(0, 10).join('\n\n')}`, {
+              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+            });
           }
         } else if (txt.startsWith('/alert')) {
           const args = txt.replace('/alert', '').trim();

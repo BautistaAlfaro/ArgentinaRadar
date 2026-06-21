@@ -14,6 +14,13 @@ export interface Location {
 export interface AiScore {
   publish: boolean;
   reasoning: string;
+  political?: number;
+  economic?: number;
+  social?: number;
+  urgency?: number;
+  quality?: number;
+  relevance?: number;
+  combined?: number;
 }
 
 export type NewsStatus =
@@ -39,6 +46,10 @@ export interface NewsItem {
   aiScore: AiScore | null;
   tweetId: string | null;
   status: NewsStatus;
+  // Quality scoring (v2)
+  qualityScore?: number;
+  engagementScore?: number;
+  relevanceScore?: number;
 }
 
 export type IndicatorType =

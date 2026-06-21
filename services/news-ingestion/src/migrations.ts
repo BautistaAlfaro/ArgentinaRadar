@@ -81,5 +81,38 @@ export function runMigrations(db: Database.Database): void {
     }
   }
 
+  // ─── Translation columns (added idempotently) ───────────────────
+  const translationColumns = [
+    'ALTER TABLE news_items ADD COLUMN title_en TEXT',
+    'ALTER TABLE news_items ADD COLUMN summary_en TEXT',
+    'ALTER TABLE news_items ADD COLUMN translated INTEGER DEFAULT 0',
+    'ALTER TABLE news_items ADD COLUMN detected_language TEXT',
+  ];
+
+  for (const sql of translationColumns) {
+    try {
+      db.exec(sql);
+      console.log(`[migrations] Executed: ${sql}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
+  // ─── Quality scoring columns (v2) ────────────────────────────────
+  const qualityColumns = [
+    "ALTER TABLE news_items ADD COLUMN quality_score REAL DEFAULT 0",
+    "ALTER TABLE news_items ADD COLUMN engagement_score REAL DEFAULT 0",
+    "ALTER TABLE news_items ADD COLUMN relevance_score REAL DEFAULT 0",
+  ];
+
+  for (const sql of qualityColumns) {
+    try {
+      db.exec(sql);
+      console.log(`[migrations] Executed: ${sql}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
   console.log('[migrations] Schema up to date');
 }

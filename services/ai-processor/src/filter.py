@@ -41,7 +41,7 @@ class FilterResponse(BaseModel):
     verdict: str
     reason: str
     scores: dict[str, int]
-    combined: int
+    combined: float
     tokens_used: int
     cost: float
 
@@ -111,24 +111,35 @@ async def run_filter(
     if parsed is None:
         return _build_error_result(article_id, "Failed to parse JSON from LLM response")
 
-    # --- Extract scores ---
+    # --- Extract scores (v2 format with quality, relevance, combined avg) ---
     scores = {
         "political": int(parsed.get("political", 0)),
         "economic": int(parsed.get("economic", 0)),
         "social": int(parsed.get("social", 0)),
         "urgency": int(parsed.get("urgency", 0)),
+        "quality": int(parsed.get("quality", 0)),
+        "relevance": int(parsed.get("relevance", 0)),
     }
-    combined = sum(scores.values())
+    # combined is now an average 0-10 (v2) — fallback to old sum for backward compat
+    combined_raw = parsed.get("combined")
+    if combined_raw is not None:
+        combined = float(combined_raw)
+    else:
+        combined = float(sum(scores.values()))  # old format: sum of 4 scores (0-40)
     verdict = str(parsed.get("verdict", "DISCARD")).upper()
     reason = str(parsed.get("reason", ""))
 
-    # --- Enforce threshold ---
-    if combined >= 15 and verdict != "PUBLISH":
+    # --- Normalise combined to 0-10 scale if it looks like old sum format ---
+    if combined > 10:
+        combined = combined / 4.0  # convert old sum-of-4 to approximate average
+
+    # --- Enforce threshold (combined >= 5.0 on 0-10 scale) ---
+    if combined >= 5.0 and verdict != "PUBLISH":
         verdict = "PUBLISH"
-        reason = reason or f"Combined score {combined} meets ≥15 threshold"
-    elif combined < 15 and verdict != "DISCARD":
+        reason = reason or f"Combined score {combined:.1f} meets ≥5.0 threshold"
+    elif combined < 5.0 and verdict != "DISCARD":
         verdict = "DISCARD"
-        reason = reason or f"Combined score {combined} is below 15 threshold"
+        reason = reason or f"Combined score {combined:.1f} is below 5.0 threshold"
 
     # --- Persist to DB (only if article_id is provided) ---
     if article_id:
@@ -196,7 +207,9 @@ def _persist_verdict(
             "economic": scores["economic"],
             "social": scores["social"],
             "urgency": scores["urgency"],
-            "combined": combined,
+            "quality": scores.get("quality", 0),
+            "relevance": scores.get("relevance", 0),
+            "combined": round(combined, 1),
         },
         ensure_ascii=False,
     )
@@ -219,8 +232,8 @@ def _build_error_result(article_id: str, error: str) -> dict[str, Any]:
         "article_id": article_id,
         "verdict": "DISCARD",
         "reason": error,
-        "scores": {"political": 0, "economic": 0, "social": 0, "urgency": 0},
-        "combined": 0,
+        "scores": {"political": 0, "economic": 0, "social": 0, "urgency": 0, "quality": 0, "relevance": 0},
+        "combined": 0.0,
         "tokens_used": 0,
         "cost": 0.0,
     }
