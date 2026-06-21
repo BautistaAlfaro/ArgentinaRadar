@@ -7,9 +7,12 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import type { Gazetteer, GazetteerProvince, GazetteerCity, GazetteerLandmark } from './types.js';
 
-const GAZETTEER_PATH = path.resolve(process.cwd(), 'shared', 'gazetteer', 'argentina.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const GAZETTEER_PATH = path.resolve(__dirname, '..', '..', '..', 'shared', 'gazetteer', 'argentina.json');
 
 let _gazetteer: Gazetteer | null = null;
 
