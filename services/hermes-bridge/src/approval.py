@@ -397,12 +397,14 @@ async def send_approval_request_with_image(
     article_title: str,
     image_url: str,
     article_url: str = "",
+    image_prompt: str | None = None,
 ) -> int | None:
     """
     Send a tweet draft WITH image preview to Telegram for approval.
 
     The image is sent as a photo with the draft text as caption,
     plus inline keyboard with image-toggle options.
+    When available, the generated DALL-E prompt is shown below for review.
 
     Returns the Telegram message_id on success, None on failure.
     """
@@ -419,11 +421,18 @@ async def send_approval_request_with_image(
         ]
     }
 
+    prompt_section = (
+        f"\n\n🎨 *Prompt usado:*\n`{image_prompt[:200]}…`"
+        if image_prompt
+        else ""
+    )
+
     caption = (
         f"📝 *Propuesta con imagen*\n\n"
         f"{draft}\n\n"
         f"📰 {article_title}\n"
-        f"{'🔗 ' + article_url if article_url else ''}\n\n"
+        f"{'🔗 ' + article_url if article_url else ''}"
+        f"{prompt_section}\n\n"
         f"Elegí si publicar con imagen o solo texto:"
     )
 
@@ -1053,6 +1062,7 @@ async def _send_approvals_for_events(events: list[dict[str, Any]]) -> None:
                 article_title=title,
                 image_url=image_url,
                 article_url=article_url,
+                image_prompt=image_prompt,
             )
         else:
             msg_id = await send_approval_request(

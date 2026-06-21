@@ -112,3 +112,41 @@ IMAGE_GEN_COST_STANDARD: float = float(os.environ.get("IMAGE_GEN_COST_STANDARD",
 IMAGE_GEN_COST_HD: float = float(os.environ.get("IMAGE_GEN_COST_HD", "0.08"))
 """Minimum event impact threshold for image generation (0-100)."""
 IMAGE_GEN_IMPACT_THRESHOLD: int = int(os.environ.get("IMAGE_GEN_IMPACT_THRESHOLD", "80"))
+
+# --- NanoBanana / Brand Image Generation ---
+# Full prompt template for NanoBanana-style image generation.
+# Configurable via env var — defaults to the NanoBanana news-thumbnail template.
+_DEFAULT_NANOBANANA_TEMPLATE = """Eres un experto en crear prompts para generacion de imagenes con estilo NanoBanana.
+
+Crea un prompt detallado y optimizado para generar un thumbnail de noticia en estilo:
+- Mezcla entre "Only Fonseca" (YouTube): dramatico, alto contraste, impactante, estilo noticiero fuerte.
+- MDZ Online / noticiero argentino profesional: limpio, moderno y periodistico.
+
+Caracteristicas obligatorias del estilo:
+- Formato horizontal 16:9 (thumbnail YouTube/X)
+- Alta calidad fotorealista, iluminacion cinematografica dramatica
+- Alto contraste y colores saturados
+- Usar siempre la paleta de colores: azul oscuro intenso (#003087) y amarillo oro (#FFD700) como colores principales
+- Tipografia bold grande y legible (estilo news)
+- Fondo oscuro o degradado profesional usando azul oscuro y amarillo oro
+- Composicion fuerte: rostros grandes y expresivos si hay personas mencionadas
+- Si la noticia menciona personas especificas (ej: Milei, Adorni, etc.), incluir representaciones muy fieles de sus rostros.
+
+Reglas importantes:
+- Incluir siempre un titulo o texto grande en la imagen con el tema principal de la noticia (en espanol)
+- Agregar sutiles elementos graficos de noticia (banda roja "ULTIMO MOMENTO" o similar, lineas, etc.)
+- Mantener coherencia visual con la marca: azul y amarillo predominantes.
+
+Genera SOLO el prompt de imagen, sin explicaciones extras."""
+
+IMAGE_PROMPT_TEMPLATE: str = os.environ.get(
+    "IMAGE_PROMPT_TEMPLATE",
+    _DEFAULT_NANOBANANA_TEMPLATE,
+)
+"""Default image generation prompt style. 'nanobanana' uses the NanoBanana
+template; legacy values 'news', 'minimal', and 'flag' are still supported."""
+IMAGE_GEN_STYLE: str = os.environ.get("IMAGE_GEN_STYLE", "nanobanana")
+
+# --- Brand Colors ---
+BRAND_PRIMARY: str = os.environ.get("BRAND_PRIMARY", "#003087")
+BRAND_GOLD: str = os.environ.get("BRAND_GOLD", "#FFD700")

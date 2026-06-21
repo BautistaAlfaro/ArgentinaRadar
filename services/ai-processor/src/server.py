@@ -56,14 +56,14 @@ openai_client = OpenAIClient(cost_tracker=cost_tracker)
 async def lifespan(app: FastAPI):
     # Startup: validate configuration
     if AI_MODE == "local":
-        print("🔋 AI mode: LOCAL — using Ollama (zero cost, no API keys needed)")
-        print(f"   Models: fast={LOCAL_MODELS.get('fast')}, smart={LOCAL_MODELS.get('smart')}, embed={LOCAL_MODELS.get('embed')}")
+        print("[AI] AI mode: LOCAL — using Ollama (zero cost, no API keys needed)")
+        print(f"[AI]    Models: fast={LOCAL_MODELS.get('fast')}, smart={LOCAL_MODELS.get('smart')}, embed={LOCAL_MODELS.get('embed')}")
     elif AI_MODE == "hybrid":
-        print("🔀 AI mode: HYBRID — Ollama by default, fallback to paid API")
+        print("[AI] AI mode: HYBRID — Ollama by default, fallback to paid API")
         if not OPENAI_API_KEY and not OPENROUTER_API_KEY:
-            print("⚠️  Hybrid mode requires at least one API key for fallback")
+            print("[AI]  Hybrid mode requires at least one API key for fallback")
     elif not OPENAI_API_KEY and not OPENROUTER_API_KEY:
-        print("⚠️  No API keys configured — set OPENAI_API_KEY or OPENROUTER_API_KEY")
+        print("[AI]  No API keys configured — set OPENAI_API_KEY or OPENROUTER_API_KEY")
     yield
     # Shutdown: nothing to clean up (in-memory state)
 

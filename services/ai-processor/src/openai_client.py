@@ -399,50 +399,62 @@ class OpenAIClient:
         self,
         title: str,
         style: str = "news",
+        prompt: str | None = None,
     ) -> dict[str, Any]:
         """
         Generate a news-themed image using DALL-E 3.
 
-        In local mode, returns a placeholder response with zero cost.
+        In local / disabled mode, returns a placeholder with zero cost and
+        sets ``prompt_used`` to a local fallback (instead of ``None``) so the
+        caller can still see what prompt *would* have been used.
 
         Args:
             title: News headline to illustrate.
-            style: Visual style ("news" | "minimal" | "flag").
+            style: Visual style enum (passed for backward compat / logging).
+            prompt: Pre-built prompt from ``build_nanobanana_prompt``.
+                    If ``None``, falls back to inline prompt building (legacy).
 
         Returns:
             Dict with 'image_url', 'prompt_used', 'model', 'cost'.
             'image_url' is None in local mode.
         """
+        # ── Determine the final prompt ─────────────────────────────
+        if prompt is not None:
+            final_prompt = prompt
+        else:
+            # Legacy inline prompt building (backward compat)
+            if style == "minimal":
+                style_desc = "Minimalist, clean vector art, simple shapes"
+            elif style == "flag":
+                style_desc = (
+                    "Argentine flag colors (light blue, white), "
+                    "patriotic theme, bold composition"
+                )
+            else:
+                style_desc = (
+                    "Professional news graphic, clean, modern, "
+                    "photo-realistic"
+                )
+
+            final_prompt = (
+                f"Argentine news illustration for: {title}\n"
+                f"Style: {style_desc}\n"
+                f"Colors: Argentine flag theme (light blue, white)\n"
+                f"No text on the image\n"
+                f"Aspect ratio: 1:1 (1024x1024)"
+            )
+
         # ── Local / disabled mode ──────────────────────────────────
         if not IMAGE_GEN_ENABLED or AI_MODE == "local":
+            # Lazy import to avoid circular dependency (images.py → openai_client.py)
+            from src.images import build_local_fallback_prompt
+
             return {
                 "image_url": None,
-                "prompt_used": None,
+                "prompt_used": build_local_fallback_prompt(title),
                 "model": "placeholder",
                 "cost": 0.0,
             }
-
-        # ── Build prompt ──────────────────────────────────────────
-        if style == "minimal":
-            style_desc = "Minimalist, clean vector art, simple shapes"
-        elif style == "flag":
-            style_desc = (
-                "Argentine flag colors (light blue, white), "
-                "patriotic theme, bold composition"
-            )
-        else:
-            style_desc = (
-                "Professional news graphic, clean, modern, "
-                "photo-realistic"
-            )
-
-        prompt = (
-            f"Argentine news illustration for: {title}\n"
-            f"Style: {style_desc}\n"
-            f"Colors: Argentine flag theme (light blue, white)\n"
-            f"No text on the image\n"
-            f"Aspect ratio: 1:1 (1024x1024)"
-        )
 
         # ── Determine cost ────────────────────────────────────────
         is_hd = IMAGE_GEN_QUALITY == "hd"
@@ -460,7 +472,7 @@ class OpenAIClient:
         try:
             response = await client.images.generate(
                 model=IMAGE_GEN_MODEL,
-                prompt=prompt,
+                prompt=final_prompt,
                 size=IMAGE_GEN_SIZE,
                 quality=IMAGE_GEN_QUALITY,
                 n=1,
@@ -480,7 +492,7 @@ class OpenAIClient:
 
         return {
             "image_url": image_url,
-            "prompt_used": prompt,
+            "prompt_used": final_prompt,
             "model": IMAGE_GEN_MODEL,
             "cost": round(cost, 8),
         }

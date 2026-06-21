@@ -26,6 +26,7 @@ const InsecurityPanel = lazy(() => import('../components/admin/InsecurityPanel')
 const ProtestPanel = lazy(() => import('../components/admin/ProtestPanel').then(m => ({ default: m.ProtestPanel })));
 const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').then(m => ({ default: m.PoliticalRadar })));
 const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
+const ServiceControlPanel = lazy(() => import('../components/admin/ServiceControlPanel').then(m => ({ default: m.ServiceControlPanel })));
 
 // ─── Suspense fallbacks ──────────────────────────────────────────
 const EMPTY_ARRAY: [] = [];
@@ -35,7 +36,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'overview' | 'briefing';
+type Tab = 'overview' | 'briefing' | 'services';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -46,6 +47,7 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
 const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'overview', label: 'Overview', icon: '📊' },
   { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
+  { value: 'services', label: 'Servicios', icon: '⚙️' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -114,9 +116,9 @@ export function AdminDashboard() {
               Admin Dashboard
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {activeTab === 'overview'
-                ? 'System overview &amp; performance metrics'
-                : 'Nightly digest &amp; today\'s predictions'}
+              {activeTab === 'overview' && 'System overview &amp; performance metrics'}
+              {activeTab === 'briefing' && 'Nightly digest &amp; today\'s predictions'}
+              {activeTab === 'services' && 'Start, stop &amp; monitor all backend services'}
             </p>
           </div>
 
@@ -180,7 +182,7 @@ export function AdminDashboard() {
       {/* ─── Main Content ───────────────────────────────────────────── */}
       <div className="p-6 space-y-6">
         <AnimatePresence mode="wait">
-          {activeTab === 'overview' ? (
+          {activeTab === 'overview' && (
             <m.div
               key={range}
               initial={{ opacity: 0 }}
@@ -288,7 +290,9 @@ export function AdminDashboard() {
               <SystemMetrics metrics={systemMetrics ?? EMPTY_ARRAY} />
             </Suspense>
           </m.div>
-          ) : (
+          )}
+
+          {activeTab === 'briefing' && (
             <m.div
               key="briefing"
               initial={{ opacity: 0 }}
@@ -298,6 +302,20 @@ export function AdminDashboard() {
             >
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <MorningBriefing />
+              </Suspense>
+            </m.div>
+          )}
+
+          {activeTab === 'services' && (
+            <m.div
+              key="services"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
+                <ServiceControlPanel />
               </Suspense>
             </m.div>
           )}

@@ -160,27 +160,32 @@ async function pollAndGeolocate(): Promise<void> {
       updateStmt.run(JSON.stringify(location), article.id);
       console.log(`  ✓ ${String(article.id).slice(0, 8)}… → ${location.province || '(unknown)'} (confidence: ${location.confidence})`);
 
-      // ── Push to event-detector if article has embedding data ──────────
-      if (article.embedding) {
-        try {
-          const detectResp = await fetch(`${EVENT_DETECTOR_URL}/api/detect`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: article.title,
-              summary: article.summary,
-              source: article.source,
-              url: article.url,
-              publishedAt: article.publishedAt,
-              embedding: article.embedding,
-            }),
-          });
-          if (!detectResp.ok) {
-            console.warn(`[geolocation] event-detector returned ${detectResp.status} for ${String(article.id).slice(0, 8)}…`);
+      // ── Push to event-detector for event clustering ──────────────────
+      // Always push, even without an embedding — the event-detector's
+      // ensureEmbedding() fallback calls the ai-processor on demand.
+      try {
+        const detectResp = await fetch(`${EVENT_DETECTOR_URL}/api/detect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            article_id: article.id,
+            title: article.title,
+            summary: article.summary,
+            source: article.source,
+            url: article.url,
+            publishedAt: article.publishedAt,
+          }),
+        });
+        if (detectResp.ok) {
+          const result = await detectResp.json() as { eventId?: string };
+          if (result.eventId) {
+            console.log(`  → event ${result.eventId.slice(0, 8)}…`);
           }
-        } catch (err) {
-          console.warn(`[geolocation] event-detector unreachable for ${String(article.id).slice(0, 8)}…:`, (err as Error).message);
+        } else {
+          console.warn(`[geolocation] event-detector returned ${detectResp.status} for ${String(article.id).slice(0, 8)}…`);
         }
+      } catch (err) {
+        console.warn(`[geolocation] event-detector unreachable for ${String(article.id).slice(0, 8)}…:`, (err as Error).message);
       }
     }
   } catch (err) {

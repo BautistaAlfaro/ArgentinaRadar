@@ -16,6 +16,11 @@
  *   GET   /api/admin/users                          — Admin user list (ADMIN only)
  *   POST  /api/admin/subscription                   — Register a subscription
  *   GET   /api/admin/subscriptions                  — List subscriptions
+ *   GET   /api/admin/services                        — List service statuses (ADMIN)
+ *   POST  /api/admin/services/:name/start            — Start a service via PM2 (ADMIN)
+ *   POST  /api/admin/services/:name/stop             — Stop a service via PM2 (ADMIN)
+ *   POST  /api/admin/services/start-all              — Start all services (ADMIN)
+ *   POST  /api/admin/services/stop-all               — Stop all services (ADMIN)
  *   GET   /health                                   — Service health
  */
 
@@ -38,13 +43,49 @@ import { dailyStatsRouter } from "./routes/daily-stats.js";
 import { revenueRouter } from "./routes/revenue.js";
 import { usersRouter } from "./routes/users.js";
 import { subscriptionRouter } from "./routes/subscription.js";
+import { servicesRouter } from "./routes/services.js";
 import { startCollector } from "./collector.js";
+import http from "http";
 
 const app = express();
 
 // ─── Middleware ──────────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+// ─── Public pipeline-status endpoint (no auth) ──────────────────────
+// Checks health of every pipeline service. Placed before the auth
+// middleware so it's available without credentials.
+const PIPELINE_SERVICES: Array<{ name: string; url: string }> = [
+  { name: 'rss', url: config.newsServiceUrl },
+  { name: 'geolocation', url: config.geolocationUrl },
+  { name: 'ai', url: config.aiProcessorUrl },
+  { name: 'event_detection', url: config.eventDetectorUrl },
+  { name: 'bluesky', url: config.twitterPublisherUrl },
+];
+
+app.get('/api/admin/pipeline-status', async (_req, res) => {
+  const statuses: Record<string, string> = {};
+
+  for (const svc of PIPELINE_SERVICES) {
+    try {
+      const resp = await fetch(`${svc.url}/health`, { 
+        signal: AbortSignal.timeout(10_000),
+      });
+      const text = await resp.text();
+      let ok = resp.ok;
+      if (ok && text) {
+        try { ok = JSON.parse(text)?.status === 'ok'; } catch { /* keep resp.ok */ }
+      }
+      statuses[svc.name] = ok ? 'ok' : `degraded (${resp.status})`;
+    } catch (err) {
+      statuses[svc.name] = 'down';
+      console.warn(`[pipeline-status] ${svc.name}: ${(err as Error).message}`);
+    }
+  }
+
+  res.json(statuses);
+});
 
 // ─── Global auth middleware (all /api/admin/* routes require auth + ADMIN) ─
 const auth = requireAuth(config.jwtSecret);
@@ -60,6 +101,7 @@ app.use("/api/admin", dailyStatsRouter);
 app.use("/api/admin", revenueRouter);
 app.use("/api/admin", usersRouter);
 app.use("/api/admin", subscriptionRouter);
+app.use("/api/admin", servicesRouter);
 
 // ─── Health ─────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -83,6 +125,12 @@ app.listen(config.port, () => {
   console.log(`[admin]   GET  /api/admin/users`);
   console.log(`[admin]   POST /api/admin/subscription`);
   console.log(`[admin]   GET  /api/admin/subscriptions`);
+  console.log(`[admin]   GET  /api/admin/services`);
+  console.log(`[admin]   POST /api/admin/services/:name/start`);
+  console.log(`[admin]   POST /api/admin/services/:name/stop`);
+  console.log(`[admin]   POST /api/admin/services/start-all`);
+  console.log(`[admin]   POST /api/admin/services/stop-all`);
+  console.log(`[admin]   GET  /api/admin/pipeline-status`);
   console.log(`[admin]   GET  /health`);
 
   // Start the KPI collector

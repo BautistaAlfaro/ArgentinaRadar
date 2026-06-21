@@ -197,3 +197,139 @@ export async function fetchRevenueData(): Promise<RevenuePoint[]> {
     fallback,
   );
 }
+
+// ═════════════════════════════════════════════════════════════════════
+//  Service Control (ADMIN only — requires JWT token)
+// ═════════════════════════════════════════════════════════════════════
+
+export interface ServiceStatus {
+  name: string;
+  pm2Name: string;
+  port: number | null;
+  icon: string;
+  description: string;
+  type: 'node' | 'python' | 'web';
+  status: 'running' | 'stopped' | 'unknown';
+  lastChecked: string;
+}
+
+export interface ServicesResponse {
+  services: ServiceStatus[];
+}
+
+export interface ServiceActionResponse {
+  message: string;
+  service: string;
+  stdout: string;
+  stderr: string;
+}
+
+// ─── Mock fallback for services (all unknown when backend is unreachable) ─
+
+const SERVICE_DEFINITIONS_MOCK: Omit<ServiceStatus, 'status' | 'lastChecked'>[] = [
+  { name: 'web-app',         pm2Name: 'web-app',         port: 5173, icon: '🌐', description: 'Vite dev server',              type: 'web' },
+  { name: 'news-ingestion',  pm2Name: 'news-ingestion',  port: 3001, icon: '📰', description: 'News ingestion pipeline',      type: 'node' },
+  { name: 'geolocation',     pm2Name: 'geolocation',     port: 3002, icon: '📍', description: 'Geolocation service',          type: 'node' },
+  { name: 'ai-processor',    pm2Name: 'ai-processor',    port: 3013, icon: '🧠', description: 'AI content processor',         type: 'python' },
+  { name: 'event-detector',  pm2Name: 'event-detector',  port: 3008, icon: '⚡', description: 'Event detection engine',       type: 'node' },
+  { name: 'trend-analyzer',  pm2Name: 'trend-analyzer',  port: 3009, icon: '📈', description: 'Trend analysis',               type: 'node' },
+  { name: 'twitter-publisher', pm2Name: 'twitter-publisher', port: 3004, icon: '🐦', description: 'Twitter/X publisher',     type: 'node' },
+  { name: 'hermes-bridge',   pm2Name: 'hermes-bridge',   port: 3005, icon: '🤖', description: 'Telegram bot bridge',          type: 'python' },
+  { name: 'economic-data',   pm2Name: 'economic-data',   port: 3006, icon: '💰', description: 'Economic data fetcher',        type: 'node' },
+  { name: 'alerts',          pm2Name: 'alerts',          port: 3007, icon: '🔔', description: 'Alert system',                 type: 'node' },
+  { name: 'night-owl',       pm2Name: 'night-owl',       port: 3011, icon: '🦉', description: 'Nightly batch processor',      type: 'node' },
+  { name: 'auth',            pm2Name: 'auth',            port: 3010, icon: '🔐', description: 'Authentication service',       type: 'node' },
+];
+
+function getMockServices(): ServiceStatus[] {
+  return SERVICE_DEFINITIONS_MOCK.map((svc) => ({
+    ...svc,
+    status: 'unknown' as const,
+    lastChecked: new Date().toISOString(),
+  }));
+}
+
+// ─── Auth fetch helper ─────────────────────────────────────────────
+
+function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem('argentinaradar_token');
+  } catch {
+    return null;
+  }
+}
+
+async function authFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  // Merge any additional headers from options
+  if (options?.headers) {
+    Object.assign(headers, options.headers);
+  }
+
+  const resp = await fetch(url, { ...options, headers });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => 'Unknown error');
+    throw new Error(`HTTP ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  return resp.json();
+}
+
+// ─── Public Service API ────────────────────────────────────────────
+
+/**
+ * Fetch service statuses from the backend.
+ * Falls back to mock data (all unknown) when backend is unreachable or auth fails.
+ */
+export async function fetchServices(): Promise<ServicesResponse> {
+  try {
+    return await authFetch<ServicesResponse>(`${ADMIN_API}/api/admin/services`);
+  } catch {
+    return { services: getMockServices() };
+  }
+}
+
+/**
+ * Start a service by name.
+ * Throws on failure — caller must handle errors.
+ */
+export async function startService(name: string): Promise<ServiceActionResponse> {
+  return authFetch<ServiceActionResponse>(
+    `${ADMIN_API}/api/admin/services/${encodeURIComponent(name)}/start`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * Stop a service by name.
+ * Throws on failure — caller must handle errors.
+ */
+export async function stopService(name: string): Promise<ServiceActionResponse> {
+  return authFetch<ServiceActionResponse>(
+    `${ADMIN_API}/api/admin/services/${encodeURIComponent(name)}/stop`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * Start all services via PM2.
+ */
+export async function startAllServices(): Promise<ServiceActionResponse> {
+  return authFetch<ServiceActionResponse>(
+    `${ADMIN_API}/api/admin/services/start-all`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * Stop all services (excluding admin itself) via PM2.
+ */
+export async function stopAllServices(): Promise<ServiceActionResponse> {
+  return authFetch<ServiceActionResponse>(
+    `${ADMIN_API}/api/admin/services/stop-all`,
+    { method: 'POST' },
+  );
+}

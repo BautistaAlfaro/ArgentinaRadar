@@ -11,13 +11,16 @@ import {
   fetchDailyStats,
   fetchSystemMetrics,
   fetchRevenueData,
+  fetchServices,
   type KPIData,
   type DailyStat,
   type SystemMetric,
   type RevenuePoint,
+  type ServicesResponse,
 } from '../services/adminApi';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
+const SERVICE_POLL_INTERVAL = 5_000; // 5 seconds for service status
 
 // ─── KPIs ────────────────────────────────────────────────────────────
 
@@ -60,5 +63,16 @@ export function useRevenue() {
     queryFn: fetchRevenueData,
     refetchInterval: POLL_INTERVAL,
     staleTime: 10_000,
+  });
+}
+
+// ─── Services ─────────────────────────────────────────────────────────
+
+export function useServices() {
+  return useQuery<ServicesResponse>({
+    queryKey: ['admin', 'services'],
+    queryFn: fetchServices,
+    refetchInterval: SERVICE_POLL_INTERVAL,
+    staleTime: 2_000,
   });
 }
