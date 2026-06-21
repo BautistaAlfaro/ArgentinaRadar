@@ -94,11 +94,37 @@
 
 ---
 
+## 🟠 Sprint 5: Inteligencia avanzada ✅ COMPLETADO
+
+### 13. Multi-language detection + auto-translation ✅
+- Detector ES/EN/PT con score-counting (150+ indicator words)
+- Traducción automática vía Google Translate free (sin API key)
+- Endpoint `/api/translate` en ai-processor (puerto 3013)
+- Rate limiting: 5 req/s con token bucket
+- Columnas: `title_en`, `summary_en`, `translated`, `detected_language`
+
+### 14. Trending topics + news clustering ✅
+- `/trending` en Telegram — top 10 temas trending
+- Keyword extraction con stop words filtrados
+- Clustering con Jaccard similarity + time proximity bonus (< 2h)
+- `article_clusters` table en SQLite
+- Dashboard tab "Trending" con cards coloreadas por categoría
+- Clustering automático cada 30 min
+
+### 15. Quality scoring + AI filter v2 ✅
+- Quality scorer heurístico (0-100) con source reputation
+- Engagement predictor con category multipliers + time-of-day
+- AI filter v2: 6 criterios (political, economic, social, urgency, quality, relevance)
+- Auto-discard si quality < `MIN_QUALITY_THRESHOLD` (default 40)
+- Dashboard tab "Quality" con métricas + top 10 articles
+- Endpoints: `/api/quality/stats`, `/api/quality/thresholds`
+
+---
+
 ## ⚪ Backlog
 
 - Twitter/X integration (cuando haya API key paga)
-- Ollama local AI (qwen2.5:7b) para clasificación offline
-- Multi-idioma: detectar y traducir noticias en inglés de medios argentinos
+- Ollama local AI (qwen2.5:7b descargando, nomic-embed-text pendiente)
 - Web scraping de fuentes sin RSS (Clarín, La Nación, Infobae sin RSS)
 - Analytics dashboard público (sitears.dev/radar)
 
@@ -114,9 +140,11 @@
 | Pipeline uptime | Manual |
 | Tiempo RSS→Bluesky | ~45s |
 | Costo mensual | $0 |
-| Features implementadas | 12 |
-| Sub-agentes paralelos | 8 |
+| Features implementadas | 15 |
+| Sub-agentes paralelos | 11 |
+| Modelos Ollama | llama3, llama3.2, llama3.2-vision |
+| Calidad mínima | 40/100 |
 
 ---
 
-*Última actualización: 21 Jun 2026 — Sprint 1-4 completados*
+*Última actualización: 21 Jun 2026 — Sprint 1-5 completados*
