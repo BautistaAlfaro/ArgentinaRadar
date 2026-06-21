@@ -1,5 +1,5 @@
 {
-  "_comment": "Argentine news sources for the ingestion pipeline (updated with real RSS feeds)",
+  "_comment": "Argentine news sources for the ingestion pipeline (updated with working RSS/scrape configs)",
   "sources": [
     {
       "name": "clarin",
@@ -25,21 +25,21 @@
     {
       "name": "ambito",
       "type": "rss",
-      "url": "https://www.ambito.com/rss/",
+      "url": "https://feeds.feedburner.com/Ambito",
       "category": "economia",
       "rateLimitMs": 5000
     },
     {
       "name": "cronista",
       "type": "rss",
-      "url": "https://www.cronista.com/rss/",
+      "url": "https://www.cronista.com/arc/outboundfeeds/rss/",
       "category": "economia",
       "rateLimitMs": 5000
     },
     {
       "name": "pagina12",
       "type": "rss",
-      "url": "https://www.pagina12.com.ar/rss/",
+      "url": "https://www.pagina12.com.ar/arc/outboundfeeds/rss/",
       "category": "sociedad",
       "rateLimitMs": 5000
     },
@@ -52,17 +52,31 @@
     },
     {
       "name": "c5n",
-      "type": "rss",
-      "url": "https://www.c5n.com/rss/",
+      "type": "scrape",
+      "url": "https://www.c5n.com/",
       "category": "sociedad",
-      "rateLimitMs": 5000
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article.news-article__article-wrapper",
+        "title": "h2",
+        "summary": ".news-article__journalist",
+        "link": "a[href*='c5n.com']",
+        "timestamp": "time"
+      }
     },
     {
       "name": "a24",
-      "type": "rss",
-      "url": "https://www.a24.com/rss/",
+      "type": "scrape",
+      "url": "https://www.a24.com/",
       "category": "sociedad",
-      "rateLimitMs": 5000
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2.news-title",
+        "summary": ".news-excerpt p",
+        "link": "a.news-link",
+        "timestamp": "time"
+      }
     },
     {
       "name": "america",
@@ -81,7 +95,7 @@
     {
       "name": "canal26",
       "type": "rss",
-      "url": "https://www.canal26.com/rss/",
+      "url": "https://www.canal26.com/arc/outboundfeeds/rss/",
       "category": "sociedad",
       "rateLimitMs": 5000
     },
@@ -89,6 +103,13 @@
       "name": "perfil",
       "type": "rss",
       "url": "https://www.perfil.com/feed/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "eldestape",
+      "type": "rss",
+      "url": "https://feeds.feedburner.com/eldestape",
       "category": "sociedad",
       "rateLimitMs": 5000
     }

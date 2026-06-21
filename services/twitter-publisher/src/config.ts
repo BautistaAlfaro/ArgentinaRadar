@@ -54,7 +54,7 @@ export const config = {
     /** Monthly tweet limit with safety margin (Free tier = 1500). */
     monthlyLimit: 1400,
     /** Daily tweet limit for events. */
-    dailyLimit: parseInt(process.env.DAILY_TWEET_LIMIT ?? '50', 10),
+    dailyLimit: parseInt(process.env.DAILY_TWEET_LIMIT ?? '20', 10),
     /** Minimum cooldown between event tweets (ms). Default 5 minutes. */
     cooldownMs: parseInt(process.env.TWEET_COOLDOWN_MS ?? '300000', 10),
     /** Delay between individual publishes (ms). */

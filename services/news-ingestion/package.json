@@ -9,12 +9,15 @@
     "build": "tsc",
     "server": "node --loader ts-node/esm src/server.ts",
     "seed": "node --loader ts-node/esm src/seed.ts",
-    "seed:clear": "node --loader ts-node/esm src/seed.ts --clear"
+    "seed:clear": "node --loader ts-node/esm src/seed.ts --clear",
+    "db:reset": "node --loader ts-node/esm src/reset-db.ts --force",
+    "db:verify": "node --loader ts-node/esm src/verify-db.ts"
   },
   "dependencies": {
     "axios": "^1.18.0",
     "better-sqlite3": "^11.7.0",
     "bullmq": "^5.79.0",
+    "cheerio": "^1.0.0",
     "express": "^4.21.0",
     "ioredis": "^5.11.1",
     "puppeteer": "^23.0.0",

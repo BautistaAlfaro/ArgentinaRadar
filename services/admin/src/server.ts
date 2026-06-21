@@ -2,25 +2,32 @@
  * Admin Dashboard Service — Express Server
  *
  * Provides REST API endpoints for KPIs, metrics, daily stats,
- * revenue tracking, and user management.
+ * revenue tracking, user management, and pipeline monitoring.
  *
  * Port: 3012 (configurable via ADMIN_PORT env var)
  *
- * Endpoints:
- *   GET   /api/admin/kpis?range=7d|30d|90d       — List of KPIs
- *   GET   /api/admin/kpis/summary                  — Current KPI summary
- *   POST  /api/admin/kpis/record                   — Record a new KPI (internal)
- *   GET   /api/admin/system-metrics?service=xxx    — System metrics
- *   GET   /api/admin/daily-stats?range=7d          — Daily aggregated stats
+ * Pipeline Monitoring (public, no auth):
+ *   GET   /api/pipeline/status                      — Rich pipeline monitoring with per-service stats
+ *   GET   /api/admin/health                         — Comprehensive health dashboard
+ *   GET   /api/admin/pipeline-status                 — Legacy pipeline status check
+ *
+ * Internal Endpoints (require auth + ADMIN):
+ *   GET   /api/admin/kpis?range=7d|30d|90d          — List of KPIs
+ *   GET   /api/admin/kpis/summary                   — Current KPI summary
+ *   POST  /api/admin/kpis/record                    — Record a new KPI (internal)
+ *   GET   /api/admin/system-metrics?service=xxx     — System metrics
+ *   GET   /api/admin/daily-stats?range=7d           — Daily aggregated stats
  *   GET   /api/admin/revenue                        — Financial metrics
  *   GET   /api/admin/users                          — Admin user list (ADMIN only)
  *   POST  /api/admin/subscription                   — Register a subscription
  *   GET   /api/admin/subscriptions                  — List subscriptions
- *   GET   /api/admin/services                        — List service statuses (ADMIN)
- *   POST  /api/admin/services/:name/start            — Start a service via PM2 (ADMIN)
- *   POST  /api/admin/services/:name/stop             — Stop a service via PM2 (ADMIN)
- *   POST  /api/admin/services/start-all              — Start all services (ADMIN)
- *   POST  /api/admin/services/stop-all               — Stop all services (ADMIN)
+ *   GET   /api/admin/services                       — List service statuses (ADMIN)
+ *   POST  /api/admin/services/:name/start           — Start a service via PM2 (ADMIN)
+ *   POST  /api/admin/services/:name/stop            — Stop a service via PM2 (ADMIN)
+ *   POST  /api/admin/services/start-all             — Start all services (ADMIN)
+ *   POST  /api/admin/services/stop-all              — Stop all services (ADMIN)
+ *
+ * Service Health:
  *   GET   /health                                   — Service health
  */
 
@@ -45,7 +52,6 @@ import { usersRouter } from "./routes/users.js";
 import { subscriptionRouter } from "./routes/subscription.js";
 import { servicesRouter } from "./routes/services.js";
 import { startCollector } from "./collector.js";
-import http from "http";
 
 const app = express();
 
@@ -53,16 +59,27 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// ─── Public pipeline-status endpoint (no auth) ──────────────────────
-// Checks health of every pipeline service. Placed before the auth
-// middleware so it's available without credentials.
-const PIPELINE_SERVICES: Array<{ name: string; url: string }> = [
-  { name: 'rss', url: config.newsServiceUrl },
-  { name: 'geolocation', url: config.geolocationUrl },
-  { name: 'ai', url: config.aiProcessorUrl },
-  { name: 'event_detection', url: config.eventDetectorUrl },
-  { name: 'bluesky', url: config.twitterPublisherUrl },
+// ─── Public pipeline-status endpoints (no auth) ────────────────────
+// Placed before auth middleware so they're available without credentials.
+
+/** Service health-check definitions for pipeline monitoring. */
+interface PipelineServiceDef {
+  name: string;
+  displayName: string;
+  url: string;
+  /** Path to extract from /health response for daily stats. */
+  statsPath: string[];
+}
+
+const PIPELINE_SERVICES: PipelineServiceDef[] = [
+  { name: 'rss',            displayName: 'News Ingestion',  url: config.newsServiceUrl,         statsPath: ['articles', 'total'] },
+  { name: 'geolocation',    displayName: 'Geolocation',     url: config.geolocationUrl,         statsPath: [] },
+  { name: 'ai',             displayName: 'AI Processor',    url: config.aiProcessorUrl,          statsPath: [] },
+  { name: 'events',         displayName: 'Event Detector',  url: config.eventDetectorUrl,        statsPath: ['eventCount'] },
+  { name: 'bluesky',        displayName: 'Twitter Publisher', url: config.twitterPublisherUrl,    statsPath: ['quota', 'dailyUsed'] },
 ];
+
+// ─── GET /api/admin/pipeline-status (legacy, simple) ──────────────
 
 app.get('/api/admin/pipeline-status', async (_req, res) => {
   const statuses: Record<string, string> = {};
@@ -86,6 +103,201 @@ app.get('/api/admin/pipeline-status', async (_req, res) => {
 
   res.json(statuses);
 });
+
+// ─── GET /api/pipeline/status (rich pipeline monitoring) ──────────
+
+interface PipelineServiceHealth {
+  status: string;
+  uptime?: number;
+  [key: string]: unknown;
+}
+
+app.get('/api/pipeline/status', async (_req, res) => {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+
+  type PipelineStatus = Record<string, {
+    status: string;
+    articles_today?: number;
+    last_fetch?: string;
+    processed?: number;
+    cost_today?: number;
+    events_created?: number;
+    posts_today?: number;
+    uptime?: number;
+    error?: string;
+  }>;
+
+  const result: PipelineStatus = {};
+
+  for (const svc of PIPELINE_SERVICES) {
+    const entry: PipelineStatus[string] = { status: 'unknown' };
+
+    try {
+      const resp = await fetch(`${svc.url}/health`, {
+        signal: AbortSignal.timeout(8_000),
+      });
+
+      if (!resp.ok) {
+        entry.status = `degraded (${resp.status})`;
+        result[svc.name] = entry;
+        continue;
+      }
+
+      const body = await resp.json() as PipelineServiceHealth;
+      entry.status = body.status === 'ok' ? 'ok' : body.status ?? 'ok';
+      if (body.uptime != null) entry.uptime = body.uptime;
+
+      // Extract per-service rich stats from the health response
+      switch (svc.name) {
+        case 'rss': {
+          const typed = body as PipelineServiceHealth & { lastRun?: string; ingestionCount?: number; articles?: { total?: number } };
+          entry.articles_today = typed.articles?.total ?? 0;
+          entry.last_fetch = typed.lastRun
+            ? formatTimeAgo(typed.lastRun)
+            : 'never';
+          break;
+        }
+
+        case 'ai': {
+          const typed = body as PipelineServiceHealth & { budget_cap_exceeded?: boolean };
+          // Try to get cost from /api/costs endpoint
+          try {
+            const costsResp = await fetch(`${config.aiProcessorUrl}/api/costs`, {
+              signal: AbortSignal.timeout(5_000),
+            });
+            if (costsResp.ok) {
+              const costsData = await costsResp.json() as { total_cost?: number; daily_cost?: number };
+              entry.cost_today = costsData.daily_cost ?? costsData.total_cost ?? 0;
+            }
+          } catch {
+            entry.cost_today = 0;
+          }
+          break;
+        }
+
+        case 'events': {
+          const typed = body as PipelineServiceHealth & { eventCount?: number };
+          entry.events_created = typed.eventCount ?? 0;
+          break;
+        }
+
+        case 'bluesky': {
+          const typed = body as PipelineServiceHealth & { quota?: { dailyUsed?: number } };
+          entry.posts_today = typed.quota?.dailyUsed ?? 0;
+          break;
+        }
+      }
+    } catch (err) {
+      entry.status = 'down';
+      entry.error = (err as Error).message;
+    }
+
+    result[svc.name] = entry;
+  }
+
+  res.json({
+    pipeline: result,
+    timestamp: now.toISOString(),
+    today,
+  });
+});
+
+// ─── GET /api/admin/health (comprehensive health dashboard) ───────
+
+app.get('/api/admin/health', async (_req, res) => {
+  const results: Record<string, unknown> = {};
+  let allOk = true;
+
+  for (const svc of PIPELINE_SERVICES) {
+    try {
+      const resp = await fetch(`${svc.url}/health`, {
+        signal: AbortSignal.timeout(8_000),
+      });
+      const body = resp.ok ? await resp.json() as PipelineServiceHealth : null;
+      const serviceOk = resp.ok && body?.status === 'ok';
+      if (!serviceOk) allOk = false;
+
+      results[svc.name] = {
+        status: serviceOk ? 'running' : 'degraded',
+        httpStatus: resp.status,
+        uptime: body?.uptime ?? null,
+        healthy: serviceOk,
+      };
+    } catch (err) {
+      allOk = false;
+      results[svc.name] = {
+        status: 'down',
+        healthy: false,
+        error: (err as Error).message,
+      };
+    }
+  }
+
+  // Build today's rollup stats by querying individual service endpoints
+  let articlesToday = 0;
+  let postsToday = 0;
+  let eventsCreated = 0;
+
+  try {
+    const rssHealth = await fetch(`${config.newsServiceUrl}/api/news?limit=1`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (rssHealth.ok) {
+      const rssData = await rssHealth.json() as { total?: number };
+      articlesToday = rssData.total ?? 0;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const eventResp = await fetch(`${config.eventDetectorUrl}/api/events?limit=1`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (eventResp.ok) {
+      const eventData = await eventResp.json() as { pagination?: { total?: number } };
+      eventsCreated = eventData.pagination?.total ?? 0;
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const bskyResp = await fetch(`${config.twitterPublisherUrl}/api/stats/daily`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (bskyResp.ok) {
+      const bskyData = await bskyResp.json() as { postedToday?: number };
+      postsToday = bskyData.postedToday ?? 0;
+    }
+  } catch { /* ignore */ }
+
+  res.json({
+    status: allOk ? 'ok' : 'degraded',
+    service: 'admin-dashboard',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    services: results,
+    today: {
+      articlesIngested: articlesToday,
+      eventsCreated,
+      postsPublished: postsToday,
+    },
+    healthyCount: Object.values(results).filter((r: unknown) => (r as { healthy?: boolean }).healthy).length,
+    totalCount: PIPELINE_SERVICES.length,
+  });
+});
+
+// ─── Helper: format a timestamp as a human-friendly relative string ─
+
+function formatTimeAgo(isoString: string): string {
+  const ms = Date.now() - new Date(isoString).getTime();
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 // ─── Global auth middleware (all /api/admin/* routes require auth + ADMIN) ─
 // In development mode, skip auth so the dashboard works without token
@@ -135,7 +347,9 @@ app.listen(config.port, () => {
   console.log(`[admin]   POST /api/admin/services/start-all`);
   console.log(`[admin]   POST /api/admin/services/stop-all`);
   console.log(`[admin]   GET  /api/admin/pipeline-status`);
-  console.log(`[admin]   GET  /health`);
+  console.log(`[admin]   GET  /api/pipeline/status     — Rich pipeline monitoring`);
+  console.log(`[admin]   GET  /api/admin/health        — Comprehensive health dashboard`);
+  console.log(`[admin]   GET  /health                  — Service health`);
 
   // Start the KPI collector
   startCollector();

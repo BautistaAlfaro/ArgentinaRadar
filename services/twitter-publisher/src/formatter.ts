@@ -80,46 +80,35 @@ export function formatTweet(input: TweetFormatInput): string {
 /**
  * Event-based tweet formatter for ArgentinaRadar.
  *
- * Format:
- *   🇦🇷 {title}
- *
- *   Reportado por {N} medios | Impacto: {score}/100 {emoji}
- *
- *   #ArgentinaRadar
+ * Format (Bluesky-optimized, single line):
+ *   🇦🇷 {event_title} | 📰 {source_count} fuentes | Impacto: {score}/100 #ArgentinaRadar
  *
  * Rules:
- *  - Max 280 characters (Twitter's limit).
+ *  - Max 300 characters (Bluesky's limit).
  *  - If the title doesn't fit, it is truncated with "…".
- *  - Consensus → emoji: high 🟢, medium 🟡, low 🔴.
+ *  - Pipe-separated single line format for maximum readability on feeds.
  */
 export function formatEventTweet(input: EventTweetInput): string {
-  const { title, sourceCount, impact, consensus } = input;
-
-  const consensusEmoji: Record<string, string> = {
-    high: '🟢',
-    medium: '🟡',
-    low: '🔴',
-  };
-  const emoji = consensusEmoji[consensus] ?? '🔴';
+  const { title, sourceCount, impact } = input;
 
   const countStr = String(sourceCount);
   const impactStr = String(impact);
 
-  // Everything after the title
-  const suffix = `\n\nReportado por ${countStr} medios | Impacto: ${impactStr}/100 ${emoji}\n\n#ArgentinaRadar`;
+  // Build suffix: " | 📰 N fuentes | Impacto: N/100 #ArgentinaRadar"
+  const suffix = ` | 📰 ${countStr} fuentes | Impacto: ${impactStr}/100 #ArgentinaRadar`;
 
   // Prefix
   const prefix = '🇦🇷 ';
 
   const fixedOverhead = prefix.length + suffix.length;
 
-  if (fixedOverhead >= 280) {
+  if (fixedOverhead >= 300) {
     throw new Error(
-      `Overhead too long to fit in a tweet (${fixedOverhead} chars, max 280)`
+      `Overhead too long to fit in a post (${fixedOverhead} chars, max 300)`
     );
   }
 
-  const titleBudget = 280 - fixedOverhead;
+  const titleBudget = 300 - fixedOverhead;
 
   const truncatedTitle =
     title.length <= titleBudget

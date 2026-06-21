@@ -29,6 +29,8 @@ export function runMigrations(db: Database.Database): void {
       rate_limit_ms INTEGER DEFAULT 2000,
       status        TEXT NOT NULL DEFAULT 'healthy',
       last_fetched_at TEXT,
+      last_error      TEXT,
+      consecutive_failures INTEGER DEFAULT 0,
       css_selectors TEXT
     );
 
@@ -45,6 +47,7 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_news_status ON news_items(status);
     CREATE INDEX IF NOT EXISTS idx_news_published_at ON news_items(published_at);
     CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
+    CREATE INDEX IF NOT EXISTS idx_news_url_hash ON news_items(url);
   `);
 
   // ─── AI processing columns (added idempotently) ──────────────────
@@ -60,6 +63,21 @@ export function runMigrations(db: Database.Database): void {
       console.log(`[migrations] Executed: ${sql}`);
     } catch {
       // Column already exists — ignore on subsequent runs
+    }
+  }
+
+  // ─── Health monitoring columns (added idempotently) ──────────────
+  const healthColumns = [
+    "ALTER TABLE sources ADD COLUMN last_error TEXT",
+    "ALTER TABLE sources ADD COLUMN consecutive_failures INTEGER DEFAULT 0",
+  ];
+
+  for (const sql of healthColumns) {
+    try {
+      db.exec(sql);
+      console.log(`[migrations] Executed: ${sql}`);
+    } catch {
+      // Column already exists
     }
   }
 

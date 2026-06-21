@@ -53,8 +53,9 @@ export async function fetchTrendingEvents(): Promise<TrendingEvent[]> {
   // Server returns { events: TrendingEvent[], count: number }
   const all = resp.data.events ?? [];
 
-  // Only very high-impact events auto-publish directly (>= 70).
-  // Events with impact 50–69 are routed through the Telegram approval workflow
+  // Auto-publish events with impact >= 50 (no approval needed).
+  // Events with impact 30–49 are routed through the Telegram approval workflow
   // (handled by hermes-bridge's approval loop).
-  return all.filter((e) => e.impact >= 70);
+  // Events with impact < 30 are skipped entirely (too low to publish).
+  return all.filter((e) => e.impact >= 50);
 }

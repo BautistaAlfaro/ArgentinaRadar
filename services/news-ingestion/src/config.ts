@@ -11,6 +11,7 @@ const SOURCES_PATH =
 
 export type SourceType = 'rss' | 'scrape';
 export type SourceCategory = 'politica' | 'economia' | 'sociedad' | 'deportes';
+export type SourceStatus = 'healthy' | 'degraded' | 'disabled';
 
 export interface CssSelectors {
   article: string;

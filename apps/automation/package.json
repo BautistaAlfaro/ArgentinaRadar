@@ -1,0 +1,13 @@
+{
+  "name": "@argentinaradar/automation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/orchestrator.ts",
+    "dev": "npx tsx --watch src/orchestrator.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

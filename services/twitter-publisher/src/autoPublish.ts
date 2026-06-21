@@ -1,17 +1,17 @@
 /**
  * Auto-publish background loop.
  *
- * Polls the event-detector service for trending events with impact >= 70
- * (high-impact), formats each as a tweet, posts it via the Twitter API,
+ * Polls the event-detector service for trending events with impact >= 50,
+ * formats each for publishing, posts via Bluesky and/or Twitter,
  * and records the result in tweet_history.
  *
- * Events with impact 50–69 are NOT handled here — they go through the
- * Telegram approval workflow in hermes-bridge instead.
- *
- * Safeguards:
- *  - Monthly rate limit  (1 400 / 1 500 — from rateLimiter.ts)
- *  - Daily rate limit    (50 tweets max — from rateLimiter.ts)
- *  - Cooldown            (5 minutes between tweets — from rateLimiter.ts)
+ * Publishing rules:
+ *  - Auto-publish events with impact >= 50 (no Telegram approval needed)
+ *  - Skip events with impact < 30 (too low to be worth publishing)
+ *  - Events with impact 30–49 go through Telegram approval (hermes-bridge)
+ *  - Cooldown: minimum 5 minutes between posts
+ *  - Daily limit: 20 posts max
+ *  - Monthly rate limit (1400 / 1500 — from rateLimiter.ts)
  *  - Runs every 5 minutes by default.
  *  - If event-detector is unreachable, logs the error and retries next cycle.
  */
@@ -21,8 +21,8 @@ import { config } from './config.js';
 import { fetchTrendingEvents } from './eventClient.js';
 import type { TrendingEvent } from './eventClient.js';
 import { formatEventTweet } from './formatter.js';
-import { postTweet, TwitterApiError } from './twitterClient.js';
-import { postToBluesky } from './blueskyClient.js';
+import { postTweet } from './twitterClient.js';
+import { postToBluesky, type BlueskyPostResult } from './blueskyClient.js';
 import {
   canPublishMonthly,
   canPublishDaily,
@@ -69,7 +69,8 @@ export function startAutoPublish(): void {
   if (_autoPublishLoop) return;
   console.log(
     '[autoPublish] Starting event-based auto-publish loop ' +
-      `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 70)`
+      `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 50, ` +
+      `daily limit ${config.publishing.dailyLimit}, cooldown ${Math.round(config.publishing.cooldownMs / 1000)}s)`
   );
   _autoPublishLoop = createLoop('autoPublish', runAutoPublish, POLL_INTERVAL);
   _autoPublishLoop.start();
@@ -150,7 +151,7 @@ async function runAutoPublish(): Promise<void> {
       if (!canPublishMonthly()) break;
       if (!canPublishDaily()) break;
 
-      const tweetText = formatEventTweet({
+      const postText = formatEventTweet({
         title: event.title,
         sourceCount: event.sources.length,
         impact: event.impact,
@@ -164,45 +165,63 @@ async function runAutoPublish(): Promise<void> {
         )
         .run(event.id);
 
-      // Attempt posting with retries
+      // ── Attempt post with retries ─────────────────────────────
+      // Primary: Bluesky. Secondary: Twitter (if configured).
       let lastError: string | null = null;
+      let published = false;
 
       for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
         try {
-          const result = await postTweet(tweetText);
-
-          // Success - update tweet_history
-          d.prepare(
-            `UPDATE tweet_history
-             SET tweet_id = ?, status = 'success', posted_at = datetime('now')
-             WHERE id = ?`
-          ).run(result.tweetId, historyId);
-
-          console.log(
-            `[autoPublish] Published event "${event.title.slice(0, 60)}..." ` +
-              `-> tweet ${result.tweetId}`
-          );
-
-          // Also post to Bluesky (non-critical — never fail the pipeline)
+          // ── Publish to Bluesky (primary channel) ──────────────
           if (config.bluesky.enabled && config.bluesky.password) {
+            const bsky: BlueskyPostResult = await postToBluesky(postText, config);
+            console.log(`[autoPublish] ✅ Bluesky: ${bsky.uri}`);
+
+            // Update tweet_history with Bluesky URI
+            d.prepare(
+              `UPDATE tweet_history
+               SET tweet_id = ?, status = 'success', posted_at = datetime('now')
+               WHERE id = ?`
+            ).run(bsky.uri, historyId);
+
+            published = true;
+          }
+
+          // ── Also post to Twitter (if credentials configured) ──
+          const twitterConfigured = !!(config.twitter.apiKey && config.twitter.accessToken);
+          if (twitterConfigured) {
             try {
-              const bsky = await postToBluesky(tweetText, config);
-              console.log(`[autoPublish] ✅ Bluesky: ${bsky.uri}`);
-              await sleep(1000); // rate limit courtesy delay
-            } catch (err) {
-              console.warn(`[autoPublish] ⚠️ Bluesky failed:`, (err as Error).message);
+              const result = await postTweet(postText);
+              console.log(
+                `[autoPublish] ✅ Twitter: ${result.tweetId} for "${event.title.slice(0, 60)}..."`
+              );
+
+              // Update tweet_history with Twitter tweet ID
+              d.prepare(
+                `UPDATE tweet_history
+                 SET tweet_id = ?, status = 'success', posted_at = datetime('now')
+                 WHERE id = ?`
+              ).run(result.tweetId, historyId);
+
+              published = true;
+            } catch (twErr) {
+              console.warn(`[autoPublish] ⚠️ Twitter failed:`, (twErr as Error).message);
+              // Don't fail the pipeline — Bluesky is the primary channel
             }
           }
 
-          break; // exit retry loop
+          if (published) {
+            // If neither Bluesky nor Twitter published, we'll hit the retry logic
+            break;
+          }
+
+          // Neither channel published — mark as failure
+          lastError = 'No publishing channel available (check credentials)';
+          break;
         } catch (err) {
           lastError = String(err);
 
-          if (
-            err instanceof TwitterApiError &&
-            err.isRetryable &&
-            attempt < RETRY_DELAYS.length
-          ) {
+          if (attempt < RETRY_DELAYS.length) {
             const delay = RETRY_DELAYS[attempt];
             console.warn(
               `[autoPublish] Retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
@@ -216,36 +235,21 @@ async function runAutoPublish(): Promise<void> {
             continue;
           }
 
-          if (attempt < RETRY_DELAYS.length) {
-            // Non-Twitter error (network, etc.) - still retry
-            const delay = RETRY_DELAYS[attempt];
-            console.warn(
-              `[autoPublish] Network retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
-                `in ${Math.round(delay / 1000)}s: ${lastError}`
-            );
-            d.prepare(
-              "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
-            ).run(lastError, historyId);
-            await sleep(delay);
-            continue;
-          }
-
-          // Non-retryable error - break
+          // Non-retryable error — break
           break;
         }
       }
 
-      // All retries exhausted - dead-letter
-      if (lastError) {
-        const finalError = lastError;
+      // All retries exhausted — dead-letter
+      if (!published && lastError) {
         d.prepare(
           "UPDATE tweet_history SET status = 'failed', error = ? WHERE id = ?"
-        ).run(finalError, historyId);
+        ).run(lastError, historyId);
 
         moveToDeadLetter(
           event.id,
           event.title,
-          finalError,
+          lastError,
           RETRY_DELAYS.length
         );
       }

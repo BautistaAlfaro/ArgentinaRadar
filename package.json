@@ -19,6 +19,8 @@
     "dev:night-owl": "npm run dev --workspace=@argentinaradar/night-owl",
     "dev:admin": "npm run dev --workspace=@argentinaradar/admin",
     "dev:all": "pm2 start config/pm2.config.cjs",
+    "start:all": "powershell -ExecutionPolicy Bypass -File scripts/start-all.ps1",
+    "start:orchestrator": "npm run start --workspace=@argentinaradar/automation",
     "stop": "pm2 stop all",
     "logs": "pm2 logs",
     "build": "npm run build --workspace=@argentinaradar/web",

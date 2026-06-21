@@ -1,5 +1,6 @@
 import type { Source } from './config.js';
 import { getDb } from './db.js';
+import { recordFailure } from './healthMonitor.js';
 
 const RETRY_DELAYS_MS = [1_000, 5_000, 25_000];
 
@@ -13,7 +14,8 @@ export interface HttpClientResult {
 /**
  * Fetch a URL with retry logic. On HTTP 429 / 5xx, retries up to 3 times
  * with exponential backoff delays (1s / 5s / 25s). After all retries fail,
- * the source is marked as 'degraded' in the DB.
+ * the source is marked as 'degraded' in the DB via healthMonitor.
+ * Non-retryable errors (4xx except 429) fail immediately.
  */
 export async function fetchWithRetry(
   url: string,
@@ -52,7 +54,7 @@ export async function fetchWithRetry(
 
       // Retryable error — log and wait
       lastError = `HTTP ${response.status} for ${url} (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length + 1})`;
-      console.warn(`[httpClient] ${lastError}`);
+      console.warn(`[httpClient] Retrying: ${lastError}`);
 
       if (attempt < RETRY_DELAYS_MS.length) {
         await sleep(RETRY_DELAYS_MS[attempt]);
@@ -60,7 +62,7 @@ export async function fetchWithRetry(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       lastError = `${msg} (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length + 1})`;
-      console.warn(`[httpClient] ${lastError}`);
+      console.warn(`[httpClient] Retrying: ${lastError}`);
 
       if (attempt < RETRY_DELAYS_MS.length) {
         await sleep(RETRY_DELAYS_MS[attempt]);
@@ -68,19 +70,9 @@ export async function fetchWithRetry(
     }
   }
 
-  // All attempts failed — mark source as degraded
-  markSourceDegraded(source);
+  // All attempts failed — record failure via health monitor
+  recordFailure(source.name, lastError ?? 'Max retries exceeded');
   return { ok: false, status: lastStatus, body: null, error: lastError };
-}
-
-function markSourceDegraded(source: Source): void {
-  try {
-    const db = getDb();
-    db.prepare('UPDATE sources SET status = ? WHERE name = ?').run('degraded', source.name);
-    console.warn(`[httpClient] Source "${source.name}" marked as degraded`);
-  } catch (err) {
-    console.error(`[httpClient] Failed to mark source "${source.name}" as degraded:`, err);
-  }
 }
 
 function sleep(ms: number): Promise<void> {
