@@ -98,7 +98,7 @@ export function EventDetectionChart({ data }: EventDetectionChartProps) {
               radius={[4, 4, 0, 0]}
               maxBarSize={32}
             >
-              {data.map((entry) => (
+              {(Array.isArray(data) ? data : []).map((entry) => (
                 <Cell key={entry.date} fill={getImpactColor(entry.avgImpactScore)} />
               ))}
             </Bar>
