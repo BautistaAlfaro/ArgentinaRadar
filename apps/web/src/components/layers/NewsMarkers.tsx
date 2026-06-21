@@ -6,7 +6,7 @@
  * - Click: shows Popup with full headline, 200-char summary, source, timestamp, "Leer más" link
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useReducer, useCallback } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { Tooltip } from '../Tooltip';
 import { Popup } from '../Popup';
@@ -32,18 +32,37 @@ interface Props {
   articles: NewsItem[];
 }
 
-interface TooltipState {
-  visible: boolean;
-  x: number;
-  y: number;
-  article: NewsItem | null;
+interface InteractionState {
+  tooltip: { visible: boolean; x: number; y: number; article: NewsItem | null };
+  popup: { visible: boolean; x: number; y: number; article: NewsItem | null };
 }
 
-interface PopupState {
-  visible: boolean;
-  x: number;
-  y: number;
-  article: NewsItem | null;
+type InteractionAction =
+  | { type: 'SHOW_TOOLTIP'; x: number; y: number; article: NewsItem }
+  | { type: 'HIDE_TOOLTIP' }
+  | { type: 'SHOW_POPUP'; x: number; y: number; article: NewsItem }
+  | { type: 'HIDE_POPUP' };
+
+const INITIAL_INTERACTION: InteractionState = {
+  tooltip: { visible: false, x: 0, y: 0, article: null },
+  popup: { visible: false, x: 0, y: 0, article: null },
+};
+
+function interactionReducer(state: InteractionState, action: InteractionAction): InteractionState {
+  switch (action.type) {
+    case 'SHOW_TOOLTIP':
+      return { ...state, tooltip: { visible: true, x: action.x, y: action.y, article: action.article } };
+    case 'HIDE_TOOLTIP':
+      return { ...state, tooltip: { visible: false, x: 0, y: 0, article: null } };
+    case 'SHOW_POPUP':
+      return {
+        ...state,
+        popup: { visible: true, x: action.x, y: action.y, article: action.article },
+        tooltip: { visible: false, x: 0, y: 0, article: null },
+      };
+    case 'HIDE_POPUP':
+      return { ...state, popup: { visible: false, x: 0, y: 0, article: null } };
+  }
 }
 
 export function NewsMarkers({ globe, articles }: Props) {
@@ -51,16 +70,9 @@ export function NewsMarkers({ globe, articles }: Props) {
   const isActive = activeLayers.has('news');
   const prevActiveRef = useRef(isActive);
 
-  // Interaction state
-  const [tooltip, setTooltip] = useState<TooltipState>({
-    visible: false, x: 0, y: 0, article: null,
-  });
-  const [popup, setPopup] = useState<PopupState>({
-    visible: false, x: 0, y: 0, article: null,
-  });
-  const closePopup = useCallback(() => {
-    setPopup({ visible: false, x: 0, y: 0, article: null });
-  }, []);
+  // Combined interaction state via reducer
+  const [interaction, dispatch] = useReducer(interactionReducer, INITIAL_INTERACTION);
+  const closePopup = useCallback(() => dispatch({ type: 'HIDE_POPUP' }), []);
 
   useEffect(() => {
     const prevActive = prevActiveRef.current;
@@ -95,52 +107,15 @@ export function NewsMarkers({ globe, articles }: Props) {
       .pointAltitude(0.03)
       .pointRadius(3.5)
       .pointColor((d: MarkerDatum) => CATEGORY_COLORS[d.category] ?? CATEGORY_COLORS.general)
-      .pointLabel(null as any) // We handle tooltips manually
-
-      // Hover tooltip
-      .onPointHover((hovered: MarkerDatum | null, prevHovered: MarkerDatum | null) => {
-        // When using globe.gl, the event object may be on the second argument
-        const event = arguments as unknown as { clientX?: number; clientY?: number };
-        // We use pointer tracking via the container instead
-        if (!hovered) {
-          setTooltip({ visible: false, x: 0, y: 0, article: null });
-          globe.pointColor((d: MarkerDatum) => CATEGORY_COLORS[d.category] ?? CATEGORY_COLORS.general);
-          return;
-        }
-        // Highlight on hover
-        globe.pointColor((d: MarkerDatum) => {
-          if (d === hovered) return '#ffffff';
-          return CATEGORY_COLORS[d.category] ?? CATEGORY_COLORS.general;
-        });
-      });
-
-    // Attach mousemove on the canvas for tooltip positioning
-    const onMouseMove = (e: MouseEvent) => {
-      // Check if we have a hovered point by checking if tooltip should show
-      // The globe.gl library doesn't give us easy access to the currently hovered point
-      // So we use a workaround via custom point hover tracking
-    };
-
-    // Click handler
-    globe.onPointClick((clicked: MarkerDatum, event: { clientX: number; clientY: number }) => {
-      const ev = event || { clientX: 0, clientY: 0 };
-      setPopup({
-        visible: true,
-        x: ev.clientX,
-        y: ev.clientY,
-        article: clicked.article,
-      });
-      setTooltip({ visible: false, x: 0, y: 0, article: null });
-    });
+      .pointLabel(null as any); // We handle tooltips manually
 
     // Custom hover tracking using globe.gl's onPointHover
-    // We store the hovered point and update on mousemove
     let currentHovered: MarkerDatum | null = null;
 
     globe.onPointHover((hovered: MarkerDatum | null) => {
       currentHovered = hovered;
       if (!hovered) {
-        setTooltip({ visible: false, x: 0, y: 0, article: null });
+        dispatch({ type: 'HIDE_TOOLTIP' });
         globe.pointColor((d: MarkerDatum) => CATEGORY_COLORS[d.category] ?? CATEGORY_COLORS.general);
       } else {
         globe.pointColor((d: MarkerDatum) => {
@@ -150,17 +125,31 @@ export function NewsMarkers({ globe, articles }: Props) {
       }
     });
 
-    if (container) {
-      container.addEventListener('mousemove', (e: MouseEvent) => {
-        if (currentHovered) {
-          setTooltip({
-            visible: true,
-            x: e.clientX,
-            y: e.clientY,
-            article: currentHovered.article,
-          });
-        }
+    // Click handler
+    globe.onPointClick((clicked: MarkerDatum, event: { clientX: number; clientY: number }) => {
+      const ev = event || { clientX: 0, clientY: 0 };
+      dispatch({
+        type: 'SHOW_POPUP',
+        x: ev.clientX,
+        y: ev.clientY,
+        article: clicked.article,
       });
+    });
+
+    // Mousemove for tooltip positioning
+    const onMouseMove = (e: MouseEvent) => {
+      if (currentHovered) {
+        dispatch({
+          type: 'SHOW_TOOLTIP',
+          x: e.clientX,
+          y: e.clientY,
+          article: currentHovered.article,
+        });
+      }
+    };
+
+    if (container) {
+      container.addEventListener('mousemove', onMouseMove);
     }
 
     return () => {
@@ -176,13 +165,13 @@ export function NewsMarkers({ globe, articles }: Props) {
   return (
     <>
       {/* Tooltip */}
-      {tooltip.visible && tooltip.article && (
-        <Tooltip article={tooltip.article} x={tooltip.x} y={tooltip.y} />
+      {interaction.tooltip.visible && interaction.tooltip.article && (
+        <Tooltip article={interaction.tooltip.article} x={interaction.tooltip.x} y={interaction.tooltip.y} />
       )}
 
       {/* Popup */}
-      {popup.visible && popup.article && (
-        <Popup article={popup.article} x={popup.x} y={popup.y} onClose={closePopup} />
+      {interaction.popup.visible && interaction.popup.article && (
+        <Popup article={interaction.popup.article} x={interaction.popup.x} y={interaction.popup.y} onClose={closePopup} />
       )}
     </>
   );

@@ -9,11 +9,10 @@
  *   - 15s refresh interval
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
-import { fetchProtests, type ProtestItem } from '../../services/api';
-
-const EVENTS_API = 'http://localhost:3008';
+import { useLayerData } from '../../hooks/useLayerData';
+import type { ProtestsResponse } from '../../services/api';
 
 // Color mapping for protest types (same as ProtestPanel)
 const TYPE_COLORS: Record<string, string> = {
@@ -35,7 +34,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 interface HtmlElementDatum {
-  protest: ProtestItem;
+  protest: import('../../services/api').ProtestItem;
   lat: number;
   lng: number;
 }
@@ -58,30 +57,12 @@ export function ProtestLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('protests');
   const prevActiveRef = useRef(isActive);
-  const [protests, setProtests] = useState<ProtestItem[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch protests on interval (15s)
-  useEffect(() => {
-    async function fetchActiveProtests() {
-      try {
-        const resp = await fetchProtests({ status: 'active' });
-        setProtests(resp.protests ?? []);
-      } catch (err) {
-        console.warn('[ProtestLayer] Fetch failed:', err);
-      }
-    }
-
-    fetchActiveProtests();
-    intervalRef.current = setInterval(fetchActiveProtests, 15000);
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, []);
+  const { data } = useLayerData<ProtestsResponse>(
+    'http://localhost:3008/api/events/protests?status=active',
+    15 * 1000, // 15 seconds
+  );
+  const protests = data?.protests ?? [];
 
   // Render HTML elements on globe
   useEffect(() => {

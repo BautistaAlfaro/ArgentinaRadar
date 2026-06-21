@@ -236,9 +236,7 @@ function EventCard({ event, onClick }: EventCardProps) {
       </div>
 
       {/* Source list */}
-      <p className="text-[10px] text-slate-500 mb-1.5 truncate">
-        {renderSources(event.sources)}
-      </p>
+      <SourceBadges sources={event.sources} />
 
       {/* Footer: location + time */}
       <div className="flex items-center justify-between text-[10px] text-slate-500">
@@ -255,12 +253,13 @@ function EventCard({ event, onClick }: EventCardProps) {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function renderSources(sources: string[]): string {
-  if (sources.length === 0) return '';
+function SourceBadges({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return null;
   const visible = sources.slice(0, 3);
   const remainder = sources.length - 3;
   const parts = visible.join(', ');
-  return remainder > 0 ? `${parts} +${remainder} más` : parts;
+  const text = remainder > 0 ? `${parts} +${remainder} más` : parts;
+  return <p className="text-[10px] text-slate-500 mb-1.5 truncate">{text}</p>;
 }
 
 function getTimeAgo(dateStr: string): string {

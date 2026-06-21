@@ -9,21 +9,28 @@
  * - SystemMetrics sidebar / footer panel
  */
 
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useKPIs, useDailyStats, useSystemMetrics, useRevenue } from '../hooks/useAdminData';
-import { KPICard } from '../components/admin/KPICard';
-import { NewsProcessingChart } from '../components/admin/charts/NewsProcessingChart';
-import { RevenueChart } from '../components/admin/charts/RevenueChart';
-import { SystemHealthChart } from '../components/admin/charts/SystemHealthChart';
-import { EventDetectionChart } from '../components/admin/charts/EventDetectionChart';
-import { UserActivityChart } from '../components/admin/charts/UserActivityChart';
-import { AICostChart } from '../components/admin/charts/AICostChart';
-import { SystemMetrics } from '../components/admin/SystemMetrics';
-import { InsecurityPanel } from '../components/admin/InsecurityPanel';
-import { ProtestPanel } from '../components/admin/ProtestPanel';
-import { PoliticalRadar } from '../components/admin/PoliticalRadar';
-import { MorningBriefing } from '../components/admin/MorningBriefing';
+
+// Lazy-load admin components to code-split heavy chart libraries (recharts)
+const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
+const NewsProcessingChart = lazy(() => import('../components/admin/charts/NewsProcessingChart').then(m => ({ default: m.NewsProcessingChart })));
+const RevenueChart = lazy(() => import('../components/admin/charts/RevenueChart').then(m => ({ default: m.RevenueChart })));
+const SystemHealthChart = lazy(() => import('../components/admin/charts/SystemHealthChart').then(m => ({ default: m.SystemHealthChart })));
+const EventDetectionChart = lazy(() => import('../components/admin/charts/EventDetectionChart').then(m => ({ default: m.EventDetectionChart })));
+const UserActivityChart = lazy(() => import('../components/admin/charts/UserActivityChart').then(m => ({ default: m.UserActivityChart })));
+const AICostChart = lazy(() => import('../components/admin/charts/AICostChart').then(m => ({ default: m.AICostChart })));
+const SystemMetrics = lazy(() => import('../components/admin/SystemMetrics').then(m => ({ default: m.SystemMetrics })));
+const InsecurityPanel = lazy(() => import('../components/admin/InsecurityPanel').then(m => ({ default: m.InsecurityPanel })));
+const ProtestPanel = lazy(() => import('../components/admin/ProtestPanel').then(m => ({ default: m.ProtestPanel })));
+const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').then(m => ({ default: m.PoliticalRadar })));
+const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
+
+// ─── Suspense fallbacks ──────────────────────────────────────────
+function LoadingSkeleton({ className }: { className?: string }) {
+  return <div className={`bg-slate-800 rounded-xl animate-pulse ${className ?? ''}`} />;
+}
 
 type Range = '7d' | '30d' | '90d';
 type Tab = 'overview' | 'briefing';
@@ -153,6 +160,7 @@ export function AdminDashboard() {
               onClick={() => window.location.reload()}
               className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800/60 cursor-pointer"
               title="Refresh data"
+              aria-label="Refresh dashboard data"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                 <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
@@ -174,82 +182,104 @@ export function AdminDashboard() {
               transition={{ duration: 0.25 }}
             >
               {/* ── KPI Cards ──────────────────────────────────────────── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <KPICard
-                icon={Icons.tweets}
-                value={kpis?.tweetsPublished.total ?? 0}
-                label="Tweets Published"
-                trend={kpis?.tweetsPublished.trend ?? 0}
-                sparkline={kpis?.tweetsPublished.sparkline ?? []}
-                accent="blue"
-                format="compact"
-              />
-              <KPICard
-                icon={Icons.news}
-                value={kpis?.newsProcessed.total ?? 0}
-                label="News Processed"
-                trend={kpis?.newsProcessed.trend ?? 0}
-                sparkline={kpis?.newsProcessed.sparkline ?? []}
-                accent="emerald"
-                format="compact"
-              />
-              <KPICard
-                icon={Icons.revenue}
-                value={kpis?.revenue.usd ?? 0}
-                label="Revenue (USD)"
-                trend={kpis?.revenue.trend ?? 0}
-                sparkline={kpis?.revenue.sparkline ?? []}
-                accent="amber"
-                format="currency"
-              />
-              <KPICard
-                icon={Icons.users}
-                value={kpis?.activeUsers.total ?? 0}
-                label="Active Users"
-                trend={kpis?.activeUsers.trend ?? 0}
-                sparkline={kpis?.activeUsers.sparkline ?? []}
-                accent="violet"
-              />
-            </div>
+            <Suspense fallback={
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <LoadingSkeleton key={i} className="h-36" />
+                ))}
+              </div>
+            }>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard
+                  icon={Icons.tweets}
+                  value={kpis?.tweetsPublished.total ?? 0}
+                  label="Tweets Published"
+                  trend={kpis?.tweetsPublished.trend ?? 0}
+                  sparkline={kpis?.tweetsPublished.sparkline ?? []}
+                  accent="blue"
+                  format="compact"
+                />
+                <KPICard
+                  icon={Icons.news}
+                  value={kpis?.newsProcessed.total ?? 0}
+                  label="News Processed"
+                  trend={kpis?.newsProcessed.trend ?? 0}
+                  sparkline={kpis?.newsProcessed.sparkline ?? []}
+                  accent="emerald"
+                  format="compact"
+                />
+                <KPICard
+                  icon={Icons.revenue}
+                  value={kpis?.revenue.usd ?? 0}
+                  label="Revenue (USD)"
+                  trend={kpis?.revenue.trend ?? 0}
+                  sparkline={kpis?.revenue.sparkline ?? []}
+                  accent="amber"
+                  format="currency"
+                />
+                <KPICard
+                  icon={Icons.users}
+                  value={kpis?.activeUsers.total ?? 0}
+                  label="Active Users"
+                  trend={kpis?.activeUsers.trend ?? 0}
+                  sparkline={kpis?.activeUsers.sparkline ?? []}
+                  accent="violet"
+                />
+              </div>
+            </Suspense>
 
             {/* ── Charts Grid ────────────────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <NewsProcessingChart data={dailyStats ?? []} />
-              <RevenueChart data={revenue ?? []} />
-            </div>
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <NewsProcessingChart data={dailyStats ?? []} />
+                <RevenueChart data={revenue ?? []} />
+              </div>
+            </Suspense>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SystemHealthChart
-                metrics={systemMetrics ?? []}
-                dimension={systemDimension}
-              />
-              <EventDetectionChart data={dailyStats ?? []} />
-            </div>
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <SystemHealthChart
+                  metrics={systemMetrics ?? []}
+                  dimension={systemDimension}
+                />
+                <EventDetectionChart data={dailyStats ?? []} />
+              </div>
+            </Suspense>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <UserActivityChart data={dailyStats ?? []} />
-              <AICostChart data={dailyStats ?? []} />
-            </div>
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <UserActivityChart data={dailyStats ?? []} />
+                <AICostChart data={dailyStats ?? []} />
+              </div>
+            </Suspense>
 
             {/* ── Political Radar ──────────────────────────────────── */}
-            <PoliticalRadar />
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <PoliticalRadar />
+            </Suspense>
 
             {/* ── Insecurity Radar ──────────────────────────────────── */}
-            <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
-              <div className="max-h-[500px] overflow-y-auto">
-                <InsecurityPanel />
-              </div>
-            </section>
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+                <div className="max-h-[500px] overflow-y-auto">
+                  <InsecurityPanel />
+                </div>
+              </section>
+            </Suspense>
 
             {/* ── Protest Radar ──────────────────────────────────────── */}
-            <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
-              <div className="max-h-[500px] overflow-y-auto">
-                <ProtestPanel />
-              </div>
-            </section>
+            <Suspense fallback={<LoadingSkeleton className="h-80" />}>
+              <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+                <div className="max-h-[500px] overflow-y-auto">
+                  <ProtestPanel />
+                </div>
+              </section>
+            </Suspense>
 
             {/* ── System Metrics ─────────────────────────────────────── */}
-            <SystemMetrics metrics={systemMetrics ?? []} />
+            <Suspense fallback={<LoadingSkeleton className="h-64" />}>
+              <SystemMetrics metrics={systemMetrics ?? []} />
+            </Suspense>
           </motion.div>
           ) : (
             <motion.div
@@ -259,7 +289,9 @@ export function AdminDashboard() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
             >
-              <MorningBriefing />
+              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
+                <MorningBriefing />
+              </Suspense>
             </motion.div>
           )}
         </AnimatePresence>

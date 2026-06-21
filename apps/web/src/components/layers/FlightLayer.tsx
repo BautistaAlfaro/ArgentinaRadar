@@ -7,11 +7,11 @@
  * Refreshes every 30 seconds (matching the server-side schedule).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
+import { useLayerData } from '../../hooks/useLayerData';
 import type { FlightData } from '@shared/types';
-
-const ALERTS_API = 'http://localhost:3007';
+import type { FlightResponse } from '../../services/api';
 
 /** Airplane SVG icon as a data URI */
 const AIRPLANE_ICON_SVG = encodeURIComponent(
@@ -35,27 +35,12 @@ export function FlightLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('flights');
   const prevActiveRef = useRef(isActive);
-  const [flights, setFlights] = useState<FlightData[]>([]);
 
-  // Fetch flights on interval (30s)
-  useEffect(() => {
-    async function fetchFlights() {
-      try {
-        const resp = await fetch(`${ALERTS_API}/api/alerts/flights`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setFlights(data.flights ?? []);
-        }
-      } catch (err) {
-        console.warn('[FlightLayer] Fetch failed:', err);
-      }
-    }
-
-    fetchFlights();
-    const interval = setInterval(fetchFlights, 30 * 1000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
+  const { data } = useLayerData<FlightResponse>(
+    'http://localhost:3007/api/alerts/flights',
+    30 * 1000, // 30 seconds
+  );
+  const flights = data?.flights ?? [];
 
   // Render HTML elements on globe
   useEffect(() => {

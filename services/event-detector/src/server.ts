@@ -318,6 +318,45 @@ app.post('/api/events/protests/:id/resolve', (req, res) => {
   }
 });
 
+/**
+ * GET /api/events/search — text search on event titles.
+ *
+ * Query params:
+ *   q      (string, required) — Search term (case-insensitive substring match on title).
+ *   page   (number, optional) — Page number (default 1).
+ *   limit  (number, optional) — Results per page (default 20, max 100).
+ *
+ * IMPORTANT: this route MUST be declared BEFORE /api/events/:id to prevent
+ * Express from matching "search" as an event ID.
+ */
+app.get('/api/events/search', (req, res) => {
+  try {
+    const q = (req.query.q as string || '').trim().toLowerCase();
+    if (!q) {
+      res.status(400).json({ error: 'Query parameter "q" is required' });
+      return;
+    }
+
+    const allEvents = store.getAllEvents();
+    const matched = allEvents.filter((e) => e.title.toLowerCase().includes(q));
+
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 20));
+    const total = matched.length;
+    const totalPages = Math.ceil(total / limit);
+    const items = matched.slice((page - 1) * limit, page * limit);
+
+    res.json({
+      query: q,
+      events: items,
+      pagination: { page, limit, total, totalPages },
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 /** GET /api/events/:id — single event with articles, entities, timeline. */
 app.get('/api/events/:id', (req, res) => {
   try {
@@ -351,6 +390,7 @@ app.listen(config.port, () => {
   console.log(`[Event Detector]   POST /api/detect                    — Receive article, find/create event`);
   console.log(`[Event Detector]   GET  /api/events                    — Paginated event list with filters`);
   console.log(`[Event Detector]   GET  /api/events/political          — Filter events by political figure`);
+  console.log(`[Event Detector]   GET  /api/events/search             — Text search on event titles`);
   console.log(`[Event Detector]   GET  /api/events/trending           — Top 10 events by impact`);
   console.log(`[Event Detector]   GET  /api/events/security           — Province-level security stats`);
   console.log(`[Event Detector]   GET  /api/events/protests           — Active protests list`);

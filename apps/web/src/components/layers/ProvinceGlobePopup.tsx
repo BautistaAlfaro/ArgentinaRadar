@@ -101,12 +101,16 @@ export function ProvinceGlobePopup({ globe, containerRef }: Props) {
     }
   }, [selectedProvince, globe, containerRef]);
 
+  // Store callback in a ref so the rAF loop doesn't re-subscribe on every render
+  const updatePositionRef = useRef(updatePosition);
+  updatePositionRef.current = updatePosition;
+
   useEffect(() => {
     if (!selectedProvince || !provinceDataRef.current || !globe) return;
 
     let frame: number;
     const loop = () => {
-      updatePosition();
+      updatePositionRef.current();
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
@@ -114,7 +118,7 @@ export function ProvinceGlobePopup({ globe, containerRef }: Props) {
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [selectedProvince, globe, updatePosition]);
+  }, [selectedProvince, globe]);
 
   if (!visible || !provinceDataRef.current) return null;
 

@@ -60,11 +60,15 @@ export function ProvinceBoundaries({ globe }: Props) {
     };
   }
 
+  // Store makeColorFn in a ref so the effect doesn't need it as a dep
+  const makeColorFnRef = useRef(makeColorFn);
+  makeColorFnRef.current = makeColorFn;
+
   // Re-apply colors when pulse or selectedProvince changes
   const redrawRef = useRef<() => void>(() => {});
   redrawRef.current = () => {
     if (!isActive) return;
-    globe.polygonCapColor(makeColorFn(hoveredRef.current));
+    globe.polygonCapColor(makeColorFnRef.current(hoveredRef.current));
   };
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export function ProvinceBoundaries({ globe }: Props) {
     globe
       .polygonsData(features)
       .polygonAltitude(0.003)
-      .polygonCapColor(makeColorFn(null))
+      .polygonCapColor(makeColorFnRef.current(null))
       .polygonSideColor(() => 'rgba(80, 120, 200, 0.05)')
       .polygonStrokeColor((d: ProvinceFeature) => {
         const isArgentina = d.properties.name && d.properties.name !== 'unknown';
@@ -127,7 +131,6 @@ export function ProvinceBoundaries({ globe }: Props) {
     return () => {
       globe.polygonsData([]);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globe, isActive, selectProvince]);
 
   return null;

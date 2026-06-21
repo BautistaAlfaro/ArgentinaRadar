@@ -10,11 +10,11 @@
  * Refreshes every 30 minutes (matching the server-side schedule).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
+import { useLayerData } from '../../hooks/useLayerData';
 import type { WeatherAlert } from '@shared/types';
-
-const ALERTS_API = 'http://localhost:3007';
+import type { WeatherAlertResponse } from '../../services/api';
 
 const SEVERITY_COLORS: Record<string, { fill: string; stroke: string; label: string }> = {
   yellow: { fill: 'rgba(255, 255, 0, 0.25)', stroke: 'rgba(255, 255, 0, 0.5)', label: 'Alerta Amarilla' },
@@ -36,27 +36,12 @@ export function WeatherLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('weather');
   const prevActiveRef = useRef(isActive);
-  const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
 
-  // Fetch weather alerts on interval
-  useEffect(() => {
-    async function fetchAlerts() {
-      try {
-        const resp = await fetch(`${ALERTS_API}/api/alerts/weather`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setAlerts(data.alerts ?? []);
-        }
-      } catch (err) {
-        console.warn('[WeatherLayer] Fetch failed:', err);
-      }
-    }
-
-    fetchAlerts();
-    const interval = setInterval(fetchAlerts, 30 * 60 * 1000); // 30 min
-
-    return () => clearInterval(interval);
-  }, []);
+  const { data } = useLayerData<WeatherAlertResponse>(
+    'http://localhost:3007/api/alerts/weather',
+    30 * 60 * 1000, // 30 min
+  );
+  const alerts = data?.alerts ?? [];
 
   // Render polygons on globe
   useEffect(() => {
