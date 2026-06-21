@@ -1,7 +1,7 @@
 import { Layout } from './components/Layout';
 import { MapView } from './components/MapView';
 import { LayerToggle } from './components/panels/LayerToggle';
-import { NewsFeed } from './components/panels/NewsFeed';
+import { Sidebar } from './components/panels/Sidebar';
 import { EconomicTicker } from './components/panels/EconomicTicker';
 import { ArgentinaTitle } from './components/ArgentinaTitle';
 
@@ -22,7 +22,7 @@ export function App() {
         }
         sidebar={
           <aside className="w-[320px] shrink-0 bg-slate-800/60 border-r border-slate-700/50 overflow-y-auto">
-            <NewsFeed />
+            <Sidebar />
           </aside>
         }
         map={<MapView />}

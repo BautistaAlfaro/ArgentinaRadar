@@ -30,6 +30,10 @@ export const config = {
     url: process.env.AI_FILTER_URL ?? 'http://localhost:3003',
   },
 
+  eventDetector: {
+    url: process.env.EVENT_DETECTOR_URL ?? 'http://localhost:3008',
+  },
+
   db: {
     path:
       process.env.DB_PATH ??
@@ -37,12 +41,14 @@ export const config = {
   },
 
   publishing: {
-    /** Max tweets per hour (spam protection). */
-    maxTweetsPerHour: 10,
-    /** How often to poll the DB for new articles (ms). Default 5 minutes. */
+    /** How often to poll for new events (ms). Default 5 minutes. */
     pollIntervalMs: parseInt(process.env.POLL_INTERVAL ?? '300000', 10),
     /** Monthly tweet limit with safety margin (Free tier = 1500). */
     monthlyLimit: 1400,
+    /** Daily tweet limit for events. */
+    dailyLimit: parseInt(process.env.DAILY_TWEET_LIMIT ?? '50', 10),
+    /** Minimum cooldown between event tweets (ms). Default 5 minutes. */
+    cooldownMs: parseInt(process.env.TWEET_COOLDOWN_MS ?? '300000', 10),
     /** Delay between individual publishes (ms). */
     interPublishDelayMs: 2000,
   },

@@ -33,6 +33,14 @@ export interface SourcesConfig {
   sources: Source[];
 }
 
+// ─── AI Processor ──────────────────────────────────────────────────
+export const AI_PROCESSOR_URL: string =
+  process.env.AI_PROCESSOR_URL ?? 'http://localhost:3010';
+
+// ─── Redis / BullMQ ────────────────────────────────────────────────
+export const REDIS_HOST: string = process.env.REDIS_HOST ?? 'localhost';
+export const REDIS_PORT: number = parseInt(process.env.REDIS_PORT ?? '6379', 10);
+
 /** Load and validate sources from the JSON config file. */
 export function loadSources(): Source[] {
   const raw = fs.readFileSync(SOURCES_PATH, 'utf-8');

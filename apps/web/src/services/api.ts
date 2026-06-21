@@ -13,6 +13,7 @@ const NEWS_API = 'http://localhost:3001';
 const GEO_API = 'http://localhost:3002';
 const ECON_API = 'http://localhost:3006';
 const ALERTS_API = 'http://localhost:3007';
+const EVENT_API = 'http://localhost:3008';
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -102,6 +103,67 @@ export async function fetchServiceHealth(serviceUrl: string): Promise<{
   const resp = await fetch(`${serviceUrl}/health`);
   if (!resp.ok) {
     throw new Error(`Health check failed: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// ─── Event types ──────────────────────────────────────────────────
+
+export type ConsensusLevel = 'high' | 'medium' | 'low';
+
+export interface EventItem {
+  id: string;
+  title: string;
+  summary: string;
+  articleCount: number;
+  sources: string[];
+  consensus: ConsensusLevel;
+  impactScore: number; // 0–100
+  location: {
+    lat: number;
+    lng: number;
+    province: string;
+    city: string | null;
+  };
+  publishedAt: string; // ISO 8601
+  relatedArticleIds: string[];
+}
+
+// ─── Fetch events ─────────────────────────────────────────────────
+export async function fetchEvents(params?: {
+  impact_min?: number;
+  consensus?: ConsensusLevel;
+  province?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResponse<EventItem>> {
+  const searchParams = new URLSearchParams();
+  if (params?.impact_min !== undefined) searchParams.set('impact_min', String(params.impact_min));
+  if (params?.consensus) searchParams.set('consensus', params.consensus);
+  if (params?.province) searchParams.set('province', params.province);
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.offset) searchParams.set('offset', String(params.offset));
+
+  const url = `${EVENT_API}/api/events${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch events: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+export async function fetchEvent(id: string): Promise<EventItem> {
+  const resp = await fetch(`${EVENT_API}/api/events/${encodeURIComponent(id)}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch event ${id}: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+export async function fetchTrendingEvents(): Promise<EventItem[]> {
+  const resp = await fetch(`${EVENT_API}/api/events/trending`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch trending events: ${resp.status} ${resp.statusText}`);
   }
   return resp.json();
 }

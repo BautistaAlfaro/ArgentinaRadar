@@ -10,8 +10,11 @@
     "server": "node --loader ts-node/esm src/server.ts"
   },
   "dependencies": {
+    "axios": "^1.18.0",
     "better-sqlite3": "^11.7.0",
+    "bullmq": "^5.79.0",
     "express": "^4.21.0",
+    "ioredis": "^5.11.1",
     "puppeteer": "^23.0.0",
     "rss-parser": "^3.13.0"
   },

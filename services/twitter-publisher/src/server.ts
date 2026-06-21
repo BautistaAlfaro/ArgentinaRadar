@@ -2,17 +2,18 @@
  * Twitter Publisher REST Service
  *
  * Express server on port 3004:
- *   POST /api/publish/:id — Manual publish (force-queue an article)
- *   GET  /api/tweets       — Return tweet history
- *   GET  /api/tweets/stats — Quota usage, success/fail/dead-letter counts
- *   GET  /health           — Service status
+ *   POST /api/publish/:id  — Manual publish (force-queue an article)
+ *   GET  /api/tweets        — Return tweet history
+ *   GET  /api/tweets/stats  — Quota usage, success/fail/dead-letter counts
+ *   GET  /api/stats/daily   — Daily tweet count & remaining quota
+ *   GET  /health            — Service status
  */
 
 import express from 'express';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
 import { publishArticle } from './publisher.js';
-import { getQuotaInfo } from './rateLimiter.js';
+import { getQuotaInfo, getDailyTweetCount } from './rateLimiter.js';
 import { getDeadLetterQueue, getDeadLetterCount } from './deadLetter.js';
 
 // ---------------------------------------------------------------------------
@@ -157,6 +158,25 @@ app.get('/api/tweets/stats', (_req, res) => {
   }
 });
 
+// ─── GET /api/stats/daily — Daily tweet stats ─────────────────────────────
+
+app.get('/api/stats/daily', (_req, res) => {
+  try {
+    const dailyCount = getDailyTweetCount();
+    const dailyLimit = config.publishing.dailyLimit;
+    res.json({
+      postedToday: dailyCount,
+      dailyLimit,
+      remainingToday: Math.max(0, dailyLimit - dailyCount),
+      date: new Date().toISOString().split('T')[0],
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: 'Failed to get daily stats', details: String(err) });
+  }
+});
+
 // ─── GET /health — Service health ─────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
@@ -177,6 +197,7 @@ export function startServer(): void {
     console.log(`[twitter-publisher]   POST /api/publish/:id — Manual publish`);
     console.log(`[twitter-publisher]   GET  /api/tweets       — Tweet history`);
     console.log(`[twitter-publisher]   GET  /api/tweets/stats — Quota & stats`);
+    console.log(`[twitter-publisher]   GET  /api/stats/daily  — Daily tweet stats`);
     console.log(`[twitter-publisher]   GET  /health           — Service health`);
   });
 }

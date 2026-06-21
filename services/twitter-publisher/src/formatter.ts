@@ -23,6 +23,19 @@ export interface TweetFormatInput {
   url: string;
 }
 
+/**
+ * Input for the event-based tweet formatter.
+ *
+ * Used by the auto-publish loop when tweeting trending events from
+ * the event-detector service (no individual article URL or location).
+ */
+export interface EventTweetInput {
+  title: string;
+  sourceCount: number;
+  impact: number;
+  consensus: 'high' | 'medium' | 'low';
+}
+
 // ---------------------------------------------------------------------------
 // Formatter
 // ---------------------------------------------------------------------------
@@ -63,6 +76,58 @@ export function formatTweet(input: TweetFormatInput): string {
 // ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
+
+/**
+ * Event-based tweet formatter for ArgentinaRadar.
+ *
+ * Format:
+ *   🇦🇷 {title}
+ *
+ *   Reportado por {N} medios | Impacto: {score}/100 {emoji}
+ *
+ *   #ArgentinaRadar
+ *
+ * Rules:
+ *  - Max 280 characters (Twitter's limit).
+ *  - If the title doesn't fit, it is truncated with "…".
+ *  - Consensus → emoji: high 🟢, medium 🟡, low 🔴.
+ */
+export function formatEventTweet(input: EventTweetInput): string {
+  const { title, sourceCount, impact, consensus } = input;
+
+  const consensusEmoji: Record<string, string> = {
+    high: '🟢',
+    medium: '🟡',
+    low: '🔴',
+  };
+  const emoji = consensusEmoji[consensus] ?? '🔴';
+
+  const countStr = String(sourceCount);
+  const impactStr = String(impact);
+
+  // Everything after the title
+  const suffix = `\n\nReportado por ${countStr} medios | Impacto: ${impactStr}/100 ${emoji}\n\n#ArgentinaRadar`;
+
+  // Prefix
+  const prefix = '🇦🇷 ';
+
+  const fixedOverhead = prefix.length + suffix.length;
+
+  if (fixedOverhead >= 280) {
+    throw new Error(
+      `Overhead too long to fit in a tweet (${fixedOverhead} chars, max 280)`
+    );
+  }
+
+  const titleBudget = 280 - fixedOverhead;
+
+  const truncatedTitle =
+    title.length <= titleBudget
+      ? title
+      : title.slice(0, titleBudget - 1) + '…';
+
+  return `${prefix}${truncatedTitle}${suffix}`;
+}
 
 /**
  * Estimate the display length of a tweet.

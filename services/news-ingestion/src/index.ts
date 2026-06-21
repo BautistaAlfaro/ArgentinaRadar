@@ -16,6 +16,12 @@ import { scrapeAllSources } from './scraper.js';
 import { getDb } from './db.js';
 import { startServer } from './server.js';
 
+// Pipeline plugins — loaded to ensure side-effect initialisation
+// (BullMQ producer, ai-processor client). Actual post-processing
+// is triggered inline from dedup.ts after each article is stored.
+import './aiClient.js';
+import './queue.js';
+
 const INGESTION_INTERVAL_MS = parseInt(process.env.INGESTION_INTERVAL ?? '300000', 10); // 5 min
 
 let ingestionCount = 0;

@@ -1,9 +1,11 @@
 /**
- * Monthly tweet rate limiter.
+ * Tweet rate limiter with monthly, daily, and cooldown enforcement.
  *
- * Tracks tweets posted this month via SQLite's tweet_history table.
- * The Free Twitter API tier allows 1 500 tweets/month. We halt at 1 400
- * to leave a safety buffer for manual tweets.
+ * Monthly limit:  1 400 tweets (Free tier = 1 500, safety buffer = 100)
+ * Daily limit:      50 tweets
+ * Cooldown:          5 minutes between tweets
+ *
+ * All tracking uses the shared SQLite tweet_history table.
  */
 
 import Database from 'better-sqlite3';
@@ -23,7 +25,7 @@ function getDb(): Database.Database {
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Monthly
 // ---------------------------------------------------------------------------
 
 /**
@@ -54,20 +56,96 @@ export function getRemainingQuota(): number {
 /**
  * Check whether we are allowed to publish another tweet this month.
  */
-export function canPublish(): boolean {
+export function canPublishMonthly(): boolean {
   return getRemainingQuota() > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Daily
+// ---------------------------------------------------------------------------
+
 /**
- * Return a human-friendly quota snapshot.
+ * Return the number of successfully posted tweets today.
+ */
+export function getDailyTweetCount(): number {
+  const d = getDb();
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const row = d
+    .prepare(
+      `SELECT COUNT(*) as count FROM tweet_history
+       WHERE date(posted_at) = ? AND status = 'success'`
+    )
+    .get(dateStr) as { count: number } | undefined;
+
+  return row?.count ?? 0;
+}
+
+/**
+ * Check whether we have remaining daily quota.
+ */
+export function canPublishDaily(): boolean {
+  return getDailyTweetCount() < config.publishing.dailyLimit;
+}
+
+// ---------------------------------------------------------------------------
+// Cooldown
+// ---------------------------------------------------------------------------
+
+/**
+ * Milliseconds since the last successful tweet, or `null` if no tweets exist.
+ */
+export function getMsSinceLastTweet(): number | null {
+  const d = getDb();
+  const row = d
+    .prepare(
+      `SELECT posted_at FROM tweet_history
+       WHERE status = 'success' AND posted_at IS NOT NULL
+       ORDER BY posted_at DESC LIMIT 1`
+    )
+    .get() as { posted_at: string } | undefined;
+
+  if (!row) return null;
+
+  const lastTime = new Date(row.posted_at + 'Z').getTime();
+  return Date.now() - lastTime;
+}
+
+/**
+ * Check whether the cooldown period has elapsed since the last tweet.
+ */
+export function isCooldownElapsed(): boolean {
+  const msSince = getMsSinceLastTweet();
+  if (msSince === null) return true; // never tweeted before
+  return msSince >= config.publishing.cooldownMs;
+}
+
+// ---------------------------------------------------------------------------
+// Combined checks
+// ---------------------------------------------------------------------------
+
+/**
+ * Check ALL rate limits before publishing a new tweet.
+ */
+export function canPublish(): boolean {
+  return canPublishMonthly() && canPublishDaily() && isCooldownElapsed();
+}
+
+/**
+ * Return a human-friendly quota snapshot including daily info.
  */
 export function getQuotaInfo(): {
   used: number;
   remaining: number;
   limit: number;
   month: string;
+  dailyUsed: number;
+  dailyRemaining: number;
+  dailyLimit: number;
 } {
   const used = getMonthlyTweetCount();
+  const dailyUsed = getDailyTweetCount();
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -76,5 +154,8 @@ export function getQuotaInfo(): {
     remaining: config.publishing.monthlyLimit - used,
     limit: config.publishing.monthlyLimit,
     month,
+    dailyUsed,
+    dailyRemaining: config.publishing.dailyLimit - dailyUsed,
+    dailyLimit: config.publishing.dailyLimit,
   };
 }

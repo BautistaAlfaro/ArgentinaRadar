@@ -1,28 +1,40 @@
 /**
  * Auto-publish background loop.
  *
- * Polls the shared SQLite database for articles with status 'filtered'
- * (i.e. AI approved for publishing), formats each as a tweet, posts it
- * via the Twitter API, and records the result.
+ * Polls the event-detector service for trending high-impact events
+ * (impact >= 50), formats each as a tweet, posts it via the Twitter API,
+ * and records the result in tweet_history.
  *
  * Safeguards:
- *  - Max 10 tweets per hour (spam prevention).
- *  - Respects the monthly rate limit (1 400 / 1 500).
+ *  - Monthly rate limit  (1 400 / 1 500 — from rateLimiter.ts)
+ *  - Daily rate limit    (50 tweets max — from rateLimiter.ts)
+ *  - Cooldown            (5 minutes between tweets — from rateLimiter.ts)
  *  - Runs every 5 minutes by default.
+ *  - If event-detector is unreachable, logs the error and retries next cycle.
  */
 
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { publishArticle } from './publisher.js';
-import { canPublish, getQuotaInfo } from './rateLimiter.js';
+import { fetchTrendingEvents } from './eventClient.js';
+import type { TrendingEvent } from './eventClient.js';
+import { formatEventTweet } from './formatter.js';
+import { postTweet, TwitterApiError } from './twitterClient.js';
+import {
+  canPublishMonthly,
+  canPublishDaily,
+  isCooldownElapsed,
+  getQuotaInfo,
+} from './rateLimiter.js';
+import { moveToDeadLetter } from './deadLetter.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL = config.publishing.pollIntervalMs;
-const MAX_PER_HOUR = config.publishing.maxTweetsPerHour;
-const INTER_PUBLISH_DELAY = config.publishing.interPublishDelayMs;
+
+/** Backoff delays in ms: 60 s, 300 s (5 min). */
+const RETRY_DELAYS = [60_000, 300_000] as const;
 
 // ---------------------------------------------------------------------------
 // DB singleton
@@ -38,17 +50,6 @@ function getDb(): Database.Database {
 }
 
 // ---------------------------------------------------------------------------
-// Hourly rate tracking
-// ---------------------------------------------------------------------------
-
-let publishedThisHour = 0;
-const HOUR_MS = 60 * 60 * 1000;
-
-function resetHourlyCounter(): void {
-  publishedThisHour = 0;
-}
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -59,12 +60,9 @@ function resetHourlyCounter(): void {
  */
 export function startAutoPublish(): void {
   console.log(
-    `[autoPublish] 🔄 Starting auto-publish loop ` +
-      `(every ${Math.round(POLL_INTERVAL / 1000)}s, max ${MAX_PER_HOUR}/hour)`
+    '[autoPublish] Starting event-based auto-publish loop ' +
+      `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 50)`
   );
-
-  // Reset hourly counter every hour
-  setInterval(resetHourlyCounter, HOUR_MS);
 
   // First run immediately, then on interval
   runAutoPublish();
@@ -77,83 +75,161 @@ export function startAutoPublish(): void {
 
 async function runAutoPublish(): Promise<void> {
   try {
-    // ── Pre-flight checks ─────────────────────────────────────
-    if (!canPublish()) {
+    // ── Pre-flight: rate limits ────────────────────────────────
+    if (!canPublishMonthly()) {
       const quota = getQuotaInfo();
       console.log(
-        `[autoPublish] ⏸️  Skipping — monthly rate limit reached (${quota.used}/${quota.limit})`
+        '[autoPublish] Skipping - monthly rate limit reached ' +
+          `(${quota.used}/${quota.limit})`
       );
       return;
     }
 
-    if (publishedThisHour >= MAX_PER_HOUR) {
+    if (!canPublishDaily()) {
+      const quota = getQuotaInfo();
       console.log(
-        `[autoPublish] ⏸️  Skipping — hourly limit reached (${publishedThisHour}/${MAX_PER_HOUR})`
+        '[autoPublish] Skipping - daily limit reached ' +
+          `(${quota.dailyUsed}/${quota.dailyLimit})`
       );
       return;
     }
 
-    // ── Fetch approved but un-published articles ──────────────
-    const d = getDb();
-    const articles = d
-      .prepare(
-        `SELECT id, title, source, url, location
-         FROM news_items
-         WHERE status = 'filtered'
-           AND tweet_id IS NULL
-         ORDER BY published_at ASC
-         LIMIT ?`
-      )
-      .all(MAX_PER_HOUR - publishedThisHour) as Array<Record<string, unknown>>;
-
-    if (articles.length === 0) {
-      console.log('[autoPublish] ℹ️  No new articles to publish');
+    if (!isCooldownElapsed()) {
+      console.log('[autoPublish] Skipping - cooldown active');
       return;
     }
 
-    console.log(`[autoPublish] 📰 Publishing ${articles.length} article(s)...`);
+    // ── Fetch trending events ──────────────────────────────────
+    let events: TrendingEvent[];
+    try {
+      events = await fetchTrendingEvents();
+    } catch (err) {
+      console.error(
+        '[autoPublish] Event-detector unreachable - will retry next cycle: ' +
+          String(err)
+      );
+      return;
+    }
 
-    // ── Publish each —─────────────────────────────────────────
-    for (const article of articles) {
+    // Filter out already-tweeted events
+    const d = getDb();
+    const alreadyTweeted = new Set(
+      (
+        d
+          .prepare(
+            `SELECT DISTINCT article_id FROM tweet_history
+             WHERE article_id IS NOT NULL AND status = 'success'`
+          )
+          .all() as Array<{ article_id: string }>
+      ).map((r) => r.article_id)
+    );
+
+    const pending = events.filter((e) => !alreadyTweeted.has(e.id));
+
+    if (pending.length === 0) {
+      console.log('[autoPublish] No new high-impact events to publish');
+      return;
+    }
+
+    console.log(`[autoPublish] Publishing ${pending.length} event(s)...`);
+
+    // ── Publish each pending event ──────────────────────────────
+    for (const event of pending) {
       // Re-check limits between publishes
-      if (!canPublish()) break;
-      if (publishedThisHour >= MAX_PER_HOUR) break;
+      if (!canPublishMonthly()) break;
+      if (!canPublishDaily()) break;
 
-      // Parse location
-      let locationStr: string | null = null;
-      if (article.location) {
-        const loc =
-          typeof article.location === 'string'
-            ? JSON.parse(article.location)
-            : article.location;
-        locationStr =
-          (loc as { city?: string }).city ??
-          (loc as { province?: string }).province ??
-          null;
+      const tweetText = formatEventTweet({
+        title: event.title,
+        sourceCount: event.sources.length,
+        impact: event.impact,
+        consensus: event.consensus,
+      });
+
+      // Record attempt in tweet_history
+      const { lastInsertRowid: historyId } = d
+        .prepare(
+          "INSERT INTO tweet_history (article_id, status) VALUES (?, 'pending')"
+        )
+        .run(event.id);
+
+      // Attempt posting with retries
+      let lastError: string | null = null;
+
+      for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+        try {
+          const result = await postTweet(tweetText);
+
+          // Success - update tweet_history
+          d.prepare(
+            `UPDATE tweet_history
+             SET tweet_id = ?, status = 'success', posted_at = datetime('now')
+             WHERE id = ?`
+          ).run(result.tweetId, historyId);
+
+          console.log(
+            `[autoPublish] Published event "${event.title.slice(0, 60)}..." ` +
+              `-> tweet ${result.tweetId}`
+          );
+
+          break; // exit retry loop
+        } catch (err) {
+          lastError = String(err);
+
+          if (
+            err instanceof TwitterApiError &&
+            err.isRetryable &&
+            attempt < RETRY_DELAYS.length
+          ) {
+            const delay = RETRY_DELAYS[attempt];
+            console.warn(
+              `[autoPublish] Retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
+                `for event ${event.id.slice(0, 8)}... ` +
+                `in ${Math.round(delay / 1000)}s: ${lastError}`
+            );
+            d.prepare(
+              "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
+            ).run(lastError, historyId);
+            await sleep(delay);
+            continue;
+          }
+
+          if (attempt < RETRY_DELAYS.length) {
+            // Non-Twitter error (network, etc.) - still retry
+            const delay = RETRY_DELAYS[attempt];
+            console.warn(
+              `[autoPublish] Network retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
+                `in ${Math.round(delay / 1000)}s: ${lastError}`
+            );
+            d.prepare(
+              "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
+            ).run(lastError, historyId);
+            await sleep(delay);
+            continue;
+          }
+
+          // Non-retryable error - break
+          break;
+        }
       }
 
-      const result = await publishArticle(
-        String(article.id),
-        String(article.title ?? ''),
-        String(article.source ?? ''),
-        locationStr,
-        String(article.url ?? ''),
-      );
+      // All retries exhausted - dead-letter
+      if (lastError) {
+        const finalError = lastError;
+        d.prepare(
+          "UPDATE tweet_history SET status = 'failed', error = ? WHERE id = ?"
+        ).run(finalError, historyId);
 
-      if (result.success) {
-        publishedThisHour++;
-        console.log(`[autoPublish] ✅ Published: ${String(article.title).slice(0, 60)}…`);
-      } else {
-        console.error(
-          `[autoPublish] ❌ Failed: ${String(article.title).slice(0, 60)}… — ${result.error}`
+        moveToDeadLetter(
+          event.id,
+          event.title,
+          finalError,
+          RETRY_DELAYS.length
         );
       }
-
-      // Small delay between publishes
-      await sleep(INTER_PUBLISH_DELAY);
     }
   } catch (err) {
-    console.error('[autoPublish] 💥 Error:', err);
+    console.error('[autoPublish] Error:', err);
   }
 }
 

@@ -47,5 +47,21 @@ export function runMigrations(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
   `);
 
+  // ─── AI processing columns (added idempotently) ──────────────────
+  const aiColumns = [
+    'ALTER TABLE news_items ADD COLUMN embedding TEXT',
+    'ALTER TABLE news_items ADD COLUMN entities TEXT',
+    'ALTER TABLE news_items ADD COLUMN ai_category TEXT',
+  ];
+
+  for (const sql of aiColumns) {
+    try {
+      db.exec(sql);
+      console.log(`[migrations] Executed: ${sql}`);
+    } catch {
+      // Column already exists — ignore on subsequent runs
+    }
+  }
+
   console.log('[migrations] Schema up to date');
 }

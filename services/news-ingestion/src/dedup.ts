@@ -1,5 +1,7 @@
 import type { NewsItem, Location, AiScore } from '../../../shared/types/index.js';
 import { getDb } from './db.js';
+import { callAiProcessor } from './aiClient.js';
+import { pushToGeolocationQueue } from './queue.js';
 
 const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 const SIMILARITY_THRESHOLD = 0.85;
@@ -47,7 +49,38 @@ export function deduplicateAndStore(item: NewsItem): NewsItem {
   );
 
   console.log(`[dedup] Inserted new article: "${item.title}" (${item.source})`);
+
+  // Fire-and-forget AI processing — must not block RSS ingestion
+  postProcessArticle(item).catch((err) => {
+    console.error(`[dedup] Post-processing failed for "${item.title}":`, err);
+  });
+
   return item;
+}
+
+// ─── AI post-processing ────────────────────────────────────────────
+
+/**
+ * Enrich article via AI processor then enqueue for geo-resolution.
+ * Runs asynchronously so it never blocks the ingestion pipeline.
+ */
+async function postProcessArticle(item: NewsItem): Promise<void> {
+  const aiResult = await callAiProcessor(item.title, item.summary, item.source);
+
+  if (aiResult) {
+    const db = getDb();
+    db.prepare(
+      'UPDATE news_items SET embedding = ?, entities = ?, ai_category = ? WHERE id = ?',
+    ).run(
+      JSON.stringify(aiResult.embedding),
+      JSON.stringify(aiResult.entities),
+      aiResult.category,
+      item.id,
+    );
+    console.log(`[dedup] AI data stored for article ${item.id} (category: ${aiResult.category})`);
+  }
+
+  await pushToGeolocationQueue(item.id, item.title, item.summary);
 }
 
 /** Find a duplicate within the 24h window using normalized title similarity. */

@@ -1,0 +1,64 @@
+/**
+ * TanStack Query hook for event data with polling.
+ *
+ * Fetches grouped events from the event-detector service with optional
+ * filters for minimum impact score, consensus level, and province.
+ * Auto-refetches every 30 seconds.
+ */
+
+import { useQuery } from '@tanstack/react-query';
+import { fetchEvents } from '../services/api';
+import type { ConsensusLevel, EventItem } from '../services/api';
+
+interface UseEventsOptions {
+  impactMin?: number;
+  consensus?: ConsensusLevel;
+  province?: string;
+  limit?: number;
+  refetchInterval?: number;
+}
+
+interface UseEventsResult {
+  events: EventItem[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch: () => void;
+}
+
+export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
+  const {
+    impactMin,
+    consensus,
+    province,
+    limit = 100,
+    refetchInterval = 30000,
+  } = options;
+
+  const queryKey = ['events', impactMin, consensus, province, limit];
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey,
+    queryFn: () =>
+      fetchEvents({
+        impact_min: impactMin,
+        consensus,
+        province,
+        limit,
+      }),
+    refetchInterval,
+    staleTime: 10000,
+    retry: 3,
+    retryDelay: 5000,
+  });
+
+  return {
+    events: data?.items ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    refetch,
+  };
+}

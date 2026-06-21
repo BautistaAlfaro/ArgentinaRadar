@@ -132,6 +132,10 @@ function rowToJson(row: Record<string, unknown>): Record<string, unknown> {
     aiScore: row.ai_score ? safeParseJson(row.ai_score) : null,
     tweetId: row.tweet_id ?? null,
     status: row.status,
+    // AI enrichment (added in PR 2.3)
+    embedding: row.embedding ? safeParseJson(row.embedding) : null,
+    entities: row.entities ? safeParseJson(row.entities) : null,
+    aiCategory: row.ai_category ?? null,
   };
 }
 
