@@ -7,8 +7,9 @@
  * Refreshes every 3 hours (matching the server-side schedule).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
+import { useLayerData } from '../../hooks/useLayerData';
 import type { FireHotspot } from '@shared/types';
 
 const ALERTS_API = 'http://localhost:3007';
@@ -34,27 +35,12 @@ export function FireLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('fires');
   const prevActiveRef = useRef(isActive);
-  const [fires, setFires] = useState<FireHotspot[]>([]);
 
-  // Fetch fires on interval
-  useEffect(() => {
-    async function fetchFires() {
-      try {
-        const resp = await fetch(`${ALERTS_API}/api/alerts/fires`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setFires(data.fires ?? []);
-        }
-      } catch (err) {
-        console.warn('[FireLayer] Fetch failed:', err);
-      }
-    }
-
-    fetchFires();
-    const interval = setInterval(fetchFires, 3 * 60 * 60 * 1000); // 3 hours
-
-    return () => clearInterval(interval);
-  }, []);
+  const { data } = useLayerData<{ fires: FireHotspot[] }>(
+    `${ALERTS_API}/api/alerts/fires`,
+    3 * 60 * 60 * 1000, // 3 hours
+  );
+  const fires = data?.fires ?? [];
 
   // Render HTML elements on globe
   useEffect(() => {

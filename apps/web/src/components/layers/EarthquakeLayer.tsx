@@ -10,8 +10,9 @@
  * Refreshes every 60 minutes (matching the server-side schedule).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
+import { useLayerData } from '../../hooks/useLayerData';
 import type { Earthquake } from '@shared/types';
 
 const ALERTS_API = 'http://localhost:3007';
@@ -30,27 +31,12 @@ export function EarthquakeLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('earthquakes');
   const prevActiveRef = useRef(isActive);
-  const [earthquakes, setEarthquakes] = useState<Earthquake[]>([]);
 
-  // Fetch earthquakes on interval
-  useEffect(() => {
-    async function fetchEarthquakes() {
-      try {
-        const resp = await fetch(`${ALERTS_API}/api/alerts/earthquakes`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setEarthquakes(data.earthquakes ?? []);
-        }
-      } catch (err) {
-        console.warn('[EarthquakeLayer] Fetch failed:', err);
-      }
-    }
-
-    fetchEarthquakes();
-    const interval = setInterval(fetchEarthquakes, 60 * 60 * 1000); // 60 min
-
-    return () => clearInterval(interval);
-  }, []);
+  const { data } = useLayerData<{ earthquakes: Earthquake[] }>(
+    `${ALERTS_API}/api/alerts/earthquakes`,
+    60 * 60 * 1000, // 60 min
+  );
+  const earthquakes = data?.earthquakes ?? [];
 
   // Render points on globe
   useEffect(() => {
