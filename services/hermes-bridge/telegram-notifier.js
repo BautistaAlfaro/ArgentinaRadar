@@ -111,9 +111,27 @@ async function checkCallbacks() {
       const [action, articleId] = cb.data.split(':');
       
       if (action === 'approve') {
+        // Get article info
+        const article = db.prepare('SELECT title, source FROM news_items WHERE id = ?').get(articleId);
+        
         // Mark as approved
         db.prepare('UPDATE approval_queue SET status = ?, reviewed_at = datetime("now") WHERE article_id = ?')
           .run('approved', articleId);
+        db.prepare('UPDATE news_items SET status = ? WHERE id = ?').run('published', articleId);
+        
+        // Publish to Bluesky
+        const tweetText = `${article.title.slice(0, 250)} | ${article.source} #ArgentinaRadar`;
+        try {
+          const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ article_id: articleId, text: tweetText }),
+          });
+          const bskyResult = await bskyResp.json();
+          console.log('Bluesky:', bskyResult.success ? 'OK' : 'FAIL');
+        } catch(e) {
+          console.log('Bluesky publish failed:', e.message);
+        }
         
         await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
           method: 'POST',

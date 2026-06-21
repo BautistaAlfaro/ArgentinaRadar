@@ -144,16 +144,11 @@ POLLINATIONS_URL = "https://image.pollinations.ai/prompt"
 
 
 async def generate_pollinations_image(prompt: str, width: int = 1024, height: int = 1024) -> dict[str, Any]:
-    """Generate image via Pollinations.ai (free, no API key needed)."""
-    clean_prompt = (
-        f"Professional news thumbnail. {prompt}. "
-        f"Dark blue (#003087) and gold (#FFD700) colors. "
-        f"Argentine flag theme. Dramatic lighting, photorealistic. "
-        f"No text overlay."
-    )
-    encoded = urllib.parse.quote(clean_prompt[:500])
-    image_url = f"{POLLINATIONS_URL}/{encoded}?width={width}&height={height}&nologo=true"
-    return {"image_url": image_url, "prompt_used": clean_prompt[:500], "model": "pollinations.ai", "cost": 0.0}
+    """Generate image via Pollinations.ai. Uses the NanoBanana prompt directly."""
+    # Pass the full prompt through — Pollinations.ai handles long prompts well
+    encoded = urllib.parse.quote(prompt[:800])
+    image_url = f"{POLLINATIONS_URL}/{encoded}?width={width}&height={height}&nologo=true&seed=42"
+    return {"image_url": image_url, "prompt_used": prompt[:800], "model": "pollinations.ai", "cost": 0.0}
 
 
 # ---------------------------------------------------------------------------
