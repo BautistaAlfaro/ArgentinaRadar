@@ -10,7 +10,6 @@
  */
 
 import { lazy, Suspense, useState } from 'react';
-import { LazyMotion, m, domAnimation, AnimatePresence } from 'framer-motion';
 import { useKPIs, useDailyStats, useSystemMetrics, useRevenue } from '../hooks/useAdminData';
 
 // Lazy-load admin components to code-split heavy chart libraries (recharts)
