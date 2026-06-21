@@ -34,6 +34,11 @@ export function Gate({ requiredRole, children, fallback }: GateProps) {
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
+  // Dev mode: skip auth so dashboard works without login
+  if (import.meta.env.DEV) {
+    return <>{children}</>;
+  }
+
   let hasAccess: boolean;
   if (requiredRole) {
     const userRole = user?.role ?? 'VISITOR';
