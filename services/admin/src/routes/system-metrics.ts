@@ -9,7 +9,12 @@ export const systemMetricsRouter = Router();
 
 // ─── GET /api/admin/system-metrics?service=xxx&range=24h ─
 
-systemMetricsRouter.get("/system-metrics", async (req, res) => {
+systemMetricsRouter.get("/system-metrics", systemMetricsHandler);
+
+// Alias for frontend compatibility
+systemMetricsRouter.get("/system", systemMetricsHandler);
+
+async function systemMetricsHandler(req: any, res: any) {
   try {
     const service = req.query.service as string | undefined;
     const range = (req.query.range as string) ?? "24h";
@@ -46,7 +51,7 @@ systemMetricsRouter.get("/system-metrics", async (req, res) => {
     console.error("[admin] GET /system-metrics error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
-});
+}
 
 /** Parse range string into Date threshold (supports hours and days). */
 function computeSince(range: string): Date {

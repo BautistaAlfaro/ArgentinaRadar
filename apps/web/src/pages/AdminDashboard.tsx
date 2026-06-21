@@ -201,16 +201,16 @@ export function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard
                   icon={Icons.tweets}
-                  value={kpis?.tweetsPublished.total ?? ZERO}
+                  value={kpis?.tweetsPublished?.total ?? ZERO}
                   label="Tweets Published"
-                  trend={kpis?.tweetsPublished.trend ?? ZERO}
-                  sparkline={kpis?.tweetsPublished.sparkline ?? EMPTY_ARRAY}
+                  trend={kpis?.tweetsPublished?.trend ?? ZERO}
+                  sparkline={kpis?.tweetsPublished?.sparkline ?? EMPTY_ARRAY}
                   accent="blue"
                   format="compact"
                 />
                 <KPICard
                   icon={Icons.news}
-                  value={kpis?.newsProcessed.total ?? ZERO}
+                  value={kpis?.newsProcessed?.total ?? ZERO}
                   label="News Processed"
                   trend={kpis?.newsProcessed.trend ?? ZERO}
                   sparkline={kpis?.newsProcessed.sparkline ?? EMPTY_ARRAY}
@@ -219,7 +219,7 @@ export function AdminDashboard() {
                 />
                 <KPICard
                   icon={Icons.revenue}
-                  value={kpis?.revenue.usd ?? ZERO}
+                  value={kpis?.revenue?.usd ?? ZERO}
                   label="Revenue (USD)"
                   trend={kpis?.revenue.trend ?? ZERO}
                   sparkline={kpis?.revenue.sparkline ?? EMPTY_ARRAY}
@@ -228,7 +228,7 @@ export function AdminDashboard() {
                 />
                 <KPICard
                   icon={Icons.users}
-                  value={kpis?.activeUsers.total ?? ZERO}
+                  value={kpis?.activeUsers?.total ?? ZERO}
                   label="Active Users"
                   trend={kpis?.activeUsers.trend ?? ZERO}
                   sparkline={kpis?.activeUsers.sparkline ?? EMPTY_ARRAY}

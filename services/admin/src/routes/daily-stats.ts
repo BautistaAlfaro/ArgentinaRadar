@@ -9,7 +9,12 @@ export const dailyStatsRouter = Router();
 
 // ─── GET /api/admin/daily-stats?range=7d ────────────────
 
-dailyStatsRouter.get("/daily-stats", async (req, res) => {
+dailyStatsRouter.get("/daily-stats", dailyStatsHandler);
+
+// Alias for frontend compatibility
+dailyStatsRouter.get("/stats", dailyStatsHandler);
+
+async function dailyStatsHandler(req: any, res: any) {
   try {
     const range = (req.query.range as string) ?? "7d";
     const since = computeSince(range);
@@ -48,7 +53,7 @@ dailyStatsRouter.get("/daily-stats", async (req, res) => {
     console.error("[admin] GET /daily-stats error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
-});
+}
 
 /** Parse range string into Date threshold (supports days only). */
 function computeSince(range: string): Date {
