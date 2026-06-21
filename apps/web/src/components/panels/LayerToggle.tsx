@@ -4,6 +4,7 @@ const LAYER_DEFINITIONS: { id: LayerId; label: string; description: string }[] =
   { id: 'provinces', label: 'Provincias', description: 'Límites provinciales' },
   { id: 'borders', label: 'Países', description: 'Fronteras de Sudamérica y Antártida Argentina' },
   { id: 'news', label: 'Noticias', description: 'Marcadores de noticias' },
+  { id: 'events', label: 'Eventos', description: 'Eventos agrupados por tema e impacto' },
   { id: 'weather', label: 'Clima', description: 'Alertas meteorológicas' },
   { id: 'earthquakes', label: 'Sismos', description: 'Terremotos activos (USGS)' },
   { id: 'fires', label: 'Incendios', description: 'Focos de calor (NASA FIRMS)' },

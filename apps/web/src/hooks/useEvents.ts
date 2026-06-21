@@ -16,6 +16,8 @@ interface UseEventsOptions {
   province?: string;
   limit?: number;
   refetchInterval?: number;
+  /** If true, only return events that have valid lat/lng coordinates. */
+  withLocation?: boolean;
 }
 
 interface UseEventsResult {
@@ -34,6 +36,7 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
     province,
     limit = 100,
     refetchInterval = 30000,
+    withLocation = false,
   } = options;
 
   const queryKey = ['events', impactMin, consensus, province, limit];
@@ -53,8 +56,13 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
     retryDelay: 5000,
   });
 
+  const items = data?.items ?? [];
+  const filtered = withLocation
+    ? items.filter((e) => e.location?.lat != null && e.location?.lng != null)
+    : items;
+
   return {
-    events: data?.items ?? [],
+    events: filtered,
     total: data?.total ?? 0,
     isLoading,
     isError,

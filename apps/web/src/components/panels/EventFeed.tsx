@@ -66,6 +66,7 @@ export function EventFeed() {
 
   const selectNewsLocation = useRadarStore((s) => s.selectNewsLocation);
   const activateLayer = useRadarStore((s) => s.activateLayer);
+  const selectEvent = useRadarStore((s) => s.selectEvent);
 
   const { events, isLoading, isError, total } = useEvents({
     consensus: consensus || undefined,
@@ -83,8 +84,9 @@ export function EventFeed() {
         });
         activateLayer('news');
       }
+      selectEvent(event.id);
     },
-    [selectNewsLocation, activateLayer],
+    [selectNewsLocation, activateLayer, selectEvent],
   );
 
   return (

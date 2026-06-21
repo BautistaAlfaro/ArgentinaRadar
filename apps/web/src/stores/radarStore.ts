@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 export type LayerId =
   | 'news'
+  | 'events'
   | 'provinces'
   | 'weather'
   | 'economic'
@@ -35,6 +36,8 @@ export interface RadarState {
   selectedNewsLocation: SelectedNewsLocation | null;
   /** Panel visibility toggles */
   panelVisibility: PanelVisibility;
+  /** ID of the event selected for timeline detail view */
+  selectedEventId: string | null;
   /** Whether the sidebar is collapsed */
   sidebarCollapsed: boolean;
 }
@@ -52,6 +55,8 @@ export interface RadarActions {
   selectNewsLocation: (location: SelectedNewsLocation | null) => void;
   /** Toggle a panel's visibility */
   togglePanel: (panel: PanelId) => void;
+  /** Select an event for timeline detail view (null to close) */
+  selectEvent: (eventId: string | null) => void;
   /** Toggle sidebar collapsed state */
   toggleSidebar: () => void;
 }
@@ -60,9 +65,10 @@ export type RadarStore = RadarState & RadarActions;
 
 export const useRadarStore = create<RadarStore>((set) => ({
   // State
-  activeLayers: new Set<LayerId>(['provinces']),
+  activeLayers: new Set<LayerId>(['provinces', 'events']),
   selectedProvince: null,
   selectedNewsLocation: null,
+  selectedEventId: null,
   panelVisibility: {
     news: true,
     economic: true,
@@ -112,6 +118,8 @@ export const useRadarStore = create<RadarStore>((set) => ({
       },
     })),
 
+  selectEvent: (eventId) =>
+    set({ selectedEventId: eventId }),
   toggleSidebar: () =>
     set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 }));

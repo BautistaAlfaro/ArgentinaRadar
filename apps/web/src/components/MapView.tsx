@@ -3,10 +3,12 @@ import Globe from 'globe.gl';
 import * as THREE from 'three';
 import { useWebGLDetect } from '../hooks/useWebGLDetect';
 import { useNews } from '../hooks/useNews';
+import { useEvents } from '../hooks/useEvents';
 import { useRadarStore } from '../stores/radarStore';
 import { MapLibreFallback } from './MapLibreFallback';
 import { ProvinceBoundaries } from './layers/ProvinceBoundaries';
 import { NewsMarkers } from './layers/NewsMarkers';
+import { EventMarkers } from './layers/EventMarkers';
 import { WeatherLayer } from './layers/WeatherLayer';
 import { EarthquakeLayer } from './layers/EarthquakeLayer';
 import { FireLayer } from './layers/FireLayer';
@@ -36,6 +38,8 @@ export function MapView() {
 
   // Fetch geolocated articles for markers
   const { articles } = useNews();
+  // Fetch events with location data for event markers
+  const { events } = useEvents({ withLocation: true });
 
   // Selected news location → center map
   const selectedNewsLocation = useRadarStore((s) => s.selectedNewsLocation);
@@ -222,6 +226,7 @@ export function MapView() {
         <>
           <ProvinceBoundaries globe={globeRef.current} />
           <NewsMarkers globe={globeRef.current} articles={articles} />
+          <EventMarkers globe={globeRef.current} events={events} />
           <WeatherLayer globe={globeRef.current} />
           <EarthquakeLayer globe={globeRef.current} />
           <FireLayer globe={globeRef.current} />

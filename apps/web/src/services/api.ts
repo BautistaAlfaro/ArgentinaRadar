@@ -14,6 +14,7 @@ const GEO_API = 'http://localhost:3002';
 const ECON_API = 'http://localhost:3006';
 const ALERTS_API = 'http://localhost:3007';
 const EVENT_API = 'http://localhost:3008';
+const TRENDS_API = 'http://localhost:3009';
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -152,7 +153,7 @@ export async function fetchEvents(params?: {
   return resp.json();
 }
 
-export async function fetchEvent(id: string): Promise<EventItem> {
+export async function fetchEvent(id: string): Promise<EventDetail> {
   const resp = await fetch(`${EVENT_API}/api/events/${encodeURIComponent(id)}`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch event ${id}: ${resp.status} ${resp.statusText}`);
@@ -166,6 +167,37 @@ export async function fetchTrendingEvents(): Promise<EventItem[]> {
     throw new Error(`Failed to fetch trending events: ${resp.status} ${resp.statusText}`);
   }
   return resp.json();
+}
+
+// ─── Trending entities ────────────────────────────────────────────
+
+export interface TrendingEntity {
+  name: string;
+  type: 'persona' | 'lugar' | 'organización';
+  mentions: number;
+  previousMentions: number;
+  growthRate: number; // percentage, e.g. 45 or -12
+  score: number;
+}
+
+export async function fetchTrends(): Promise<TrendingEntity[]> {
+  const resp = await fetch(`${TRENDS_API}/api/trends`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch trends: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+// ─── Event detail ─────────────────────────────────────────────────
+
+export interface EventDetail extends EventItem {
+  articles: Array<{
+    id: string;
+    title: string;
+    source: string;
+    publishedAt: string;
+    url: string;
+  }>;
 }
 
 // ─── Alert data fetch functions ───────────────────────────────────
