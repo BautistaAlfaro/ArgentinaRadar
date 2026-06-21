@@ -11,6 +11,6 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src", "../../shared"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "../../shared/types", "../../shared/gazetteer", "../../shared/geo"],
+  "exclude": ["node_modules", "dist", "../../shared/utils"]
 }
