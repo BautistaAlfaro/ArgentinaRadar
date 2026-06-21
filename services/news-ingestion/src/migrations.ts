@@ -1,0 +1,51 @@
+import type Database from 'better-sqlite3';
+
+/**
+ * Run all schema migrations in order. Idempotent — uses IF NOT EXISTS.
+ */
+export function runMigrations(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS news_items (
+      id          TEXT PRIMARY KEY,
+      title       TEXT NOT NULL,
+      summary     TEXT,
+      source      TEXT NOT NULL,
+      sources     TEXT NOT NULL DEFAULT '[]',
+      url         TEXT NOT NULL UNIQUE,
+      category    TEXT,
+      published_at TEXT,
+      ingested_at TEXT NOT NULL DEFAULT (datetime('now')),
+      location    TEXT,
+      ai_score    TEXT,
+      tweet_id    TEXT,
+      status      TEXT NOT NULL DEFAULT 'ingested'
+    );
+
+    CREATE TABLE IF NOT EXISTS sources (
+      name          TEXT PRIMARY KEY,
+      type          TEXT NOT NULL,
+      url           TEXT NOT NULL,
+      category      TEXT,
+      rate_limit_ms INTEGER DEFAULT 2000,
+      status        TEXT NOT NULL DEFAULT 'healthy',
+      last_fetched_at TEXT,
+      css_selectors TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS tweet_history (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      article_id TEXT NOT NULL,
+      tweet_id  TEXT,
+      posted_at TEXT,
+      status    TEXT NOT NULL DEFAULT 'pending',
+      error     TEXT,
+      FOREIGN KEY (article_id) REFERENCES news_items(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_news_status ON news_items(status);
+    CREATE INDEX IF NOT EXISTS idx_news_published_at ON news_items(published_at);
+    CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
+  `);
+
+  console.log('[migrations] Schema up to date');
+}

@@ -1,0 +1,117 @@
+{
+  "_comment": "Argentine news sources for the ingestion pipeline",
+  "sources": [
+    {
+      "name": "clarin",
+      "type": "rss",
+      "url": "https://www.clarin.com/rss/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "lanacion",
+      "type": "rss",
+      "url": "https://www.lanacion.com.ar/arc/outboundfeeds/rss/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "infobae",
+      "type": "rss",
+      "url": "https://www.infobae.com/arc/outboundfeeds/rss/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "ambito",
+      "type": "rss",
+      "url": "https://www.ambito.com/rss/",
+      "category": "economia",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "cronista",
+      "type": "rss",
+      "url": "https://www.cronista.com/rss/",
+      "category": "economia",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "pagina12",
+      "type": "rss",
+      "url": "https://www.pagina12.com.ar/rss/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "tn",
+      "type": "scrape",
+      "url": "https://tn.com.ar/",
+      "category": "sociedad",
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2 a, h3 a",
+        "summary": "p",
+        "link": "h2 a, h3 a",
+        "timestamp": "time"
+      }
+    },
+    {
+      "name": "c5n",
+      "type": "scrape",
+      "url": "https://c5n.com/",
+      "category": "sociedad",
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2 a, h3 a",
+        "summary": "p",
+        "link": "h2 a, h3 a",
+        "timestamp": "time"
+      }
+    },
+    {
+      "name": "a24",
+      "type": "scrape",
+      "url": "https://www.a24.com/",
+      "category": "sociedad",
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2 a, h3 a",
+        "summary": "p",
+        "link": "h2 a, h3 a",
+        "timestamp": "time"
+      }
+    },
+    {
+      "name": "america",
+      "type": "scrape",
+      "url": "https://www.americatv.com.ar/",
+      "category": "sociedad",
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2 a, h3 a",
+        "summary": "p",
+        "link": "h2 a, h3 a",
+        "timestamp": "time"
+      }
+    },
+    {
+      "name": "canal26",
+      "type": "scrape",
+      "url": "https://www.canal26.com/",
+      "category": "sociedad",
+      "rateLimitMs": 10000,
+      "cssSelectors": {
+        "article": "article",
+        "title": "h2 a, h3 a",
+        "summary": "p",
+        "link": "h2 a, h3 a",
+        "timestamp": "time"
+      }
+    }
+  ]
+}
