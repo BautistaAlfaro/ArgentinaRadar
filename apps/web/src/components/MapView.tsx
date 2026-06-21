@@ -137,15 +137,19 @@ export function MapView() {
 
     globe.lights([ambient, mainLight, fillLight]);
 
-    // ---- Orbit controls focused on Argentina ----
+    // ---- Orbit controls focused on Argentina/South America ----
     const controls = globe.controls();
-    controls.minPolarAngle = Math.PI * 0.3;
-    controls.maxPolarAngle = Math.PI * 0.7;
-    controls.minAzimuthAngle = -Math.PI * 0.4;
-    controls.maxAzimuthAngle = Math.PI * 0.4;
+    // minPolarAngle (~31.5°N): keep South America visible, block N. America/Europe
+    controls.minPolarAngle = Math.PI * 0.35;
+    // maxPolarAngle (~-68.4°S): allow Tierra del Fuego, Islas Malvinas, Antártida
+    controls.maxPolarAngle = Math.PI * 0.88;
+    // Azimuth (±90° from lng=0): Atlantic ocean + Pacific coast of SA
+    controls.minAzimuthAngle = -Math.PI * 0.5;
+    controls.maxAzimuthAngle = Math.PI * 0.5;
     controls.enableZoom = true;
-    controls.minDistance = 150;
-    controls.maxDistance = 500;
+    // Globe radius = 100 → minDistance 130 = altitude ~0.3 (close zoom)
+    controls.minDistance = 130;
+    controls.maxDistance = 600;
 
     globeRef.current = globe;
     setGlobeReady(true);
