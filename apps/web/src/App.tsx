@@ -6,8 +6,13 @@ import { EconomicTicker } from './components/panels/EconomicTicker';
 import { ArgentinaTitle } from './components/ArgentinaTitle';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Gate } from './components/auth/Gate';
+import { AuthProvider } from './components/auth/AuthProvider';
+import { UserMenu } from './components/auth/UserMenu';
+import { useAuthStore } from './stores/authStore';
 
 function MainLayout() {
+  const role = useAuthStore((s) => s.user?.role ?? null);
+
   return (
     <>
       <ArgentinaTitle />
@@ -22,13 +27,16 @@ function MainLayout() {
             <span className="ml-3 text-xs text-slate-400 font-mono">
               Monitoreo en vivo
             </span>
-            <nav className="ml-auto flex items-center gap-4">
-              <Link
-                to="/admin"
-                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                Admin
-              </Link>
+            <nav className="ml-auto flex items-center gap-3">
+              {role === 'ADMIN' && (
+                <Link
+                  to="/admin"
+                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  Admin
+                </Link>
+              )}
+              <UserMenu />
             </nav>
           </header>
         }
@@ -47,17 +55,19 @@ function MainLayout() {
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<MainLayout />} />
-        <Route
-          path="/admin"
-          element={
-            <Gate role="ADMIN">
-              <AdminDashboard />
-            </Gate>
-          }
-        />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<MainLayout />} />
+          <Route
+            path="/admin"
+            element={
+              <Gate role="ADMIN">
+                <AdminDashboard />
+              </Gate>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

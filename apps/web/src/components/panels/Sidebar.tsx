@@ -32,7 +32,7 @@ const TABS: TabDefinition[] = [
 
 export function Sidebar() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
-  const role = useAuthStore((s) => s.role);
+  const role = useAuthStore((s) => s.user?.role ?? null);
 
   const handleKeyDown = (e: React.KeyboardEvent, tabId: TabId) => {
     if (e.key === 'Enter' || e.key === ' ') {

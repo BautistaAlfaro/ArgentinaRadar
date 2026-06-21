@@ -25,4 +25,13 @@ export const config = {
 
   /** Queue name */
   queueName: 'night-owl',
+
+  /** Event Detector service URL */
+  eventDetectorUrl: process.env.EVENT_DETECTOR_URL ?? 'http://localhost:3008',
+
+  /** Minimum events required for meaningful pattern detection */
+  minEventsForPattern: 3,
+
+  /** Cosine similarity threshold for event merging (0.0 – 1.0) */
+  mergeSimilarityThreshold: 0.95,
 } as const;

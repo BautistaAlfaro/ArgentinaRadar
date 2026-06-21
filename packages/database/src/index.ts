@@ -18,6 +18,7 @@ export type {
   SystemMetric,
   DailyStats,
   Subscription,
+  Pattern,
 } from "@prisma/client";
 
 // ── Dual-Write Adapter ────────────────────────────────────

@@ -158,6 +158,21 @@ model Category {
   news News[]
 }
 
+// ── Pattern ──────────────────────────────────────────────
+model Pattern {
+  id          String   @id @default(uuid())
+  type        String   // "weekly" | "contextual" | "temporal"
+  entityName  String
+  description String
+  confidence  Float
+  detectedAt  DateTime @default(now())
+  metadata    Json?
+
+  @@index([type])
+  @@index([entityName])
+  @@index([detectedAt])
+}
+
 // ── AiCost ───────────────────────────────────────────────
 model AiCost {
   id     String   @id @default(uuid())
