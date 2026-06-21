@@ -1,0 +1,9 @@
+{
+  "name": "@argentinaradar/hermes-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "python -m uvicorn src.bridge:app --host 0.0.0.0 --port 3005",
+    "dev": "python -m uvicorn src.bridge:app --host 0.0.0.0 --port 3005 --reload"
+  }
+}

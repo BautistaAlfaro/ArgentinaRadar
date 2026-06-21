@@ -1,0 +1,46 @@
+"""
+Hermes Bridge configuration.
+
+Loads environment variables from the project's .env file or process environment.
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Resolve project root (services/hermes-bridge/src/config.py -> project root)
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+# Load .env from project config directory
+_dotenv_path = _PROJECT_ROOT / "config" / ".env"
+if _dotenv_path.exists():
+    load_dotenv(_dotenv_path)
+
+# --- Database ---
+DB_PATH: str = os.environ.get(
+    "DB_PATH",
+    str(_PROJECT_ROOT / "data" / "argentina-radar.db"),
+)
+
+# --- Service ---
+PORT: int = int(os.environ.get("PORT", "3005"))
+
+# --- Telegram ---
+TELEGRAM_BOT_TOKEN: str = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID: str = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# --- Notification polling ---
+NOTIFICATION_POLL_INTERVAL: int = int(
+    os.environ.get("NOTIFICATION_POLL_INTERVAL", "30")
+)  # seconds
+ALERT_POLL_INTERVAL: int = int(
+    os.environ.get("ALERT_POLL_INTERVAL", "60")
+)  # seconds
+
+# --- Service URLs for health checks ---
+SERVICE_URLS: dict[str, str] = {
+    "news-ingestion": os.environ.get("NEWS_SERVICE_URL", "http://localhost:3001"),
+    "geolocation": os.environ.get("GEOLOCATION_URL", "http://localhost:3002"),
+    "ai-filter": os.environ.get("AI_FILTER_URL", "http://localhost:3003"),
+    "twitter-publisher": os.environ.get("TWITTER_PUBLISHER_URL", "http://localhost:3004"),
+}

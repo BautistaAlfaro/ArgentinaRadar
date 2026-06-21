@@ -112,5 +112,27 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+
+    // ─── Hermes Bridge (Python / FastAPI) ───────────────────────
+    {
+      name: 'hermes-bridge',
+      cwd: path.join(ROOT, 'services', 'hermes-bridge'),
+      script: 'cmd.exe',
+      args: '/c python -m uvicorn src.server:app --host 0.0.0.0 --port 3005',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3005',
+        PYTHONPATH: '.',
+        DB_PATH: path.join(ROOT, 'data', 'argentina-radar.db'),
+      },
+      watch: ['src'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'hermes-bridge-error.log'),
+      out_file: path.join(LOG_DIR, 'hermes-bridge-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
   ],
 };
