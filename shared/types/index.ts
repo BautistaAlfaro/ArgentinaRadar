@@ -4,9 +4,11 @@ export interface Location {
   province: string;
   city: string | null;
   neighborhood: string | null;
+  landmark: string | null;
   lat: number;
   lng: number;
   confidence: number; // 0.0–1.0
+  label: string | null; // "Ubicación aproximada" for low confidence
 }
 
 export interface AiScore {

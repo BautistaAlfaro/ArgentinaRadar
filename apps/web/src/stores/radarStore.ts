@@ -17,11 +17,19 @@ export interface PanelVisibility {
   alerts: boolean;
 }
 
+export interface SelectedNewsLocation {
+  lat: number;
+  lng: number;
+  articleId: string;
+}
+
 export interface RadarState {
   /** Set of active layer IDs */
   activeLayers: Set<LayerId>;
   /** Currently selected province name, or null */
   selectedProvince: string | null;
+  /** Currently selected news article location (for map centering) */
+  selectedNewsLocation: SelectedNewsLocation | null;
   /** Panel visibility toggles */
   panelVisibility: PanelVisibility;
   /** Whether the sidebar is collapsed */
@@ -37,6 +45,8 @@ export interface RadarActions {
   deactivateLayer: (layer: LayerId) => void;
   /** Select a province (null to deselect) */
   selectProvince: (province: string | null) => void;
+  /** Select a news article location (null to clear) */
+  selectNewsLocation: (location: SelectedNewsLocation | null) => void;
   /** Toggle a panel's visibility */
   togglePanel: (panel: PanelId) => void;
   /** Toggle sidebar collapsed state */
@@ -49,6 +59,7 @@ export const useRadarStore = create<RadarStore>((set) => ({
   // State
   activeLayers: new Set<LayerId>(['provinces']),
   selectedProvince: null,
+  selectedNewsLocation: null,
   panelVisibility: {
     news: true,
     economic: true,
@@ -86,6 +97,9 @@ export const useRadarStore = create<RadarStore>((set) => ({
 
   selectProvince: (province) =>
     set({ selectedProvince: province }),
+
+  selectNewsLocation: (location) =>
+    set({ selectedNewsLocation: location }),
 
   togglePanel: (panel) =>
     set((state) => ({

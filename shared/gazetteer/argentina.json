@@ -1,0 +1,377 @@
+{
+  "$schema": "./argentina.schema.json",
+  "description": "Argentine gazetteer — provinces, cities, and landmarks with coordinates",
+  "version": "1.0.0",
+  "provinces": [
+    {
+      "name": "Ciudad Autónoma de Buenos Aires",
+      "shortName": "CABA",
+      "centroid": { "lat": -34.6037, "lng": -58.3816 },
+      "region": "Centro",
+      "cities": [
+        {
+          "name": "Buenos Aires",
+          "shortName": "CABA",
+          "lat": -34.6037,
+          "lng": -58.3816,
+          "population": 3075646,
+          "landmarks": [
+            { "name": "Congreso de la Nación", "lat": -34.6097, "lng": -58.3923 },
+            { "name": "Casa Rosada", "lat": -34.6083, "lng": -58.3702 },
+            { "name": "Obelisco", "lat": -34.6037, "lng": -58.3816 },
+            { "name": "Plaza de Mayo", "lat": -34.608, "lng": -58.372 },
+            { "name": "Puerto Madero", "lat": -34.615, "lng": -58.361 },
+            { "name": "La Bombonera", "lat": -34.6353, "lng": -58.3636 },
+            { "name": "Teatro Colón", "lat": -34.6011, "lng": -58.3832 },
+            { "name": "Palacio Barolo", "lat": -34.6105, "lng": -58.3847 },
+            { "name": "Caminito", "lat": -34.6346, "lng": -58.3631 },
+            { "name": "Puente de la Mujer", "lat": -34.6158, "lng": -58.3638 },
+            { "name": "Planetario Galileo Galilei", "lat": -34.5701, "lng": -58.4106 },
+            { "name": "Museo MALBA", "lat": -34.5774, "lng": -58.4028 },
+            { "name": "Floralis Genérica", "lat": -34.5827, "lng": -58.3936 },
+            { "name": "Plaza San Martín", "lat": -34.5968, "lng": -58.378 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Buenos Aires",
+      "shortName": "Bs As",
+      "centroid": { "lat": -36.6769, "lng": -60.5588 },
+      "region": "Centro",
+      "cities": [
+        {
+          "name": "La Plata",
+          "shortName": null,
+          "lat": -34.9215,
+          "lng": -57.9546,
+          "population": 799523,
+          "landmarks": [
+            { "name": "Catedral de La Plata", "lat": -34.9229, "lng": -57.9565 },
+            { "name": "Estadio Único", "lat": -34.9062, "lng": -57.9897 }
+          ]
+        },
+        { "name": "Mar del Plata", "shortName": "MDP", "lat": -38.0055, "lng": -57.5426, "population": 682605 },
+        { "name": "Bahía Blanca", "shortName": null, "lat": -38.7196, "lng": -62.2724, "population": 301572 },
+        { "name": "Tandil", "shortName": null, "lat": -37.3217, "lng": -59.1332, "population": 150162 },
+        { "name": "Olavarría", "shortName": null, "lat": -36.8943, "lng": -60.3225, "population": 111320 },
+        { "name": "Junín", "shortName": null, "lat": -34.5935, "lng": -60.954, "population": 97929 },
+        { "name": "Pergamino", "shortName": null, "lat": -33.8938, "lng": -60.5746, "population": 105000 },
+        { "name": "San Nicolás de los Arroyos", "shortName": "San Nicolás", "lat": -33.3322, "lng": -60.2128, "population": 162000 },
+        { "name": "Luján", "shortName": null, "lat": -34.5665, "lng": -59.1144, "population": 106273 },
+        { "name": "Chivilcoy", "shortName": null, "lat": -34.8956, "lng": -60.0192, "population": 64991 },
+        { "name": "Mercedes", "shortName": null, "lat": -34.6514, "lng": -59.4309, "population": 65691 },
+        { "name": "Azul", "shortName": null, "lat": -36.7815, "lng": -59.8594, "population": 69097 },
+        { "name": "Campana", "shortName": null, "lat": -34.1684, "lng": -58.9589, "population": 94640 },
+        { "name": "San Pedro", "shortName": null, "lat": -33.6794, "lng": -59.6646, "population": 57347 },
+        { "name": "Zárate", "shortName": null, "lat": -34.0968, "lng": -59.0284, "population": 114269 },
+        { "name": "San Fernando", "shortName": null, "lat": -34.4373, "lng": -58.5621, "population": 173336 }
+      ]
+    },
+    {
+      "name": "Catamarca",
+      "shortName": null,
+      "centroid": { "lat": -28.4686, "lng": -65.7817 },
+      "region": "Noroeste",
+      "cities": [
+        {
+          "name": "San Fernando del Valle de Catamarca",
+          "shortName": "Catamarca",
+          "lat": -28.4696,
+          "lng": -65.7852,
+          "population": 159703
+        }
+      ]
+    },
+    {
+      "name": "Chaco",
+      "shortName": null,
+      "centroid": { "lat": -26.383, "lng": -60.7622 },
+      "region": "Noreste",
+      "cities": [
+        { "name": "Resistencia", "shortName": null, "lat": -27.4514, "lng": -58.9867, "population": 409359 }
+      ]
+    },
+    {
+      "name": "Chubut",
+      "shortName": null,
+      "centroid": { "lat": -44.381, "lng": -68.68 },
+      "region": "Patagonia",
+      "cities": [
+        { "name": "Rawson", "shortName": null, "lat": -43.3002, "lng": -65.1023, "population": 31611 },
+        { "name": "Puerto Madryn", "shortName": null, "lat": -42.7690, "lng": -65.0386, "population": 115353 },
+        { "name": "Comodoro Rivadavia", "shortName": null, "lat": -45.865, "lng": -67.4808, "population": 201228 }
+      ]
+    },
+    {
+      "name": "Córdoba",
+      "shortName": "Cba",
+      "centroid": { "lat": -32.06, "lng": -63.89 },
+      "region": "Centro",
+      "cities": [
+        {
+          "name": "Córdoba",
+          "shortName": "Cba",
+          "lat": -31.4201,
+          "lng": -64.1888,
+          "population": 1565112,
+          "landmarks": [
+            { "name": "Cabildo de Córdoba", "lat": -31.4135, "lng": -64.1812 },
+            { "name": "Manzana Jesuítica", "lat": -31.4176, "lng": -64.1862 }
+          ]
+        },
+        { "name": "Río Cuarto", "shortName": null, "lat": -33.1308, "lng": -64.3499, "population": 200000 },
+        { "name": "Villa María", "shortName": null, "lat": -32.4076, "lng": -63.2408, "population": 122000 }
+      ]
+    },
+    {
+      "name": "Corrientes",
+      "shortName": null,
+      "centroid": { "lat": -28.64, "lng": -58 },
+      "region": "Noreste",
+      "cities": [
+        {
+          "name": "Corrientes",
+          "shortName": "Capital",
+          "lat": -27.4698,
+          "lng": -58.8301,
+          "population": 440221
+        },
+        { "name": "Goya", "shortName": null, "lat": -29.1405, "lng": -59.2642, "population": 89158 }
+      ]
+    },
+    {
+      "name": "Entre Ríos",
+      "shortName": null,
+      "centroid": { "lat": -32, "lng": -59.3 },
+      "region": "Centro",
+      "cities": [
+        { "name": "Paraná", "shortName": null, "lat": -31.7336, "lng": -60.5296, "population": 301026 },
+        { "name": "Gualeguaychú", "shortName": null, "lat": -33.0072, "lng": -58.5112, "population": 109461 },
+        { "name": "Concepción del Uruguay", "shortName": "Uruguay", "lat": -32.4849, "lng": -58.2286, "population": 76191 },
+        { "name": "Diamante", "shortName": null, "lat": -34.6494, "lng": -60.499, "population": 50000 }
+      ]
+    },
+    {
+      "name": "Formosa",
+      "shortName": null,
+      "centroid": { "lat": -25, "lng": -59 },
+      "region": "Noreste",
+      "cities": [
+        { "name": "Formosa", "shortName": null, "lat": -26.1849, "lng": -58.1732, "population": 265171 }
+      ]
+    },
+    {
+      "name": "Jujuy",
+      "shortName": null,
+      "centroid": { "lat": -23.75, "lng": -65.5 },
+      "region": "Noroeste",
+      "cities": [
+        {
+          "name": "San Salvador de Jujuy",
+          "shortName": "Jujuy",
+          "lat": -24.1858,
+          "lng": -65.2995,
+          "population": 321789,
+          "landmarks": [
+            { "name": "Cerro de los Siete Colores", "lat": -23.6841, "lng": -65.3663 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "La Pampa",
+      "shortName": null,
+      "centroid": { "lat": -37, "lng": -65 },
+      "region": "Patagonia",
+      "cities": [
+        { "name": "Santa Rosa", "shortName": null, "lat": -36.6167, "lng": -64.2833, "population": 124101 }
+      ]
+    },
+    {
+      "name": "La Rioja",
+      "shortName": null,
+      "centroid": { "lat": -30, "lng": -67 },
+      "region": "Noroeste",
+      "cities": [
+        { "name": "La Rioja", "shortName": null, "lat": -29.4119, "lng": -66.8525, "population": 206344 }
+      ]
+    },
+    {
+      "name": "Mendoza",
+      "shortName": "Mza",
+      "centroid": { "lat": -34, "lng": -68.5 },
+      "region": "Cuyo",
+      "cities": [
+        {
+          "name": "Mendoza",
+          "shortName": "Mza",
+          "lat": -32.8908,
+          "lng": -68.8272,
+          "population": 1567142,
+          "landmarks": [
+            { "name": "Cerro Aconcagua", "lat": -32.6532, "lng": -70.0109 },
+            { "name": "Parque General San Martín", "lat": -32.8955, "lng": -68.8759 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Misiones",
+      "shortName": null,
+      "centroid": { "lat": -27, "lng": -54.5 },
+      "region": "Noreste",
+      "cities": [
+        {
+          "name": "Posadas",
+          "shortName": null,
+          "lat": -27.3671,
+          "lng": -55.8961,
+          "population": 361398,
+          "landmarks": [
+            { "name": "Cataratas del Iguazú", "lat": -25.6953, "lng": -54.4367 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Neuquén",
+      "shortName": "Nqn",
+      "centroid": { "lat": -38.5, "lng": -69.5 },
+      "region": "Patagonia",
+      "cities": [
+        { "name": "Neuquén", "shortName": "Nqn", "lat": -38.9516, "lng": -68.059, "population": 381867 }
+      ]
+    },
+    {
+      "name": "Río Negro",
+      "shortName": null,
+      "centroid": { "lat": -40.5, "lng": -67 },
+      "region": "Patagonia",
+      "cities": [
+        { "name": "Viedma", "shortName": null, "lat": -40.8105, "lng": -62.9945, "population": 73447 },
+        { "name": "General Roca", "shortName": null, "lat": -39.0265, "lng": -67.5831, "population": 98878 },
+        {
+          "name": "San Carlos de Bariloche",
+          "shortName": "Bariloche",
+          "lat": -41.1335,
+          "lng": -71.3103,
+          "population": 146000,
+          "landmarks": [
+            { "name": "Cerro Catedral", "lat": -41.1833, "lng": -71.4533 }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Salta",
+      "shortName": null,
+      "centroid": { "lat": -24.5, "lng": -64 },
+      "region": "Noroeste",
+      "cities": [
+        { "name": "Salta", "shortName": null, "lat": -24.7821, "lng": -65.4125, "population": 704000 }
+      ]
+    },
+    {
+      "name": "San Juan",
+      "shortName": null,
+      "centroid": { "lat": -31, "lng": -69 },
+      "region": "Cuyo",
+      "cities": [
+        { "name": "San Juan", "shortName": null, "lat": -31.5375, "lng": -68.5364, "population": 559448 }
+      ]
+    },
+    {
+      "name": "San Luis",
+      "shortName": null,
+      "centroid": { "lat": -33.5, "lng": -65.5 },
+      "region": "Cuyo",
+      "cities": [
+        { "name": "San Luis", "shortName": null, "lat": -33.3017, "lng": -66.3378, "population": 205316 }
+      ]
+    },
+    {
+      "name": "Santa Cruz",
+      "shortName": null,
+      "centroid": { "lat": -49, "lng": -70.5 },
+      "region": "Patagonia",
+      "cities": [
+        {
+          "name": "Río Gallegos",
+          "shortName": null,
+          "lat": -51.6236,
+          "lng": -69.2188,
+          "population": 135000,
+          "landmarks": [
+            { "name": "Glaciar Perito Moreno", "lat": -50.471, "lng": -73.048 }
+          ]
+        },
+        { "name": "Caleta Olivia", "shortName": null, "lat": -46.4377, "lng": -67.5354, "population": 79917 }
+      ]
+    },
+    {
+      "name": "Santa Fe",
+      "shortName": "SF",
+      "centroid": { "lat": -31.5, "lng": -61 },
+      "region": "Centro",
+      "cities": [
+        {
+          "name": "Rosario",
+          "shortName": null,
+          "lat": -32.9468,
+          "lng": -60.6393,
+          "population": 1426964,
+          "landmarks": [
+            { "name": "Monumento a la Bandera", "lat": -32.9472, "lng": -60.6309 }
+          ]
+        },
+        { "name": "Santa Fe", "shortName": "SF", "lat": -31.6333, "lng": -60.7, "population": 653073 },
+        { "name": "Rafaela", "shortName": null, "lat": -31.2527, "lng": -61.4883, "population": 113574 },
+        { "name": "Venado Tuerto", "shortName": null, "lat": -33.7447, "lng": -61.9694, "population": 107149 }
+      ]
+    },
+    {
+      "name": "Santiago del Estero",
+      "shortName": "Sgo",
+      "centroid": { "lat": -28, "lng": -63 },
+      "region": "Noroeste",
+      "cities": [
+        {
+          "name": "Santiago del Estero",
+          "shortName": null,
+          "lat": -27.7834,
+          "lng": -64.2641,
+          "population": 430000
+        }
+      ]
+    },
+    {
+      "name": "Tierra del Fuego",
+      "shortName": "TDF",
+      "centroid": { "lat": -54, "lng": -68 },
+      "region": "Patagonia",
+      "cities": [
+        { "name": "Ushuaia", "shortName": null, "lat": -54.8019, "lng": -68.303, "population": 82000 },
+        { "name": "Río Grande", "shortName": null, "lat": -53.7879, "lng": -67.7095, "population": 98476 }
+      ]
+    },
+    {
+      "name": "Tucumán",
+      "shortName": "Tuc",
+      "centroid": { "lat": -27, "lng": -65.5 },
+      "region": "Noroeste",
+      "cities": [
+        {
+          "name": "San Miguel de Tucumán",
+          "shortName": "Tucumán",
+          "lat": -26.8253,
+          "lng": -65.228,
+          "population": 987000,
+          "landmarks": [
+            { "name": "Casa de la Independencia", "lat": -26.833, "lng": -65.2029 }
+          ]
+        }
+      ]
+    }
+  ]
+}
