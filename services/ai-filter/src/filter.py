@@ -10,7 +10,9 @@ import json
 import sqlite3
 from typing import Any
 
-from src.config import DB_PATH
+import httpx
+
+from src.config import DB_PATH, EVENT_DETECTOR_URL
 from src.model_router import query_llm, ModelRouterError
 from src.prompts import build_prompt
 from src.cost_tracker import CostTracker
@@ -121,6 +123,10 @@ class AIFilter:
         finally:
             conn.close()
 
+        # --- Push PUBLISH articles to event-detector for event clustering ---
+        if verdict == "PUBLISH":
+            await self._push_to_event_detector(article_id, title, summary, source)
+
         return {
             "article_id": article_id,
             "verdict": verdict,
@@ -129,6 +135,81 @@ class AIFilter:
             "combined": combined,
             "tokens": tokens,
         }
+
+    # ------------------------------------------------------------------
+    # Event-detector push
+    # ------------------------------------------------------------------
+
+    async def _push_to_event_detector(
+        self,
+        article_id: str,
+        title: str,
+        summary: str,
+        source: str,
+    ) -> None:
+        """
+        Push a PUBLISH-verdict article to the event-detector service.
+
+        Reads the article's URL, published_at, embedding, and entities from
+        the database so the event-detector has enough context for clustering.
+        Errors are logged but never propagated — the filter pipeline is not
+        blocked by a downstream service being down.
+        """
+        conn = self._get_db()
+        try:
+            row = conn.execute(
+                """SELECT url, published_at, embedding, entities
+                   FROM news_items WHERE id = ?""",
+                (article_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if not row:
+            print(f"[filter] ⚠️  article {article_id[:8]}… not found in DB, skipping event-detector push")
+            return
+
+        payload: dict[str, Any] = {
+            "article_id": article_id,
+            "title": title,
+            "summary": summary,
+            "source": source,
+            "url": row["url"] or "",
+            "publishedAt": row["published_at"] or "",
+        }
+
+        # Attach embedding if available (JSON array stored as TEXT)
+        embedding_raw = row["embedding"]
+        if embedding_raw:
+            try:
+                payload["embedding"] = json.loads(embedding_raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Attach entities if available (JSON array stored as TEXT)
+        entities_raw = row["entities"]
+        if entities_raw:
+            try:
+                payload["entities"] = json.loads(entities_raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{EVENT_DETECTOR_URL}/api/detect",
+                    json=payload,
+                )
+            if resp.status_code != 200:
+                print(
+                    f"[filter] ⚠️  event-detector returned {resp.status_code} "
+                    f"for article {article_id[:8]}…"
+                )
+        except httpx.RequestError as exc:
+            print(
+                f"[filter] ⚠️  event-detector unreachable for article "
+                f"{article_id[:8]}…: {exc}"
+            )
 
     # ------------------------------------------------------------------
     # Batch / queue processing

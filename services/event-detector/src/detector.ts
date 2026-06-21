@@ -149,6 +149,19 @@ async function gptVerify(
 export async function detectEvent(
   payload: DetectPayload,
 ): Promise<DetectResult> {
+  // 0. Dedup — if this article was already ingested, return its event
+  if (payload.articleId) {
+    const existing = store.getEventByArticleId(payload.articleId);
+    if (existing) {
+      return {
+        eventId: existing.id,
+        matchType: 'existing',
+        confidence: 1.0,
+        event: existing,
+      };
+    }
+  }
+
   // 1. Ensure embedding
   const embedding = await ensureEmbedding(
     payload.title,
@@ -159,7 +172,7 @@ export async function detectEvent(
   // 2. Build article object
   const now = new Date().toISOString();
   const article: NewsArticle = {
-    id: crypto.randomUUID(),
+    id: payload.articleId || crypto.randomUUID(),
     title: payload.title,
     summary: payload.summary,
     source: payload.source,

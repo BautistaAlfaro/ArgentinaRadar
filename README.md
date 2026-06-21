@@ -39,8 +39,7 @@ graph TD
     end
 
     subgraph "AI Services (Python / FastAPI)"
-        AIFilter["AI Filter<br/>:3003"]:::python
-        AIProc["AI Processor<br/>:3010"]:::python
+        AIProc["AI Processor<br/>:3013"]:::python
         Hermes["Hermes Bridge<br/>:3005"]:::python
     end
 
@@ -156,17 +155,16 @@ sequenceDiagram
 |---|---------|------|----------|-------------|
 | 1 | **news-ingestion** | 3001 | Node.js / Express | RSS feed poller — fetches, parses, deduplicates, and stores raw articles |
 | 2 | **geolocation** | 3002 | Node.js / Express | Gazetteer-based location matching — assigns lat/lng + province to articles |
-| 3 | **ai-filter** | 3003 | Python / FastAPI | AI content filtering — classifies relevance, enriches with OpenAI embeddings |
-| 4 | **twitter-publisher** | 3004 | Node.js / Express | Formats event data and posts tweets via Twitter API v2 |
-| 5 | **hermes-bridge** | 3005 | Python / FastAPI | Telegram bot bridge — sends alerts and digests to subscribed channels |
-| 6 | **economic-data** | 3006 | Node.js / Express | Fetches and exposes economic indicators (dólar, inflación, etc.) |
-| 7 | **alerts** | 3007 | Node.js / Express | Push notification system — manages user alert subscriptions and delivery |
-| 8 | **event-detector** | 3008 | Node.js / Express | Event clustering — groups related news, calculates impact scores |
-| 9 | **trend-analyzer** | 3009 | Node.js / Express | Temporal trend analysis — tracks entity velocity and media attention |
-| 10 | **ai-processor** | 3010 | Python / FastAPI | OpenAI / OpenRouter wrapper — embeddings, entity extraction, NLP |
-| 11 | **auth** | 3010 | Node.js / Express | JWT authentication — login, refresh tokens, role-based access control |
-| 12 | **night-owl** | 3011 | Node.js / Express | Cron + BullMQ — 7 nightly batch jobs for maintenance and analysis |
-| 13 | **admin-service** | 3012 | Node.js / Express | Admin Dashboard API — KPI aggregation, user management, cost monitoring |
+| 3 | **twitter-publisher** | 3004 | Node.js / Express | Formats event data and posts tweets via Twitter API v2 |
+| 4 | **hermes-bridge** | 3005 | Python / FastAPI | Telegram bot bridge — sends alerts and digests to subscribed channels |
+| 5 | **economic-data** | 3006 | Node.js / Express | Fetches and exposes economic indicators (dólar, inflación, etc.) |
+| 6 | **alerts** | 3007 | Node.js / Express | Push notification system — manages user alert subscriptions and delivery |
+| 7 | **event-detector** | 3008 | Node.js / Express | Event clustering — groups related news, calculates impact scores |
+| 8 | **trend-analyzer** | 3009 | Node.js / Express | Temporal trend analysis — tracks entity velocity and media attention |
+| 9 | **ai-processor** | 3013 | Python / FastAPI | OpenAI / OpenRouter wrapper — NER, embeddings, embeddings, article filtering |
+| 10 | **auth** | 3010 | Node.js / Express | JWT authentication — login, refresh tokens, role-based access control |
+| 11 | **night-owl** | 3011 | Node.js / Express | Cron + BullMQ — 7 nightly batch jobs for maintenance and analysis |
+| 12 | **admin-service** | 3012 | Node.js / Express | Admin Dashboard API — KPI aggregation, user management, cost monitoring |
 | — | **web-app** | 5173 | React / Vite | Frontend SPA — map view, trending, economic data, alerts |
 
 ---
@@ -330,17 +328,16 @@ npm run dev:twitter   # Twitter Publisher
 ArgentinaRadar/
 ├── apps/
 │   └── web/                    # React SPA (Vite)
-├── services/                   # 12 backend services
+├── services/                   # 11 backend services
 │   ├── news-ingestion/         # :3001  — RSS poller
 │   ├── geolocation/            # :3002  — Gazetteer matcher
-│   ├── ai-filter/              # :3003  — Python AI filter
 │   ├── twitter-publisher/      # :3004  — Tweet poster
 │   ├── hermes-bridge/          # :3005  — Python Telegram bot
 │   ├── economic-data/          # :3006  — Economic indicators
 │   ├── alerts/                 # :3007  — Push notifications
 │   ├── event-detector/         # :3008  — Event clustering
 │   ├── trend-analyzer/         # :3009  — Trend analysis
-│   ├── ai-processor/           # :3010  — Python OpenAI wrapper
+│   ├── ai-processor/           # :3013  — Python AI processor (NER, filter, embeddings)
 │   ├── auth/                   # :3010  — JWT auth service
 │   └── night-owl/              # :3011  — Automated nightly jobs
 ├── packages/

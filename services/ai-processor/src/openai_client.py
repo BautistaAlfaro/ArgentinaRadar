@@ -1,13 +1,19 @@
 """
-OpenAI / OpenRouter client wrapper for the AI Processor.
+OpenAI / OpenRouter / Ollama client wrapper for the AI Processor.
 
 Provides a unified interface for:
-  - Chat completions (NER, classification) via GPT-4o-mini or fallback
-  - Embeddings via text-embedding-3-small
-  - Cost tracking per call
-  - Daily budget enforcement
-  - Token-bucket rate limiting (max N requests/min)
+  - Chat completions (NER, classification, sentiment) via GPT-4o-mini or local Ollama
+  - Embeddings via text-embedding-3-small or local nomic-embed-text
+  - Cost tracking per call (paid APIs only)
+  - Daily budget enforcement (paid APIs only)
+  - Token-bucket rate limiting (paid APIs only)
   - Graceful fallback to Gemini Flash via OpenRouter when budget is hit
+  - **Local mode**: Zero-cost inference via Ollama (default)
+
+Mode switching (via AI_MODE env var):
+  - "local"  → All calls routed to Ollama, cost = 0. No API keys needed.
+  - "openai" → All calls via OpenAI / OpenRouter (existing behavior).
+  - "hybrid" → Ollama by default, falls back to paid API on failure.
 """
 
 import asyncio
@@ -18,12 +24,14 @@ import httpx
 from openai import APIError, AsyncOpenAI, RateLimitError
 
 from src.config import (
+    AI_MODE,
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
     EMBEDDING_PRICE_PER_1M,
     FALLBACK_INPUT_PRICE_PER_1M,
     FALLBACK_MODEL,
     FALLBACK_OUTPUT_PRICE_PER_1M,
+    LOCAL_MODELS,
     MAX_BATCH_SIZE,
     NER_INPUT_PRICE_PER_1M,
     NER_MODEL,
@@ -35,6 +43,7 @@ from src.config import (
     RATE_LIMIT_RPM,
 )
 from src.cost_tracker import CostTracker
+from src.ollama_client import OllamaClient
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +171,9 @@ class OpenAIClient:
         self.rate_limiter = TokenBucketRateLimiter(RATE_LIMIT_RPM)
         self._provider = provider
 
+        # Local Ollama client (used in local / hybrid modes)
+        self._ollama_client = OllamaClient()
+
         # Primary client (OpenAI)
         self._primary_client = self._build_client(
             api_key=OPENAI_API_KEY,
@@ -207,6 +219,7 @@ class OpenAIClient:
         self,
         messages: list[dict[str, str]],
         use_fallback: bool = False,
+        local_model: str | None = None,
     ) -> dict[str, Any]:
         """
         Send a chat completion request with cost tracking.
@@ -214,10 +227,31 @@ class OpenAIClient:
         Args:
             messages: OpenAI-format message list.
             use_fallback: If True, use the fallback model via OpenRouter.
+            local_model: Local model override (used in local/hybrid mode).
 
         Returns:
             Dict with 'content', 'model', 'tokens_used', 'cost'.
         """
+        # ── Local mode: route to Ollama ────────────────────────────
+        if AI_MODE == "local":
+            model = local_model or LOCAL_MODELS.get("smart", "qwen2.5:7b")
+            return await self._ollama_client.chat_completion(
+                messages=messages,
+                model=model,
+            )
+
+        # ── Hybrid mode: try Ollama first, fall through to paid API ─
+        if AI_MODE == "hybrid" and not use_fallback:
+            model = local_model or LOCAL_MODELS.get("smart", "qwen2.5:7b")
+            try:
+                return await self._ollama_client.chat_completion(
+                    messages=messages,
+                    model=model,
+                )
+            except Exception:
+                # Ollama failed — fall through to paid API
+                pass
+
         self.budget.check()
         await self.rate_limiter.acquire()
 
@@ -279,6 +313,7 @@ class OpenAIClient:
         self,
         texts: list[str],
         use_fallback: bool = False,
+        local_model: str | None = None,
     ) -> dict[str, Any]:
         """
         Create embeddings for a list of texts.
@@ -286,12 +321,33 @@ class OpenAIClient:
         Args:
             texts: List of text strings (max MAX_BATCH_SIZE).
             use_fallback: Ignored for embeddings (no fallback model).
+            local_model: Local embedding model override.
 
         Returns:
             Dict with 'embeddings', 'model', 'tokens_used', 'cost'.
         """
         if len(texts) > MAX_BATCH_SIZE:
             texts = texts[:MAX_BATCH_SIZE]
+
+        # ── Local mode: route to Ollama ────────────────────────────
+        if AI_MODE == "local":
+            model = local_model or LOCAL_MODELS.get("embed", "nomic-embed-text")
+            return await self._ollama_client.create_embedding(
+                texts=texts,
+                model=model,
+            )
+
+        # ── Hybrid mode: try Ollama first, fall through to paid API ─
+        if AI_MODE == "hybrid" and not use_fallback:
+            model = local_model or LOCAL_MODELS.get("embed", "nomic-embed-text")
+            try:
+                return await self._ollama_client.create_embedding(
+                    texts=texts,
+                    model=model,
+                )
+            except Exception:
+                # Ollama failed — fall through to paid API
+                pass
 
         self.budget.check()
         await self.rate_limiter.acquire()

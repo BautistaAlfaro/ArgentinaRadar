@@ -18,7 +18,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.config import LOCAL_MODELS
 from src.openai_client import OpenAIClient
+
+# Local model for political sentiment — nuanced Spanish analysis
+_POLITICAL_LOCAL_MODEL: str = LOCAL_MODELS.get("smart", "qwen2.5:7b")
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -124,7 +128,11 @@ async def run_political_analysis(
     Returns a dict with keys: figures, summary, tokens_used, cost.
     """
     messages = _build_political_prompt(text)
-    result = await client.chat_completion(messages=messages, use_fallback=use_fallback)
+    result = await client.chat_completion(
+        messages=messages,
+        use_fallback=use_fallback,
+        local_model=_POLITICAL_LOCAL_MODEL,
+    )
 
     content = result["content"].strip()
 

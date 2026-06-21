@@ -112,32 +112,32 @@ async def _check_twitter_auth_error() -> str | None:
 
 async def _check_ai_cost_cap() -> str | None:
     """
-    Check if the AI filter daily cost cap has been exceeded.
+    Check if the AI processor daily cost cap has been exceeded.
 
     Returns an alert message or None if OK.
     """
-    import sqlite3
+    from src.config import SERVICE_URLS
 
-    conn = sqlite3.connect(DB_PATH, uri=True)
-    conn.row_factory = sqlite3.Row
+    processor_url = SERVICE_URLS.get("ai-processor", "http://localhost:3013")
+
     try:
-        today = date.today().isoformat()
-        row = conn.execute(
-            "SELECT COALESCE(SUM(cost), 0) as total FROM ai_filter_costs WHERE date = ?",
-            (today,),
-        ).fetchone()
-        daily_cost = float(row["total"]) if row else 0.0
-        budget = 0.50
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{processor_url}/api/costs")
+            if resp.status_code == 200:
+                data = resp.json()
+                daily_cost = data.get("daily_cost", 0.0)
+                budget = float(data.get("daily_budget_cap", 2.0))
 
-        if daily_cost >= budget:
-            return (
-                f"Límite de presupuesto de AI Filter alcanzado. "
-                f"${daily_cost:.4f} gastados hoy (límite: ${budget:.2f}). "
-                f"El filtrado automático está pausado."
-            )
-        return None
-    finally:
-        conn.close()
+                if daily_cost >= budget:
+                    return (
+                        f"Límite de presupuesto de AI Processor alcanzado. "
+                        f"${daily_cost:.4f} gastados hoy (límite: ${budget:.2f}). "
+                        f"El procesamiento automático está pausado."
+                    )
+    except Exception:
+        pass  # Service unreachable — skip alert
+
+    return None
 
 
 async def _check_service_health() -> str | None:

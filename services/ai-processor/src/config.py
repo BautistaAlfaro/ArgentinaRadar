@@ -20,6 +20,23 @@ if _dotenv_path.exists():
 OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
 
+# --- AI Mode ---
+# "local"  → All inference via Ollama (zero cost, no API keys required)
+# "openai" → All inference via OpenAI / OpenRouter APIs (existing behavior)
+# "hybrid" → Local by default, falls back to OpenAI on failure
+AI_MODE: str = os.environ.get("AI_MODE", "local")
+
+# --- Local Models (Ollama) ---
+# Each model is configurable via env vars for easy experimentation.
+OLLAMA_BASE_URL: str = os.environ.get(
+    "OLLAMA_BASE_URL", "http://localhost:11434/v1"
+)
+LOCAL_MODELS: dict[str, str] = {
+    "fast": os.environ.get("LOCAL_MODEL_FAST", "gemma3:4b"),
+    "smart": os.environ.get("LOCAL_MODEL_SMART", "qwen2.5:7b"),
+    "embed": os.environ.get("LOCAL_MODEL_EMBED", "nomic-embed-text"),
+}
+
 # --- Provider Configuration ---
 # Default provider: "openai" or "openrouter"
 AI_PROVIDER: str = os.environ.get("AI_PROVIDER", "openai")
@@ -28,8 +45,19 @@ OPENROUTER_BASE_URL: str = os.environ.get(
     "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
 )
 
+# --- Database (optional — for the filter endpoint) ---
+DB_PATH: str = os.environ.get(
+    "DB_PATH",
+    str(_PROJECT_ROOT / "data" / "argentina-radar.db"),
+)
+
 # --- Models ---
+# Note: EMBEDDING_MODEL and EMBEDDING_DIMENSIONS keep their original OpenAI
+# defaults (text-embedding-3-small, 1536d) even in local/hybrid mode because
+# the Ollama path uses LOCAL_MODELS["embed"] directly. This ensures the paid
+# API fallback path in hybrid mode always uses the correct OpenAI model.
 NER_MODEL: str = os.environ.get("NER_MODEL", "gpt-4o-mini")
+FILTER_MODEL: str = os.environ.get("FILTER_MODEL", "gpt-4o-mini")
 EMBEDDING_MODEL: str = os.environ.get(
     "EMBEDDING_MODEL", "text-embedding-3-small"
 )
@@ -38,6 +66,7 @@ FALLBACK_MODEL: str = os.environ.get(
 )
 
 # --- Embedding dimensions ---
+# text-embedding-3-small → 1536d. nomic-embed-text → 768d (handled in OllamaClient)
 EMBEDDING_DIMENSIONS: int = int(os.environ.get("EMBEDDING_DIMENSIONS", "1536"))
 
 # --- Service ---

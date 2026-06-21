@@ -161,6 +161,116 @@ export async function publishArticle(
 }
 
 // ---------------------------------------------------------------------------
+// Publish arbitrary text (from approval workflow)
+// ---------------------------------------------------------------------------
+
+/**
+ * Publish a tweet with explicitly provided text (bypasses formatting).
+ *
+ * Used by the approval workflow when a human-approved (or edited) draft
+ * comes in from hermes-bridge via POST /api/publish-text.
+ *
+ * @param articleId UUID of the article in `news_items`.
+ * @param text      The exact tweet text to post (must be ≤ 280 chars).
+ * @returns `PublishResult` indicating success or failure details.
+ */
+export async function publishText(
+  articleId: string,
+  text: string,
+): Promise<PublishResult> {
+  // ── 1. Check monthly rate limit ─────────────────────────────────
+  if (!canPublish()) {
+    const quota = getQuotaInfo();
+    const msg = `Monthly rate limit reached (${quota.used}/${quota.limit})`;
+    console.warn(`[publisher] ⛔ ${msg}`);
+    return { success: false, error: msg };
+  }
+
+  // ── 2. Validate tweet length ────────────────────────────────────
+  if (text.length > 280) {
+    return { success: false, error: `Tweet too long (${text.length}/280 chars)` };
+  }
+
+  if (text.length === 0) {
+    return { success: false, error: 'Tweet text is empty' };
+  }
+
+  const headline = text.slice(0, 60); // For logging only
+
+  // ── 3. Record attempt in tweet_history ─────────────────────────
+  const d = getDb();
+  const { lastInsertRowid: historyId } = d
+    .prepare("INSERT INTO tweet_history (article_id, status) VALUES (?, 'pending')")
+    .run(articleId);
+
+  // ── 4. Attempt posting with retries ────────────────────────────
+  let lastError: string | null = null;
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    try {
+      const result = await postTweet(text);
+
+      // ✅ Success
+      d.prepare(
+        `UPDATE tweet_history
+         SET tweet_id = ?, status = 'success', posted_at = datetime('now')
+         WHERE id = ?`
+      ).run(result.tweetId, historyId);
+
+      d.prepare(
+        'UPDATE news_items SET tweet_id = ?, status = ? WHERE id = ?'
+      ).run(result.tweetId, 'published', articleId);
+
+      console.log(
+        `[publisher] ✅ Draft ${articleId.slice(0, 8)}… published → tweet ${result.tweetId}: "${headline}…"`
+      );
+
+      return { success: true, tweetId: result.tweetId };
+    } catch (err) {
+      lastError = String(err);
+
+      if (err instanceof TwitterApiError && err.isRetryable && attempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[attempt];
+        console.warn(
+          `[publisher] 🔄 Retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
+            `for draft ${articleId.slice(0, 8)}… in ${Math.round(delay / 1000)}s: ${lastError}`
+        );
+        d.prepare(
+          "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
+        ).run(lastError, historyId);
+        await sleep(delay);
+        continue;
+      }
+
+      if (attempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[attempt];
+        console.warn(
+          `[publisher] 🔄 Network retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
+            `in ${Math.round(delay / 1000)}s: ${lastError}`
+        );
+        d.prepare(
+          "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
+        ).run(lastError, historyId);
+        await sleep(delay);
+        continue;
+      }
+
+      break;
+    }
+  }
+
+  // ── 5. All retries exhausted → dead-letter ─────────────────────
+  const finalError = lastError ?? 'Unknown error';
+  d.prepare(
+    "UPDATE tweet_history SET status = 'failed', error = ? WHERE id = ?"
+  ).run(finalError, historyId);
+
+  moveToDeadLetter(articleId, headline, finalError, RETRY_DELAYS.length);
+
+  return { success: false, error: finalError, retries: RETRY_DELAYS.length };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

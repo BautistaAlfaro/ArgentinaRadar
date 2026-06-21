@@ -12,7 +12,6 @@
     "dev:web": "npm run dev --workspace=@argentinaradar/web",
     "dev:news": "npm run dev --workspace=@argentinaradar/news-ingestion",
     "dev:geo": "npm run dev --workspace=@argentinaradar/geolocation",
-    "dev:ai": "cd services/ai-filter && python -m uvicorn src.server:app --reload",
     "dev:twitter": "npm run dev --workspace=@argentinaradar/twitter-publisher",
     "dev:hermes": "cd services/hermes-bridge && python -m uvicorn src.server:app --reload",
     "dev:eco": "npm run dev --workspace=@argentinaradar/economic-data",

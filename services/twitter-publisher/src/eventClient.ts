@@ -53,6 +53,8 @@ export async function fetchTrendingEvents(): Promise<TrendingEvent[]> {
   // Server returns { events: TrendingEvent[], count: number }
   const all = resp.data.events ?? [];
 
-  // Only high-impact events qualify for Twitter
-  return all.filter((e) => e.impact >= 50);
+  // Only very high-impact events auto-publish directly (>= 70).
+  // Events with impact 50–69 are routed through the Telegram approval workflow
+  // (handled by hermes-bridge's approval loop).
+  return all.filter((e) => e.impact >= 70);
 }

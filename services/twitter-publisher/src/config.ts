@@ -26,8 +26,8 @@ export const config = {
     port: parseInt(process.env.PORT ?? '3004', 10),
   },
 
-  aiFilter: {
-    url: process.env.AI_FILTER_URL ?? 'http://localhost:3003',
+  aiProcessor: {
+    url: process.env.AI_PROCESSOR_URL ?? 'http://localhost:3013',
   },
 
   eventDetector: {

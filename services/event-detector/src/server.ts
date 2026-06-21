@@ -12,7 +12,9 @@
  * Port: 3008 (configurable via PORT env var).
  */
 
+import Database from 'better-sqlite3';
 import express from 'express';
+
 import { config } from './config.js';
 import { detectEvent } from './detector.js';
 import { store } from './store.js';
@@ -48,6 +50,7 @@ app.post('/api/detect', async (req, res) => {
     }
 
     const payload: DetectPayload = {
+      articleId: body.article_id || body.articleId,
       title: body.title,
       summary: body.summary ?? '',
       source: body.source,
@@ -382,11 +385,100 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// ── Fallback background loop ──────────────────────────────────────
+//
+// Every `fallbackPollIntervalMs` (default 5 min), query the shared
+// SQLite database for articles that:
+//   1. Have status = 'filtered'
+//   2. Have an ai_score where publish = true (PUBLISH verdict)
+//   3. Have an embedding
+//
+// These articles are fed into detectEvent() — catching any that were
+// not pushed directly by ai-filter or geolocation.
+//
+// The dedup check in detectEvent (via articleId) prevents double-ingestion.
+
+async function fallbackPollLoop(): Promise<void> {
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(config.dbPath);
+    db.pragma('journal_mode = WAL');
+
+    const rows = db.prepare(`
+      SELECT id, title, summary, source, url, published_at, embedding, ai_score
+      FROM news_items
+      WHERE status = 'filtered'
+        AND embedding IS NOT NULL
+        AND embedding != ''
+      ORDER BY published_at ASC
+      LIMIT 50
+    `).all() as Array<{
+      id: string; title: string; summary: string; source: string;
+      url: string; published_at: string; embedding: string; ai_score: string;
+    }>;
+
+    if (rows.length === 0) return;
+
+    let pushed = 0;
+    for (const row of rows) {
+      // Parse ai_score to verify it's a PUBLISH verdict
+      let isPublish = false;
+      try {
+        const score = JSON.parse(row.ai_score);
+        isPublish = score?.publish === true;
+      } catch {
+        continue; // malformed ai_score — skip
+      }
+      if (!isPublish) continue;
+
+      // Parse embedding
+      let embedding: number[] | undefined;
+      try {
+        embedding = JSON.parse(row.embedding) as number[];
+        if (!Array.isArray(embedding) || embedding.length === 0) {
+          embedding = undefined;
+        }
+      } catch {
+        continue; // malformed embedding — skip
+      }
+
+      const payload: DetectPayload = {
+        articleId: row.id,
+        title: row.title,
+        summary: row.summary ?? '',
+        source: row.source,
+        url: row.url ?? '',
+        publishedAt: row.published_at ?? new Date().toISOString(),
+        embedding,
+      };
+
+      try {
+        await detectEvent(payload);
+        pushed++;
+      } catch (err) {
+        console.warn(`[Fallback] detectEvent failed for ${row.id.slice(0, 8)}…:`, (err as Error).message);
+      }
+    }
+
+    if (pushed > 0) {
+      console.log(`[Fallback] Pushed ${pushed}/${rows.length} filtered articles into event detection`);
+    }
+  } catch (err) {
+    console.error('[Fallback] DB polling error:', err);
+  } finally {
+    if (db) {
+      db.close();
+    }
+  }
+}
+
 // ── Start ──────────────────────────────────────────────────────────
 
 app.listen(config.port, () => {
   console.log(`[Event Detector] Listening on http://localhost:${config.port}`);
   console.log(`[Event Detector] AI Processor URL: ${config.aiProcessorUrl}`);
+  console.log(`[Event Detector] DB Path (fallback): ${config.dbPath}`);
+  console.log(`[Event Detector] Fallback poll interval: ${config.fallbackPollIntervalMs}ms`);
   console.log(`[Event Detector]   POST /api/detect                    — Receive article, find/create event`);
   console.log(`[Event Detector]   GET  /api/events                    — Paginated event list with filters`);
   console.log(`[Event Detector]   GET  /api/events/political          — Filter events by political figure`);
@@ -398,4 +490,8 @@ app.listen(config.port, () => {
   console.log(`[Event Detector]   POST /api/events/protests/:id/resolve — Resolve a protest`);
   console.log(`[Event Detector]   GET  /api/events/:id                — Single event with full detail`);
   console.log(`[Event Detector]   GET  /health                        — Service health`);
+
+  // Start fallback poll loop
+  fallbackPollLoop();
+  setInterval(fallbackPollLoop, config.fallbackPollIntervalMs);
 });

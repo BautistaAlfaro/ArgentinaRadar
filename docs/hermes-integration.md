@@ -19,7 +19,7 @@ The **hermes-bridge** service is a Python FastAPI application that:
 
 ### Prerequisites
 - Hermes bot running at `C:\Users\bauti\Desktop\PROYECTOS\Hermes`
-- ArgentinaRadar services running (news-ingestion, geolocation, ai-filter, twitter-publisher)
+- ArgentinaRadar services running (news-ingestion, geolocation, ai-processor, twitter-publisher)
 
 ### Installation
 ```bash

@@ -79,6 +79,9 @@ def get_article_counts() -> dict[str, int]:
         pending = conn.execute(
             "SELECT COUNT(*) as c FROM news_items WHERE status IN ('ingested','geolocated','filtered')"
         ).fetchone()["c"]
+        pending_approval = conn.execute(
+            "SELECT COUNT(*) as c FROM news_items WHERE status = 'pending_approval'"
+        ).fetchone()["c"]
         discarded = conn.execute(
             "SELECT COUNT(*) as c FROM news_items WHERE status = 'discarded'"
         ).fetchone()["c"]
@@ -97,6 +100,7 @@ def get_article_counts() -> dict[str, int]:
             "total": total,
             "published": published,
             "pending": pending,
+            "pending_approval": pending_approval,
             "discarded": discarded,
             "published_today": published_today,
             "ingested_today": ingested_today,
@@ -164,36 +168,37 @@ def get_twitter_quota() -> dict[str, int]:
         conn.close()
 
 
-def get_ai_filter_cost() -> dict[str, Any]:
-    """Return today's AI filter cost and budget info."""
-    conn = _get_readonly_conn()
+def get_ai_processor_cost() -> dict[str, Any]:
+    """Return today's AI processing cost from the ai-processor service."""
+    import httpx
+
+    from src.config import SERVICE_URLS
+
+    processor_url = SERVICE_URLS.get("ai-processor", "http://localhost:3013")
+
     try:
-        today = date.today().isoformat()
+        with httpx.Client(timeout=5) as client:
+            resp = client.get(f"{processor_url}/api/costs")
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "daily_cost": data.get("daily_cost", 0.0),
+                    "daily_tokens": data.get("daily_tokens", 0),
+                    "monthly_cost": data.get("monthly_cost", 0.0),
+                    "daily_budget_cap": data.get("daily_budget_cap", 2.0),
+                    "cap_exceeded": data.get("cap_exceeded", False),
+                }
+    except Exception:
+        pass
 
-        daily_cost = conn.execute(
-            "SELECT COALESCE(SUM(cost), 0) as total FROM ai_filter_costs WHERE date = ?",
-            (today,),
-        ).fetchone()["total"]
-
-        daily_tokens = conn.execute(
-            "SELECT COALESCE(SUM(total_tokens), 0) as total FROM ai_filter_costs WHERE date = ?",
-            (today,),
-        ).fetchone()["total"]
-
-        monthly_cost = conn.execute(
-            "SELECT COALESCE(SUM(cost), 0) as total FROM ai_filter_costs WHERE month = ?",
-            (today[:7],),
-        ).fetchone()["total"]
-
-        return {
-            "daily_cost": round(float(daily_cost), 6),
-            "daily_tokens": int(daily_tokens),
-            "monthly_cost": round(float(monthly_cost), 6),
-            "daily_budget_cap": 0.50,
-            "cap_exceeded": float(daily_cost) >= 0.50,
-        }
-    finally:
-        conn.close()
+    # Fallback when ai-processor is unreachable
+    return {
+        "daily_cost": 0.0,
+        "daily_tokens": 0,
+        "monthly_cost": 0.0,
+        "daily_budget_cap": 2.0,
+        "cap_exceeded": False,
+    }
 
 
 def get_daily_weekly_stats() -> dict[str, Any]:
@@ -218,7 +223,11 @@ def get_daily_weekly_stats() -> dict[str, Any]:
                 (today,),
             ).fetchone()["c"],
             "filtered_publish": conn.execute(
-                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) = ? AND status IN ('filtered','published')",
+                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) = ? AND status IN ('filtered','published','pending_approval')",
+                (today,),
+            ).fetchone()["c"],
+            "pending_approval": conn.execute(
+                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) = ? AND status = 'pending_approval'",
                 (today,),
             ).fetchone()["c"],
             "filtered_discard": conn.execute(
@@ -241,7 +250,11 @@ def get_daily_weekly_stats() -> dict[str, Any]:
                 (week_ago,),
             ).fetchone()["c"],
             "filtered_publish": conn.execute(
-                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) >= ? AND status IN ('filtered','published')",
+                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) >= ? AND status IN ('filtered','published','pending_approval')",
+                (week_ago,),
+            ).fetchone()["c"],
+            "pending_approval": conn.execute(
+                "SELECT COUNT(*) as c FROM news_items WHERE date(ingested_at) >= ? AND status = 'pending_approval'",
                 (week_ago,),
             ).fetchone()["c"],
             "filtered_discard": conn.execute(
@@ -384,5 +397,90 @@ def skip_article(article_id: str, reason: str = "") -> bool:
 
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Approval queue queries
+# ---------------------------------------------------------------------------
+
+
+def get_approval_queue(status_filter: str | None = None) -> list[dict[str, Any]]:
+    """
+    Return approval_queue entries, optionally filtered by status.
+
+    Joins with news_items to include article title and source.
+    """
+    conn = _get_readonly_conn()
+    try:
+        if status_filter:
+            rows = conn.execute(
+                """SELECT aq.*, ni.title AS article_title, ni.source AS article_source,
+                          ni.url AS article_url
+                   FROM approval_queue aq
+                   LEFT JOIN news_items ni ON ni.id = aq.article_id
+                   WHERE aq.status = ?
+                   ORDER BY aq.created_at DESC""",
+                (status_filter,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT aq.*, ni.title AS article_title, ni.source AS article_source,
+                          ni.url AS article_url
+                   FROM approval_queue aq
+                   LEFT JOIN news_items ni ON ni.id = aq.article_id
+                   ORDER BY aq.created_at DESC"""
+            ).fetchall()
+
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_approval_stats() -> dict[str, Any]:
+    """Return approval queue statistics."""
+    conn = _get_readonly_conn()
+    try:
+        total = conn.execute("SELECT COUNT(*) as c FROM approval_queue").fetchone()["c"]
+        pending = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE status = 'pending'"
+        ).fetchone()["c"]
+        approved = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE status = 'approved'"
+        ).fetchone()["c"]
+        rejected = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE status = 'rejected'"
+        ).fetchone()["c"]
+        edited = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE status = 'edited'"
+        ).fetchone()["c"]
+        scheduled = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE status = 'scheduled'"
+        ).fetchone()["c"]
+
+        # Last 24 hours
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+        last_24h = conn.execute(
+            "SELECT COUNT(*) as c FROM approval_queue WHERE created_at >= ?",
+            (cutoff,),
+        ).fetchone()["c"]
+
+        # Oldest pending (time since creation)
+        oldest_pending = conn.execute(
+            "SELECT created_at FROM approval_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+        ).fetchone()
+
+        return {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "edited": edited,
+            "scheduled": scheduled,
+            "last_24h": last_24h,
+            "oldest_pending": dict(oldest_pending)["created_at"] if oldest_pending else None,
+        }
     finally:
         conn.close()

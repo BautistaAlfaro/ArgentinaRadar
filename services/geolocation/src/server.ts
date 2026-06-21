@@ -22,6 +22,7 @@ const PORT = parseInt(process.env.PORT ?? '3002', 10);
 const NEWS_SERVICE_URL = process.env.NEWS_SERVICE_URL ?? 'http://localhost:3001';
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL ?? '30000', 10);
 const DB_PATH = process.env.DB_PATH ?? path.resolve(__dirname, '..', '..', '..', 'data', 'argentina-radar.db');
+const EVENT_DETECTOR_URL = process.env.EVENT_DETECTOR_URL ?? 'http://localhost:3008';
 
 let db: Database.Database | null = null;
 
@@ -158,6 +159,29 @@ async function pollAndGeolocate(): Promise<void> {
 
       updateStmt.run(JSON.stringify(location), article.id);
       console.log(`  ✓ ${String(article.id).slice(0, 8)}… → ${location.province || '(unknown)'} (confidence: ${location.confidence})`);
+
+      // ── Push to event-detector if article has embedding data ──────────
+      if (article.embedding) {
+        try {
+          const detectResp = await fetch(`${EVENT_DETECTOR_URL}/api/detect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: article.title,
+              summary: article.summary,
+              source: article.source,
+              url: article.url,
+              publishedAt: article.publishedAt,
+              embedding: article.embedding,
+            }),
+          });
+          if (!detectResp.ok) {
+            console.warn(`[geolocation] event-detector returned ${detectResp.status} for ${String(article.id).slice(0, 8)}…`);
+          }
+        } catch (err) {
+          console.warn(`[geolocation] event-detector unreachable for ${String(article.id).slice(0, 8)}…:`, (err as Error).message);
+        }
+      }
     }
   } catch (err) {
     console.error('[geolocation] Poll/geolocate error:', err);

@@ -13,7 +13,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.config import LOCAL_MODELS
 from src.openai_client import OpenAIClient
+
+# Local model for protest classification — simple 6-category, fast model is fine
+_PROTEST_LOCAL_MODEL: str = LOCAL_MODELS.get("fast", "gemma3:4b")
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -107,7 +111,11 @@ async def run_protest_classify(
     location, estimated_duration_hours, confidence, tokens_used, cost.
     """
     messages = _build_protest_prompt(text)
-    result = await client.chat_completion(messages=messages, use_fallback=use_fallback)
+    result = await client.chat_completion(
+        messages=messages,
+        use_fallback=use_fallback,
+        local_model=_PROTEST_LOCAL_MODEL,
+    )
 
     content = result["content"].strip()
 

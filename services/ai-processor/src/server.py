@@ -1,15 +1,20 @@
 """
 AI Processor REST Service.
 
-FastAPI server on port 3010 that provides:
+FastAPI server on port 3013 that provides:
   - POST /api/ner               — Named Entity Recognition
   - POST /api/embed             — Text embeddings
   - POST /api/process           — Combined NER + embedding
+  - POST /api/filter            — Article relevance classification (PUBLISH/DISCARD)
   - POST /api/political/analyze — Political figure + sentiment extraction
+  - POST /api/security/classify — Security/crime category classification
+  - POST /api/protest/classify  — Protest/corte content classification
   - GET  /api/costs             — Today's cost and usage statistics
+  - GET  /api/costs/logs        — Recent cost log entries
   - GET  /health                — Service health check
 
-This service has NO database dependency — all state is in-memory.
+The filter endpoint has an optional database dependency for persisting
+verdicts (DB_PATH config). All other state is in-memory.
 """
 
 import os
@@ -18,9 +23,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.config import PORT, OPENAI_API_KEY, OPENROUTER_API_KEY
+from src.config import AI_MODE, LOCAL_MODELS, PORT, OPENAI_API_KEY, OPENROUTER_API_KEY
 from src.cost_tracker import CostTracker
 from src.embeddings import EmbeddingRequest, EmbeddingResponse, run_embedding
+from src.filter import FilterRequest, FilterResponse, run_filter
 from src.ner import NERRequest, NERResponse, run_ner
 from src.openai_client import BudgetExceededError, OpenAIClient
 from src.political import (
@@ -47,8 +53,15 @@ openai_client = OpenAIClient(cost_tracker=cost_tracker)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: validate at least one API key is present
-    if not OPENAI_API_KEY and not OPENROUTER_API_KEY:
+    # Startup: validate configuration
+    if AI_MODE == "local":
+        print("🔋 AI mode: LOCAL — using Ollama (zero cost, no API keys needed)")
+        print(f"   Models: fast={LOCAL_MODELS.get('fast')}, smart={LOCAL_MODELS.get('smart')}, embed={LOCAL_MODELS.get('embed')}")
+    elif AI_MODE == "hybrid":
+        print("🔀 AI mode: HYBRID — Ollama by default, fallback to paid API")
+        if not OPENAI_API_KEY and not OPENROUTER_API_KEY:
+            print("⚠️  Hybrid mode requires at least one API key for fallback")
+    elif not OPENAI_API_KEY and not OPENROUTER_API_KEY:
         print("⚠️  No API keys configured — set OPENAI_API_KEY or OPENROUTER_API_KEY")
     yield
     # Shutdown: nothing to clean up (in-memory state)
@@ -223,6 +236,55 @@ async def political_analyze_endpoint(req: PoliticalAnalysisRequest):
     )
 
 
+@app.post("/api/filter", response_model=FilterResponse)
+async def filter_endpoint(req: FilterRequest):
+    """Classify article relevance and return PUBLISH/DISCARD verdict."""
+    try:
+        result = await run_filter(
+            openai_client,
+            article_id=req.article_id,
+            title=req.title,
+            summary=req.summary,
+            source=req.source,
+            category=req.category,
+        )
+    except BudgetExceededError:
+        try:
+            result = await run_filter(
+                openai_client,
+                article_id=req.article_id,
+                title=req.title,
+                summary=req.summary,
+                source=req.source,
+                category=req.category,
+                use_fallback=True,
+            )
+        except BudgetExceededError:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "budget_exceeded",
+                    "message": "Daily cost cap exceeded — try again tomorrow",
+                    "usage": cost_tracker.get_stats(),
+                },
+            )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "filter_failed", "message": str(exc)},
+        )
+
+    return FilterResponse(
+        article_id=result["article_id"],
+        verdict=result["verdict"],
+        reason=result["reason"],
+        scores=result["scores"],
+        combined=result["combined"],
+        tokens_used=result["tokens_used"],
+        cost=result["cost"],
+    )
+
+
 @app.post("/api/security/classify", response_model=SecurityClassifyResponse)
 async def security_classify_endpoint(req: SecurityClassifyRequest):
     """Classify article text into a security/crime category."""
@@ -311,10 +373,12 @@ async def health():
     return {
         "status": "ok",
         "port": PORT,
+        "ai_mode": AI_MODE,
         "api_keys_configured": {
             "openai": bool(OPENAI_API_KEY),
             "openrouter": bool(OPENROUTER_API_KEY),
         },
+        "ollama_models": list(LOCAL_MODELS.values()),
         "budget_cap_exceeded": cost_tracker.is_cap_exceeded(),
     }
 

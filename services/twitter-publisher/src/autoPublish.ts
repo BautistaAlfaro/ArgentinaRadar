@@ -1,9 +1,12 @@
 /**
  * Auto-publish background loop.
  *
- * Polls the event-detector service for trending high-impact events
- * (impact >= 50), formats each as a tweet, posts it via the Twitter API,
+ * Polls the event-detector service for trending events with impact >= 70
+ * (high-impact), formats each as a tweet, posts it via the Twitter API,
  * and records the result in tweet_history.
+ *
+ * Events with impact 50–69 are NOT handled here — they go through the
+ * Telegram approval workflow in hermes-bridge instead.
  *
  * Safeguards:
  *  - Monthly rate limit  (1 400 / 1 500 — from rateLimiter.ts)
@@ -61,7 +64,7 @@ function getDb(): Database.Database {
 export function startAutoPublish(): void {
   console.log(
     '[autoPublish] Starting event-based auto-publish loop ' +
-      `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 50)`
+      `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 70)`
   );
 
   // First run immediately, then on interval

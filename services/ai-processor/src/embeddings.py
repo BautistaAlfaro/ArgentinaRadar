@@ -7,8 +7,11 @@ text-embedding-3-small model (1536 dimensions).
 
 from pydantic import BaseModel, Field
 
-from src.config import MAX_BATCH_SIZE
+from src.config import LOCAL_MODELS, MAX_BATCH_SIZE
 from src.openai_client import OpenAIClient
+
+# Local model for embeddings — nomic-embed-text (768d)
+_EMBED_LOCAL_MODEL: str = LOCAL_MODELS.get("embed", "nomic-embed-text")
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +49,11 @@ async def run_embedding(
 
     Returns a dict with keys: embeddings, tokens_used, cost.
     """
-    result = await client.create_embedding(texts=texts, use_fallback=use_fallback)
+    result = await client.create_embedding(
+        texts=texts,
+        use_fallback=use_fallback,
+        local_model=_EMBED_LOCAL_MODEL,
+    )
     return {
         "embeddings": result["embeddings"],
         "tokens_used": result["tokens_used"],

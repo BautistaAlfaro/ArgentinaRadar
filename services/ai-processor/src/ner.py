@@ -10,7 +10,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.config import LOCAL_MODELS
 from src.openai_client import OpenAIClient
+
+# Local model for NER — needs strong Spanish + entity extraction
+_NER_LOCAL_MODEL: str = LOCAL_MODELS.get("smart", "qwen2.5:7b")
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -133,7 +137,11 @@ async def run_ner(
     Returns a dict with keys: entities, category, tokens_used, cost.
     """
     messages = _build_ner_prompt(text)
-    result = await client.chat_completion(messages=messages, use_fallback=use_fallback)
+    result = await client.chat_completion(
+        messages=messages,
+        use_fallback=use_fallback,
+        local_model=_NER_LOCAL_MODEL,
+    )
 
     # Parse JSON from the response content
     content = result["content"].strip()

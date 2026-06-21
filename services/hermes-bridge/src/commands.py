@@ -49,7 +49,7 @@ async def cmd_status():
     sources_status = db.get_service_status()
 
     quota = db.get_twitter_quota()
-    ai_cost = db.get_ai_filter_cost()
+    ai_cost = db.get_ai_processor_cost()
     counts = db.get_article_counts()
 
     combined_services = {

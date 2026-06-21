@@ -16,7 +16,7 @@ console.log('══════════════════════�
 // Print initial quota
 const quota = getQuotaInfo();
 console.log(`  Monthly quota:   ${quota.used} / ${quota.limit} used (${quota.remaining} remaining)`);
-console.log(`  AI filter URL:  ${config.aiFilter.url}`);
+console.log(`  AI processor URL:  ${config.aiProcessor.url}`);
 console.log(`  DB path:        ${config.db.path}`);
 console.log('');
 

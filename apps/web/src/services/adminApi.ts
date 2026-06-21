@@ -111,7 +111,6 @@ function generateDailyStats(days: number): DailyStat[] {
 const SYSTEM_SERVICES = [
   { name: 'news-ingestion', baseCpu: 45, baseMem: 320 },
   { name: 'geolocation', baseCpu: 38, baseMem: 280 },
-  { name: 'ai-filter', baseCpu: 62, baseMem: 512 },
   { name: 'twitter-publisher', baseCpu: 28, baseMem: 192 },
   { name: 'economic-data', baseCpu: 22, baseMem: 156 },
   { name: 'alerts', baseCpu: 18, baseMem: 128 },

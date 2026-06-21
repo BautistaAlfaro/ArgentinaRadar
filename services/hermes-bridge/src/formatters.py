@@ -40,7 +40,7 @@ def fmt_status(
     svc_names = {
         "news-ingestion": "📰 News Ingestion",
         "geolocation": "📍 Geolocalización",
-        "ai-filter": "🤖 AI Filter",
+        "ai-processor": "🤖 AI Processor",
         "twitter-publisher": "🐦 Twitter Publisher",
     }
 
@@ -249,7 +249,55 @@ def _status_icon(status: str) -> str:
         "filtered": "📋",
         "geolocated": "📍",
         "ingested": "📥",
+        "event": "📡",
+        "pending_approval": "⏳",
         "discarded": "⏭️",
         "skipped": "⏭️",
     }
     return mapping.get(status, "❓")
+
+
+def fmt_approval_proposal(draft: str, article_title: str, article_url: str = "") -> str:
+    """
+    Format a tweet draft proposal for Telegram with approval instructions.
+
+    Returns a markdown-formatted message string.
+    """
+    url_part = f"\n🔗 {article_url}" if article_url else ""
+    return (
+        f"📝 *Propuesta de tweet*\n\n"
+        f"{draft}\n\n"
+        f"📰 {article_title}{url_part}"
+    )
+
+
+def fmt_approval_result(action: str, draft: str, reviewer: str = "") -> str:
+    """
+    Format the result message after an approval action.
+
+    Args:
+        action: 'approved', 'rejected', 'edited', or 'scheduled'
+        draft: The tweet text (original or edited)
+        reviewer: Username of the reviewer
+    """
+    icons = {
+        "approved": "✅",
+        "rejected": "❌",
+        "edited": "✏️",
+        "scheduled": "⏰",
+    }
+    labels = {
+        "approved": "Aprobado",
+        "rejected": "Descartado",
+        "edited": "Editado y publicado",
+        "scheduled": "Programado",
+    }
+    icon = icons.get(action, "❓")
+    label = labels.get(action, action)
+    reviewer_part = f" por @{reviewer}" if reviewer else ""
+
+    return (
+        f"{icon} *{label}{reviewer_part}* {icon}\n\n"
+        f"{draft}\n\n"
+        f"_Acción registrada._"
+    )

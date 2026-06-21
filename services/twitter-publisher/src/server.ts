@@ -12,7 +12,7 @@
 import express from 'express';
 import Database from 'better-sqlite3';
 import { config } from './config.js';
-import { publishArticle } from './publisher.js';
+import { publishArticle, publishText } from './publisher.js';
 import { getQuotaInfo, getDailyTweetCount } from './rateLimiter.js';
 import { getDeadLetterQueue, getDeadLetterCount } from './deadLetter.js';
 
@@ -78,6 +78,30 @@ app.post('/api/publish/:id', async (req, res) => {
       String(article.url ?? ''),
     );
 
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Publish failed', details: String(err) });
+  }
+});
+
+// ─── POST /api/publish-text — Publish a draft with arbitrary text ───────
+// Called by hermes-bridge when a tweet draft is approved via Telegram.
+
+app.post('/api/publish-text', async (req, res) => {
+  try {
+    const { article_id, text } = req.body;
+
+    if (!article_id || !text) {
+      res.status(400).json({ error: 'article_id and text are required' });
+      return;
+    }
+
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      res.status(400).json({ error: 'text must be a non-empty string' });
+      return;
+    }
+
+    const result = await publishText(article_id, text.trim());
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Publish failed', details: String(err) });
@@ -194,10 +218,11 @@ app.get('/health', (_req, res) => {
 export function startServer(): void {
   app.listen(PORT, () => {
     console.log(`[twitter-publisher] 🚀 REST API on http://localhost:${PORT}`);
-    console.log(`[twitter-publisher]   POST /api/publish/:id — Manual publish`);
-    console.log(`[twitter-publisher]   GET  /api/tweets       — Tweet history`);
-    console.log(`[twitter-publisher]   GET  /api/tweets/stats — Quota & stats`);
-    console.log(`[twitter-publisher]   GET  /api/stats/daily  — Daily tweet stats`);
-    console.log(`[twitter-publisher]   GET  /health           — Service health`);
+    console.log(`[twitter-publisher]   POST /api/publish/:id   — Manual publish`);
+    console.log(`[twitter-publisher]   POST /api/publish-text  — Publish approval draft`);
+    console.log(`[twitter-publisher]   GET  /api/tweets        — Tweet history`);
+    console.log(`[twitter-publisher]   GET  /api/tweets/stats  — Quota & stats`);
+    console.log(`[twitter-publisher]   GET  /api/stats/daily   — Daily tweet stats`);
+    console.log(`[twitter-publisher]   GET  /health            — Service health`);
   });
 }

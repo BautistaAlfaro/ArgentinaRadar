@@ -27,7 +27,7 @@ export interface TimelineEntry {
 }
 
 export type MediaConsensus = 'high' | 'medium' | 'low';
-export type MatchType = 'auto' | 'gpt_verified' | 'new';
+export type MatchType = 'auto' | 'gpt_verified' | 'new' | 'existing';
 
 export interface Event {
   id: string;
@@ -50,6 +50,8 @@ export interface Event {
 }
 
 export interface DetectPayload {
+  /** Optional DB article ID for pipeline traceability. */
+  articleId?: string;
   title: string;
   summary: string;
   source: string;

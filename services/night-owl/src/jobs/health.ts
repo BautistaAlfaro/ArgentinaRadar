@@ -4,7 +4,7 @@
  * Scheduled: 05:30 ART
  *
  * Full system health check:
- *   1. Check all 12 services via GET /health on each port
+ *   1. Check all 11 services via GET /health on each port
  *   2. Check queue depths (via lazy import to avoid circular dep)
  *   3. Check disk space, memory usage
  *   4. Generate health score (0-100)
@@ -29,16 +29,15 @@ interface ServiceEntry {
 const SERVICES: ServiceEntry[] = [
   { name: 'news-ingestion',   url: 'http://localhost:3001' },
   { name: 'geolocation',      url: 'http://localhost:3002' },
-  { name: 'ai-filter',        url: 'http://localhost:3003' },
   { name: 'twitter-publisher', url: 'http://localhost:3004' },
   { name: 'hermes-bridge',    url: 'http://localhost:3005' },
   { name: 'economic-data',    url: 'http://localhost:3006' },
   { name: 'alerts',           url: 'http://localhost:3007' },
   { name: 'event-detector',   url: 'http://localhost:3008' },
   { name: 'trend-analyzer',   url: 'http://localhost:3009' },
-  { name: 'ai-processor',     url: 'http://localhost:3010' },
+  { name: 'ai-processor',     url: 'http://localhost:3013' },
   { name: 'admin',            url: 'http://localhost:3012' },
-  { name: 'auth',             url: 'http://localhost:3013' },
+  { name: 'auth',             url: 'http://localhost:3010' },
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────

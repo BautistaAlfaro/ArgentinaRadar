@@ -31,6 +31,7 @@ DB_PATH: str = os.environ.get(
 PORT: int = int(os.environ.get("PORT", "3003"))
 POLL_INTERVAL: int = int(os.environ.get("POLL_INTERVAL", "60"))  # seconds
 GEOLOCATION_URL: str = os.environ.get("GEOLOCATION_URL", "http://localhost:3002")
+EVENT_DETECTOR_URL: str = os.environ.get("EVENT_DETECTOR_URL", "http://localhost:3008")
 
 # --- Cost tracking ---
 AI_DAILY_BUDGET: float = float(os.environ.get("AI_DAILY_BUDGET", "0.50"))

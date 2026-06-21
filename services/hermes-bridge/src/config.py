@@ -41,6 +41,33 @@ ALERT_POLL_INTERVAL: int = int(
 SERVICE_URLS: dict[str, str] = {
     "news-ingestion": os.environ.get("NEWS_SERVICE_URL", "http://localhost:3001"),
     "geolocation": os.environ.get("GEOLOCATION_URL", "http://localhost:3002"),
-    "ai-filter": os.environ.get("AI_FILTER_URL", "http://localhost:3003"),
+    "ai-processor": os.environ.get("AI_PROCESSOR_URL", "http://localhost:3013"),
     "twitter-publisher": os.environ.get("TWITTER_PUBLISHER_URL", "http://localhost:3004"),
 }
+
+# --- Approval workflow (Telegram-based human approval) ---
+TWITTER_PUBLISHER_URL: str = os.environ.get(
+    "TWITTER_PUBLISHER_URL", "http://localhost:3004"
+)
+EVENT_DETECTOR_URL: str = os.environ.get(
+    "EVENT_DETECTOR_URL", "http://localhost:3008"
+)
+
+# How often to poll Telegram for callback updates (seconds)
+APPROVAL_POLL_INTERVAL: int = int(
+    os.environ.get("APPROVAL_POLL_INTERVAL", "5")
+)
+
+# How often to poll the event-detector for new events (seconds)
+APPROVAL_EVENT_POLL_INTERVAL: int = int(
+    os.environ.get("APPROVAL_EVENT_POLL_INTERVAL", "60")
+)
+
+# Auto-publish threshold: events with impact >= this value skip approval
+APPROVAL_AUTO_PUBLISH_THRESHOLD: int = int(
+    os.environ.get("APPROVAL_AUTO_PUBLISH_THRESHOLD", "70")
+)
+
+# --- AI draft generation (OpenRouter) ---
+OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "mistral-nemo")
