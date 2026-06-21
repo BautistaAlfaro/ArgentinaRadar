@@ -14,7 +14,7 @@ from .db import (
     get_approval_queue,
     get_approval_stats,
 )
-from .commands import handle_status, handle_news, handle_stats
+from .commands import router as commands_router
 from .notifications import notification_loop
 from .alerts import alert_loop
 from .approval import approval_loop
@@ -60,6 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(commands_router)
 app.include_router(overrides_router, prefix="/api/override", tags=["overrides"])
 
 
@@ -72,21 +73,6 @@ app.include_router(overrides_router, prefix="/api/override", tags=["overrides"])
 async def health():
     status = get_service_status()
     return {"status": "ok", "services": status}
-
-
-@app.get("/api/radar/status")
-async def radar_status():
-    return handle_status()
-
-
-@app.get("/api/radar/news")
-async def radar_news(limit: int = 5):
-    return handle_news(limit)
-
-
-@app.get("/api/radar/stats")
-async def radar_stats():
-    return handle_stats()
 
 
 @app.get("/api/radar/articles")
