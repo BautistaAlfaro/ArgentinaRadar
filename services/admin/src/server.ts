@@ -27,6 +27,10 @@
  *   POST  /api/admin/services/start-all             — Start all services (ADMIN)
  *   POST  /api/admin/services/stop-all              — Stop all services (ADMIN)
  *
+ *
+ * Ecosystem Health (public, no auth):
+ *   GET   /api/admin/health/all                     — Check all ecosystem services + Ollama
+ *
  * Service Health:
  *   GET   /health                                   — Service health
  */
@@ -42,6 +46,8 @@ process.on('unhandledRejection', (reason) => {
 
 import express from "express";
 import cors from "cors";
+import net from "net";
+import { exec } from "child_process";
 import { config } from "./config.js";
 import { requireAuth, requireAdmin } from "@argentinaradar/auth-middleware";
 import { kpiRouter } from "./routes/kpis.js";
@@ -52,6 +58,8 @@ import { usersRouter } from "./routes/users.js";
 import { subscriptionRouter } from "./routes/subscription.js";
 import { servicesRouter } from "./routes/services.js";
 import { sourcesRouter } from "./routes/sources.js";
+import { actionsRouter } from "./routes/actions.js";
+import { systemRouter } from "./routes/system.js";
 import { startCollector } from "./collector.js";
 
 const app = express();
@@ -286,6 +294,169 @@ app.get('/api/admin/health', async (_req, res) => {
   });
 });
 
+// ─── GET /api/admin/health/all ──────────────────────────────────────
+// Checks ALL ecosystem services (the 6 defined in ecosystem.config.cjs)
+// plus Ollama, using HTTP health endpoints where available and PM2 status
+// for non-HTTP services (e.g., notifier).
+
+interface EcosystemServiceHealth {
+  name: string;
+  status: 'running' | 'stopped' | 'down' | 'degraded';
+  port?: number | null;
+  uptime?: number | null;
+  error?: string;
+}
+
+const ECOSYSTEM_SERVICE_PORTS: Record<string, number | null> = {
+  'news-ingestion': 3001,
+  'publisher': 3004,
+  'notifier': null, // no HTTP endpoint — checked via PM2
+  'ai-processor': 3013,
+  'admin': 3012,
+  'web': 5173,
+};
+
+app.get('/api/admin/health/all', async (_req, res) => {
+  const services: EcosystemServiceHealth[] = [];
+  const errors: string[] = [];
+
+  // 1. Check HTTP services via /health endpoint
+  const httpServices = Object.entries(ECOSYSTEM_SERVICE_PORTS)
+    .filter(([, port]) => port !== null) as [string, number][];
+
+  const httpResults = await Promise.allSettled(
+    httpServices.map(async ([name, port]) => {
+      try {
+        const resp = await fetch(`http://127.0.0.1:${port}/health`, {
+          signal: AbortSignal.timeout(5_000),
+        });
+
+        if (resp.ok) {
+          const body = await resp.json() as { status?: string; uptime?: number };
+          services.push({
+            name,
+            status: body.status === 'ok' ? 'running' : 'degraded',
+            port,
+            uptime: body.uptime ?? null,
+          });
+        } else {
+          services.push({ name, status: 'degraded', port, error: `HTTP ${resp.status}` });
+        }
+      } catch (err) {
+        // Fallback: port might be open even without a /health endpoint (e.g., web/Vite)
+        try {
+          const socketCheck = await new Promise<boolean>((resolve) => {
+            const socket = new net.Socket();
+            socket.setTimeout(2_000);
+            socket.on('connect', () => { socket.destroy(); resolve(true); });
+            socket.on('error', () => { socket.destroy(); resolve(false); });
+            socket.on('timeout', () => { socket.destroy(); resolve(false); });
+            socket.connect(port, '127.0.0.1');
+          });
+
+          if (socketCheck) {
+            services.push({
+              name,
+              status: 'running',
+              port,
+              uptime: null,
+            });
+          } else {
+            services.push({
+              name,
+              status: 'down',
+              port,
+              error: (err as Error).message,
+            });
+          }
+        } catch {
+          services.push({
+            name,
+            status: 'down',
+            port,
+            error: (err as Error).message,
+          });
+        }
+      }
+    }),
+  );
+
+  for (const result of httpResults) {
+    if (result.status === 'rejected') {
+      errors.push(result.reason?.message ?? 'Unknown error');
+    }
+  }
+
+  // 2. Check notifier via PM2 jlist (no HTTP endpoint)
+  try {
+    const pm2Status = await new Promise<string>((resolve, reject) => {
+      exec('pm2 jlist', { cwd: process.cwd(), shell: 'cmd.exe', timeout: 5_000 }, (err, stdout) => {
+        if (err) { reject(err); return; }
+        resolve(stdout);
+      });
+    });
+
+    const pm2Apps = JSON.parse(pm2Status) as Array<{ name: string; pm2_env?: { status?: string; uptime?: number }; monit?: { memory?: number; cpu?: number } }>;
+    const notifierApp = pm2Apps.find((a) => a.name === 'notifier');
+
+    if (notifierApp) {
+      services.push({
+        name: 'notifier',
+        status: notifierApp.pm2_env?.status === 'online' ? 'running' : 'stopped',
+        port: null,
+        uptime: notifierApp.pm2_env?.uptime ?? null,
+      });
+    } else {
+      services.push({
+        name: 'notifier',
+        status: 'down',
+        port: null,
+        error: 'Not found in PM2 process list',
+      });
+    }
+  } catch (err) {
+    services.push({
+      name: 'notifier',
+      status: 'down',
+      port: null,
+      error: (err as Error).message,
+    });
+    errors.push(`PM2 jlist failed: ${(err as Error).message}`);
+  }
+
+  // 3. Check Ollama
+  try {
+    const ollamaResp = await fetch('http://127.0.0.1:11434', {
+      signal: AbortSignal.timeout(3_000),
+    });
+    services.push({
+      name: 'ollama',
+      status: ollamaResp.ok ? 'running' : 'degraded',
+      port: 11434,
+    });
+  } catch (err) {
+    services.push({
+      name: 'ollama',
+      status: 'down',
+      port: 11434,
+      error: (err as Error).message,
+    });
+  }
+
+  // 4. Build response
+  const healthyCount = services.filter((s) => s.status === 'running').length;
+  const totalCount = services.length;
+
+  res.json({
+    status: healthyCount === totalCount ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+    healthyCount,
+    totalCount,
+    services,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+});
+
 // ─── Helper: format a timestamp as a human-friendly relative string ─
 
 function formatTimeAgo(isoString: string): string {
@@ -320,6 +491,8 @@ app.use("/api/admin", usersRouter);
 app.use("/api/admin", subscriptionRouter);
 app.use("/api/admin", servicesRouter);
 app.use("/api/admin", sourcesRouter);
+app.use("/api/admin", actionsRouter);
+app.use("/api/admin", systemRouter);
 
 // ─── Health ─────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -351,6 +524,15 @@ app.listen(config.port, () => {
   console.log(`[admin]   GET  /api/admin/pipeline-status`);
   console.log(`[admin]   GET  /api/pipeline/status     — Rich pipeline monitoring`);
   console.log(`[admin]   GET  /api/admin/health        — Comprehensive health dashboard`);
+  console.log(`[admin]   GET  /api/admin/health/all    — Ecosystem health (all services + Ollama)`);
+  console.log(`[admin]   ├── Control Center Actions (ADMIN):`);
+  console.log(`[admin]   POST /api/admin/actions/refresh-rss    — Trigger RSS refresh`);
+  console.log(`[admin]   POST /api/admin/actions/auto-approve   — Auto-approve all pending`);
+  console.log(`[admin]   POST /api/admin/actions/reprocess      — Reprocess batch`);
+  console.log(`[admin]   POST /api/admin/actions/backup         — Trigger DB backup`);
+  console.log(`[admin]   POST /api/admin/actions/cleanup        — Trigger cleanup`);
+  console.log(`[admin]   POST /api/admin/actions/restart/:svc   — Restart a service via PM2`);
+  console.log(`[admin]   GET  /api/admin/system-info            — System CPU/RAM/uptime`);
   console.log(`[admin]   GET  /health                  — Service health`);
   console.log(`[admin]   ├── Source Management (ADMIN):`);
   console.log(`[admin]   GET    /api/admin/sources     — List sources with stats`);

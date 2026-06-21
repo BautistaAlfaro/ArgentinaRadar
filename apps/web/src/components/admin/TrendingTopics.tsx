@@ -7,46 +7,8 @@
  *   - Color-coded by category
  */
 
-import { useCallback, useEffect, useState } from 'react';
-
-// ─── Types ───────────────────────────────────────────────────────────────
-
-interface TrendingTopic {
-  topic: string;
-  articleCount: number;
-  sourceCount: number;
-  category: string;
-  latestArticleTitle: string;
-  trendingScore: number;
-}
-
-interface Cluster {
-  clusterId: string;
-  mainTopic: string;
-  articleCount: number;
-  sourceCount: number;
-  topArticleTitles: string[];
-  consensusScore: number;
-}
-
-interface TrendingResponse {
-  topics: TrendingTopic[];
-  totalArticles: number;
-  window: string;
-  generatedAt: string;
-}
-
-interface ClustersResponse {
-  clusters: Cluster[];
-  totalClusters: number;
-  multiSourceClusters: number;
-  window: string;
-  generatedAt: string;
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────
-
-const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
+import { useState } from 'react';
+import { useTrendingTopics } from '../../hooks/useAdminData';
 
 const CATEGORY_COLORS: Record<string, string> = {
   urgente: 'bg-red-900/30 text-red-300 border-red-700/30',
@@ -190,8 +152,8 @@ function ClusterCard({
 
       {/* Top titles */}
       <div className="mt-2 space-y-1">
-        {cluster.topArticleTitles.map((title, i) => (
-          <p key={i} className="text-[11px] text-slate-400 truncate pl-2 border-l-2 border-slate-700">
+        {cluster.topArticleTitles.map((title) => (
+          <p key={title} className="text-[11px] text-slate-400 truncate pl-2 border-l-2 border-slate-700">
             {title}
           </p>
         ))}
@@ -208,55 +170,26 @@ function ClusterCard({
 // ─── Main Component ──────────────────────────────────────────────────────
 
 export function TrendingTopics() {
-  const [trending, setTrending] = useState<TrendingResponse | null>(null);
-  const [clusters, setClusters] = useState<ClustersResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, isFetching, isError, error, refetch } = useTrendingTopics();
   const [view, setView] = useState<'trending' | 'clusters'>('trending');
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const [trendingResp, clustersResp] = await Promise.all([
-        fetch(`${NEWS_SERVICE_API}/api/trending?hours=24`),
-        fetch(`${NEWS_SERVICE_API}/api/clusters?hours=24&threshold=0.3`),
-      ]);
-
-      if (!trendingResp.ok) throw new Error(`Trending API: ${trendingResp.status}`);
-      if (!clustersResp.ok) throw new Error(`Clusters API: ${clustersResp.status}`);
-
-      const trendingData = (await trendingResp.json()) as TrendingResponse;
-      const clustersData = (await clustersResp.json()) as ClustersResponse;
-
-      setTrending(trendingData);
-      setClusters(clustersData);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const trending = data?.trending ?? null;
+  const clusters = data?.clusters ?? null;
 
   // ─── Loading ──────────────────────────────────────────────────────
-  if (loading && !trending) {
+  if (isLoading) {
     return <LoadingSkeleton />;
   }
 
   // ─── Error ────────────────────────────────────────────────────────
-  if (error && !trending) {
+  if (isError && !data) {
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-900/20 p-6 text-center">
         <p className="text-sm text-red-300 mb-3">Failed to load trending data</p>
-        <p className="text-xs text-red-400/80 mb-4">{error}</p>
+        <p className="text-xs text-red-400/80 mb-4">{error instanceof Error ? error.message : 'Unknown error'}</p>
         <button
           type="button"
-          onClick={fetchData}
+          onClick={() => refetch()}
           className="px-4 py-2 text-xs font-medium rounded-lg bg-red-700 text-white hover:bg-red-600 transition-colors cursor-pointer"
         >
           Retry
@@ -311,11 +244,11 @@ export function TrendingTopics() {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={fetchData}
-          disabled={loading}
+          onClick={() => refetch()}
+          disabled={isFetching}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 transition-colors cursor-pointer"
         >
-          {loading ? 'Refreshing…' : '🔄 Refresh'}
+          {isFetching ? 'Refreshing…' : '🔄 Refresh'}
         </button>
       </div>
 

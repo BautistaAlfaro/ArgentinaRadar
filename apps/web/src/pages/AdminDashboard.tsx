@@ -1,24 +1,22 @@
 /**
- * AdminDashboard — Main admin page with KPIs, charts, and system metrics.
+ * AdminDashboard — Main admin page with tabs.
  *
- * Layout:
- * - Header with title + range selector (7d / 30d / 90d)
- * - 4 KPI cards in a responsive grid
- * - 2×2 chart grid (NewsProcessing, Revenue, SystemHealth, EventDetection)
- * - Bottom row: UserActivity + AICost
- * - SystemMetrics sidebar / footer panel
+ * Default tab now shows the new ControlCenter.
+ * Old Overview content is available as a sub-tab.
  */
 
 import { lazy, Suspense, useState } from 'react';
+import { ControlCenter } from './ControlCenter';
 import { useKPIs, useDailyStats, useSystemMetrics, useRevenue, usePipelineStats, useServiceHealth } from '../hooks/useAdminData';
-import { PipelineView } from '../components/admin/PipelineView';
-import { CategoryChart } from '../components/admin/CategoryChart';
-import { ActivityFeed } from '../components/admin/ActivityFeed';
 import { ServiceCards } from '../components/admin/ServiceCards';
 import { QualityMetrics } from '../components/admin/QualityMetrics';
+import { LogViewer } from '../components/admin/LogViewer';
 
-// Lazy-load admin components to code-split heavy chart libraries (recharts)
+// Lazy-load admin components (kept for legacy overview tab)
 const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
+const PipelineView = lazy(() => import('../components/admin/PipelineView').then(m => ({ default: m.PipelineView })));
+const CategoryChart = lazy(() => import('../components/admin/CategoryChart').then(m => ({ default: m.CategoryChart })));
+const ActivityFeed = lazy(() => import('../components/admin/ActivityFeed').then(m => ({ default: m.ActivityFeed })));
 const NewsProcessingChart = lazy(() => import('../components/admin/charts/NewsProcessingChart').then(m => ({ default: m.NewsProcessingChart })));
 const RevenueChart = lazy(() => import('../components/admin/charts/RevenueChart').then(m => ({ default: m.RevenueChart })));
 const SystemHealthChart = lazy(() => import('../components/admin/charts/SystemHealthChart').then(m => ({ default: m.SystemHealthChart })));
@@ -42,7 +40,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'overview' | 'briefing' | 'services' | 'sources' | 'trending' | 'quality';
+type Tab = 'control-center' | 'overview' | 'briefing' | 'services' | 'sources' | 'trending' | 'quality' | 'logs';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -51,10 +49,12 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
 ];
 
 const TABS: { value: Tab; label: string; icon: string }[] = [
+  { value: 'control-center', label: 'Panel de Control', icon: '🎛️' },
   { value: 'overview', label: 'Overview', icon: '📊' },
   { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
   { value: 'trending', label: 'Trending', icon: '📈' },
   { value: 'quality', label: 'Quality', icon: '⭐' },
+  { value: 'logs', label: 'Logs', icon: '📋' },
   { value: 'services', label: 'Servicios', icon: '⚙️' },
   { value: 'sources', label: 'Fuentes', icon: '📡' },
 ];
@@ -86,7 +86,7 @@ const Icons = {
 export function AdminDashboard() {
   const [range, setRange] = useState<Range>('30d');
   const [systemDimension, setSystemDimension] = useState<'cpu' | 'memory'>('cpu');
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('control-center');
 
   // Data fetching
   const { data: kpis, isLoading: kpisLoading } = useKPIs(range);
@@ -127,12 +127,14 @@ export function AdminDashboard() {
               Admin Dashboard
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
+              {activeTab === 'control-center' && 'Control center con monitoreo en vivo, acciones y estadísticas'}
               {activeTab === 'overview' && 'System overview &amp; performance metrics'}
               {activeTab === 'briefing' && 'Nightly digest &amp; today\'s predictions'}
               {activeTab === 'trending' && 'Trending topics &amp; article clusters'}
               {activeTab === 'quality' && 'Article quality scoring &amp; source ranking'}
               {activeTab === 'services' && 'Start, stop &amp; monitor all backend services'}
               {activeTab === 'sources' && 'Manage RSS &amp; scrape news sources'}
+              {activeTab === 'logs' && 'Structured service logs with filtering and auto-refresh'}
             </p>
           </div>
 
@@ -157,7 +159,11 @@ export function AdminDashboard() {
             </div>
 
             {/* Range selector (overview only) */}
-            {activeTab === 'overview' && (
+        {activeTab === 'control-center' && (
+          <ControlCenter />
+        )}
+
+        {activeTab === 'overview' && (
               <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
                 {RANGE_OPTIONS.map((opt) => (
                   <button
@@ -359,6 +365,12 @@ export function AdminDashboard() {
           {activeTab === 'quality' && (
             <div>
               <QualityMetrics />
+            </div>
+          )}
+
+          {activeTab === 'logs' && (
+            <div>
+              <LogViewer />
             </div>
           )}
       </div>

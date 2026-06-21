@@ -15,6 +15,7 @@ import { config } from './config.js';
 import { publishArticle, publishText } from './publisher.js';
 import { getQuotaInfo, getDailyTweetCount } from './rateLimiter.js';
 import { getDeadLetterQueue, getDeadLetterCount } from './deadLetter.js';
+import { ERRORS } from '../../../shared/errorMessages.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,7 +55,7 @@ app.post('/api/publish/:id', async (req, res) => {
       .get(articleId) as Record<string, unknown> | undefined;
 
     if (!article) {
-      res.status(404).json({ error: 'Article not found' });
+      res.status(404).json({ error: ERRORS.ARTICLE_NOT_FOUND });
       return;
     }
 
@@ -80,7 +81,7 @@ app.post('/api/publish/:id', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Publish failed', details: String(err) });
+    res.status(500).json({ error: ERRORS.PUBLISH_FAILED, details: String(err) });
   }
 });
 
@@ -92,31 +93,31 @@ app.post('/api/publish-text', async (req, res) => {
     const { article_id, text, image_url, url } = req.body;
 
     if (!article_id || !text) {
-      res.status(400).json({ error: 'article_id and text are required' });
+      res.status(400).json({ error: 'article_id y text son obligatorios' });
       return;
     }
 
     if (typeof text !== 'string' || text.trim().length === 0) {
-      res.status(400).json({ error: 'text must be a non-empty string' });
+      res.status(400).json({ error: 'text debe ser un texto no vacío' });
       return;
     }
 
     // Validate image_url if provided
     if (image_url !== undefined && typeof image_url !== 'string') {
-      res.status(400).json({ error: 'image_url must be a string if provided' });
+      res.status(400).json({ error: 'image_url debe ser un texto si se proporciona' });
       return;
     }
 
     // Validate url if provided
     if (url !== undefined && typeof url !== 'string') {
-      res.status(400).json({ error: 'url must be a string if provided' });
+      res.status(400).json({ error: 'url debe ser un texto si se proporciona' });
       return;
     }
 
     const result = await publishText(article_id, text.trim(), image_url || undefined, url || undefined);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Publish failed', details: String(err) });
+    res.status(500).json({ error: ERRORS.PUBLISH_FAILED, details: String(err) });
   }
 });
 
@@ -148,7 +149,7 @@ app.get('/api/tweets', (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ error: 'Failed to fetch tweet history', details: String(err) });
+      .json({ error: ERRORS.DB_ERROR, details: String(err) });
   }
 });
 
@@ -190,7 +191,7 @@ app.get('/api/tweets/stats', (_req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ error: 'Failed to get stats', details: String(err) });
+      .json({ error: ERRORS.DB_ERROR, details: String(err) });
   }
 });
 
@@ -209,7 +210,7 @@ app.get('/api/stats/daily', (_req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ error: 'Failed to get daily stats', details: String(err) });
+      .json({ error: ERRORS.DB_ERROR, details: String(err) });
   }
 });
 

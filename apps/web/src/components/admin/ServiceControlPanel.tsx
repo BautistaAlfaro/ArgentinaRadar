@@ -245,10 +245,11 @@ export function ServiceControlPanel() {
 
   // Cleanup timers on unmount
   useEffect(() => {
+    const timers = actionTimers.current;
     return () => {
-      Object.values(actionTimers.current).forEach(clearTimeout);
+      Object.values(timers).forEach(clearTimeout);
     };
-  }, []);
+  }, [actionTimers]);
 
   // ─── Toggle handler ──────────────────────────────────────────────
 

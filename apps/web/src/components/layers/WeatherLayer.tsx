@@ -10,7 +10,7 @@
  * Refreshes every 30 minutes (matching the server-side schedule).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { WeatherAlert } from '@shared/types';
@@ -35,17 +35,20 @@ interface Props {
 export function WeatherLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('weather');
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   const { data } = useLayerData<WeatherAlertResponse>(
     'http://localhost:3007/api/alerts/weather',
     30 * 60 * 1000, // 30 min
   );
-  const alerts = data?.alerts ?? [];
+  const alerts = useMemo(() => data?.alerts ?? [], [data]);
 
   // Render polygons on globe
   useEffect(() => {
-
     if (!isActive) return;
+
+    const g = globeRef.current;
 
     // Build polygon data from alerts
     const polygonData: PolygonDatum[] = alerts.flatMap((alert) => {
@@ -68,7 +71,7 @@ export function WeatherLayer({ globe }: Props) {
 
     if (polygonData.length === 0) return;
 
-    globe
+    g
       .polygonsData(polygonData)
       .polygonLat((d: PolygonDatum) => d.coordinates.map((c) => c[1]))
       .polygonLng((d: PolygonDatum) => d.coordinates.map((c) => c[0]))
@@ -96,7 +99,7 @@ export function WeatherLayer({ globe }: Props) {
         `;
       })
       .onPolygonHover((hovered: PolygonDatum | null) => {
-        globe.polygonCapColor((d: PolygonDatum) => {
+        globeRef.current.polygonCapColor((d: PolygonDatum) => {
           if (d === hovered) {
             const colors = SEVERITY_COLORS[d.alert.severity] ?? SEVERITY_COLORS.yellow;
             return colors.fill.replace('0.25', '0.45').replace('0.3', '0.5');
@@ -107,9 +110,9 @@ export function WeatherLayer({ globe }: Props) {
       });
 
     return () => {
-      globe.polygonsData([]);
+      g.polygonsData([]);
     };
-  }, [globe, isActive, alerts]);
+  }, [isActive, alerts]);
 
   return null;
 }

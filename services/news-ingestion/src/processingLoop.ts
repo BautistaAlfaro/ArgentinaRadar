@@ -33,6 +33,10 @@ import { detectLanguage } from '../../../shared/language';
 // Import the alerts module (CommonJS → ESM bridge)
 const cRequire = createRequire(import.meta.url);
 const alerts = cRequire('../../hermes-bridge/alerts.js');
+const { createLogger } = cRequire('../../../shared/logger.js');
+const { increment } = cRequire('../../../shared/metrics.js');
+
+const logger = createLogger('processing-loop');
 
 const DB_PATH = process.env.DB_PATH ?? path.resolve(process.cwd(), '..', '..', 'data', 'argentina-radar.db');
 const GEO_API = process.env.GEO_API ?? 'http://127.0.0.1:3002';
@@ -162,6 +166,7 @@ async function sendTelegram(message: string): Promise<void> {
         text: message,
         parse_mode: 'Markdown',
       }),
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (e) {
     console.warn(`[processing] ⚠️ Telegram notification failed: ${(e as Error).message}`);
@@ -197,15 +202,16 @@ async function autoPublishArticle(article: Article, aiResult: Record<string, unk
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article_id: article.id, text: tweetText, image_url: imageUrl }),
+      signal: AbortSignal.timeout(15_000),
     });
     const pubResult: Record<string, unknown> = await pubResp.json();
     if (pubResult.success) {
-      console.log(`  🚀 ${article.id.slice(0, 8)} → AUTO-PUBLISHED`);
+      logger.info('AUTO-PUBLISHED', { articleId: article.id.slice(0, 8) });
     } else {
-      console.warn(`  ⚠️ ${article.id.slice(0, 8)} → auto-publish failed: ${pubResult.error}`);
+      logger.warn('Auto-publish failed', { articleId: article.id.slice(0, 8), error: pubResult.error });
     }
   } catch (e) {
-    console.warn(`  ⚠️ ${article.id.slice(0, 8)} → auto-publish network error: ${(e as Error).message}`);
+    logger.warn('Auto-publish network error', { articleId: article.id.slice(0, 8), error: (e as Error).message });
   }
 
   // Send Telegram notification
@@ -222,17 +228,27 @@ async function processBatch(): Promise<void> {
 
     if (articles.length === 0) return;
 
-    console.log(`[processing] Processing ${articles.length} new articles...`);
+    logger.info('Processing articles', { count: articles.length });
+    increment('articles_ingested', articles.length);
 
     for (const article of articles) {
       try {
+        // ── Validate required fields before processing ──────────────
+        if (!article.id || !article.title || !article.source) {
+          logger.warn('Artículo omitido por datos incompletos', { id: article.id?.slice(0, 8) || 'sin ID', title: !!article.title, source: !!article.source });
+          if (article.id) {
+            d.prepare("UPDATE news_items SET status = ? WHERE id = ?").run('validation_failed', article.id);
+          }
+          continue;
+        }
+
         // ── Step 0: Language detection + Auto-translation ──────────
         if (AUTO_TRANSLATE) {
           const combinedText = `${article.title} ${article.summary || ''}`;
           const detectedLang = detectLanguage(combinedText);
 
           if (detectedLang !== 'es' && detectedLang !== 'other') {
-            console.log(`  🌐 ${article.id.slice(0, 8)} → detected ${detectedLang}, translating...`);
+            logger.info('Language detected, translating', { articleId: article.id.slice(0, 8), lang: detectedLang });
 
             const originalTitle = article.title;
             const originalSummary = article.summary || '';
@@ -247,6 +263,7 @@ async function processBatch(): Promise<void> {
                   source: detectedLang,
                   provider: TRANSLATION_PROVIDER,
                 }),
+                signal: AbortSignal.timeout(10_000),
               });
 
               if (titleResp.ok) {
@@ -255,16 +272,17 @@ async function processBatch(): Promise<void> {
 
                 // Translate summary if present
                 let translatedSummary = article.summary || '';
-                if (article.summary) {
-                  const summaryResp = await fetch(`${AI_API}/api/translate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      text: article.summary,
-                      source: detectedLang,
-                      provider: TRANSLATION_PROVIDER,
-                    }),
-                  });
+                  if (article.summary) {
+                    const summaryResp = await fetch(`${AI_API}/api/translate`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: article.summary,
+                        source: detectedLang,
+                        provider: TRANSLATION_PROVIDER,
+                      }),
+                      signal: AbortSignal.timeout(10_000),
+                    });
                   if (summaryResp.ok) {
                     const summaryResult = await summaryResp.json();
                     translatedSummary = summaryResult.translated_text;
@@ -291,12 +309,12 @@ async function processBatch(): Promise<void> {
                 article.title = translatedTitle;
                 article.summary = translatedSummary;
 
-                console.log(`  🌐 Translated: "${originalTitle.slice(0, 60)}…" → "${translatedTitle.slice(0, 60)}…"`);
+                logger.info('Translated article', { articleId: article.id.slice(0, 8), from: originalTitle.slice(0, 40) });
               } else {
-                console.warn(`  ⚠️ ${article.id.slice(0, 8)} → translate API returned ${titleResp.status}`);
+                logger.warn('Error de API de traducción', { articleId: article.id.slice(0, 8), status: titleResp.status });
               }
             } catch (e) {
-              console.warn(`  ⚠️ ${article.id.slice(0, 8)} → translation failed: ${(e as Error).message}`);
+              logger.warn('Traducción fallida', { articleId: article.id.slice(0, 8), error: (e as Error).message });
             }
           }
         }
@@ -306,7 +324,7 @@ async function processBatch(): Promise<void> {
           const category = categorizeArticle(article.title, article.summary || '', article.source);
           d.prepare('UPDATE news_items SET category = ? WHERE id = ?').run(category, article.id);
           article.category = category;
-          console.log(`  🏷️ ${article.id.slice(0, 8)} → ${category}`);
+          logger.info('Categorized article', { articleId: article.id.slice(0, 8), category });
         }
 
         // ── 1b. Quality scoring + engagement prediction ──────────────
@@ -337,13 +355,13 @@ async function processBatch(): Promise<void> {
           if (quality < MIN_QUALITY_THRESHOLD) {
             d.prepare("UPDATE news_items SET status = ? WHERE id = ?")
               .run('discarded', article.id);
-            console.log(`  ⚠️ ${article.id.slice(0, 8)} → DISCARDED (quality: ${quality} < ${MIN_QUALITY_THRESHOLD})`);
+            logger.warn('Artículo descartado por baja calidad', { articleId: article.id.slice(0, 8), quality, threshold: MIN_QUALITY_THRESHOLD });
             continue; // skip remaining processing for this article
           }
 
-          console.log(`  📊 ${article.id.slice(0, 8)} → quality: ${quality}, engagement: ${engagement}`);
+          logger.info('Quality scored', { articleId: article.id.slice(0, 8), quality, engagement });
         } catch (e) {
-          console.warn(`  ⚠️ ${article.id.slice(0, 8)} → quality scoring failed: ${(e as Error).message}`);
+          logger.warn('Error al puntuar calidad', { articleId: article.id.slice(0, 8), error: (e as Error).message });
         }
 
         // ── Alert check: keyword alerts ──────────────────────────────
@@ -352,10 +370,10 @@ async function processBatch(): Promise<void> {
           const keywordMatches = matches.filter((m: { type: string }) => m.type === 'keyword');
           if (keywordMatches.length > 0) {
             await alerts.sendAlertNotification(keywordMatches, article);
-            console.log(`  🔔 ${article.id.slice(0, 8)} → ${keywordMatches.length} keyword alert(s)`);
+            logger.info('Keyword alerts matched', { articleId: article.id.slice(0, 8), count: keywordMatches.length });
           }
         } catch (e) {
-          console.warn(`  ⚠️ Keyword alert check failed:`, (e as Error).message);
+          logger.warn('Error al verificar alertas de palabras clave', { articleId: article.id.slice(0, 8), error: (e as Error).message });
         }
 
         // 3. Geolocate
@@ -366,13 +384,14 @@ async function processBatch(): Promise<void> {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: `${article.title}. ${article.summary || ''}` }),
+              signal: AbortSignal.timeout(10_000),
             });
             if (geoResp.ok) {
               const geoResult = await geoResp.json();
               location = JSON.stringify(geoResult);
               d.prepare('UPDATE news_items SET location = ?, status = ? WHERE id = ?')
                 .run(location, 'geolocated', article.id);
-              console.log(`  📍 ${article.id.slice(0, 8)} → ${geoResult.province || 'unknown'}`);
+              logger.info('Geolocated article', { articleId: article.id.slice(0, 8), province: geoResult.province || 'unknown' });
             }
           } catch (e) { /* continue without location */ }
         }
@@ -383,10 +402,10 @@ async function processBatch(): Promise<void> {
           const provinceMatches = matches.filter((m: { type: string }) => m.type === 'province');
           if (provinceMatches.length > 0) {
             await alerts.sendAlertNotification(provinceMatches, article);
-            console.log(`  🔔 ${article.id.slice(0, 8)} → ${provinceMatches.length} province alert(s)`);
+            logger.info('Province alerts matched', { articleId: article.id.slice(0, 8), count: provinceMatches.length });
           }
         } catch (e) {
-          console.warn(`  ⚠️ Province alert check failed:`, (e as Error).message);
+          logger.warn('Error al verificar alertas de provincia', { articleId: article.id.slice(0, 8), error: (e as Error).message });
         }
 
         // 4. AI Filter — supports both direct Ollama and OpenAI/OpenRouter
@@ -395,6 +414,7 @@ async function processBatch(): Promise<void> {
           let aiSuccess = false;
 
           if (AI_PROVIDER === 'ollama') {
+            increment('api_calls_ollama');
             // ── Direct Ollama classification ──────────────────────────
             const resp = await fetch(`${AI_API}/api/ollama-classify`, {
               method: 'POST',
@@ -435,6 +455,7 @@ async function processBatch(): Promise<void> {
                 source: article.source,
                 category: article.category || 'general',
               }),
+              signal: AbortSignal.timeout(15_000),
             });
             if (resp.ok) {
               aiResult = await resp.json() as Record<string, unknown>;
@@ -469,11 +490,11 @@ async function processBatch(): Promise<void> {
                     const embedData = await embedResp.json() as { embedding: number[] };
                     d.prepare('UPDATE news_items SET embedding = ? WHERE id = ?')
                       .run(JSON.stringify(embedData.embedding), article.id);
-                    console.log(`  🧬 ${article.id.slice(0, 8)} → embedding stored (${embedData.embedding.length}d)`);
+                    logger.info('Embedding generated', { articleId: article.id.slice(0, 8), dimensions: embedData.embedding.length });
                   }
                 }
               } catch (e) {
-                console.warn(`  ⚠️ ${article.id.slice(0, 8)} → embedding failed: ${(e as Error).message}`);
+                logger.warn('Embedding generation failed', { articleId: article.id.slice(0, 8), error: (e as Error).message });
               }
             }
 
@@ -498,11 +519,11 @@ async function processBatch(): Promise<void> {
                     if (aiSummary) {
                       d.prepare('UPDATE news_items SET ai_summary = ? WHERE id = ?')
                         .run(aiSummary, article.id);
-                      console.log(`  📝 ${article.id.slice(0, 8)} → AI summary generated`);
+                      logger.info('AI summary generated', { articleId: article.id.slice(0, 8) });
                     }
                   }
                 } catch (e) {
-                  console.warn(`  ⚠️ ${article.id.slice(0, 8)} → AI summarize failed: ${(e as Error).message}`);
+                  logger.warn('AI summarize failed', { articleId: article.id.slice(0, 8), error: (e as Error).message });
                 }
               }
 
@@ -529,13 +550,14 @@ async function processBatch(): Promise<void> {
                 d.prepare('UPDATE news_items SET status = ?, ai_score = ? WHERE id = ?')
                   .run('pending_approval', JSON.stringify(aiResult), article.id);
 
-                console.log(`  ✅ ${article.id.slice(0, 8)} → PUBLISH → pending approval (impact: ${impact})`);
+                logger.info('Article pending approval', { articleId: article.id.slice(0, 8), impact });
                 processedCount++;
               }
             } else {
               d.prepare('UPDATE news_items SET status = ?, ai_score = ? WHERE id = ?')
                 .run('discarded', JSON.stringify(aiResult), article.id);
-              console.log(`  ❌ ${article.id.slice(0, 8)} → DISCARD`);
+              logger.info('Article discarded by AI', { articleId: article.id.slice(0, 8) });
+              increment('articles_rejected');
             }
           } else {
             // AI not available — set all to pending_approval for manual review
@@ -550,22 +572,25 @@ async function processBatch(): Promise<void> {
             d.prepare('UPDATE news_items SET status = ? WHERE id = ?')
               .run('pending_approval', article.id);
 
-            console.log(`  ⚠️ ${article.id.slice(0, 8)} → AI unavailable → pending approval`);
+            logger.warn('AI unavailable — article pending approval', { articleId: article.id.slice(0, 8) });
             processedCount++;
           }
         } catch (e) {
-          console.warn(`[processing] AI error for ${article.id.slice(0, 8)}:`, (e as Error).message);
+          logger.error('AI filter error', { articleId: article.id.slice(0, 8), error: (e as Error).message });
+          increment('errors');
         }
       } catch (e) {
-        console.error(`[processing] Error processing ${article.id.slice(0, 8)}:`, e);
+        logger.error('Error processing article', { articleId: article.id.slice(0, 8), error: String(e) });
+        increment('errors');
       }
     }
 
     if (processedCount > 0) {
-      console.log(`[processing] Total processed: ${processedCount} articles`);
+      logger.info('Batch complete', { processedCount });
     }
   } catch (e) {
-    console.error('[processing] Batch error:', e);
+    logger.error('Batch processing error', { error: (e as Error).message });
+    increment('errors');
   }
 }
 
@@ -606,7 +631,7 @@ async function runClustering(): Promise<void> {
     ).all(`-${CLUSTER_WINDOW} hours`) as Array<Record<string, unknown>>;
 
     if (rows.length < 2) {
-      console.log(`[clustering] Only ${rows.length} articles — skipping clustering`);
+      logger.info('Skipping clustering — insufficient articles', { count: rows.length });
       return;
     }
 
@@ -631,7 +656,7 @@ async function runClustering(): Promise<void> {
     const multiSource = clusters.filter((c) => c.articleCount > 1);
 
     if (multiSource.length === 0) {
-      console.log(`[clustering] No multi-source clusters found in the last ${CLUSTER_WINDOW}h`);
+      logger.info('No multi-source clusters found', { hours: CLUSTER_WINDOW });
       return;
     }
 
@@ -676,9 +701,10 @@ async function runClustering(): Promise<void> {
 
     insertAll(multiSource);
 
-    console.log(`[clustering] ✅ ${multiSource.length} clusters from ${rows.length} articles (${CLUSTER_WINDOW}h window)`);
+    logger.info('Clustering complete', { clusters: multiSource.length, articles: rows.length, hours: CLUSTER_WINDOW });
   } catch (e) {
-    console.error('[clustering] Error:', (e as Error).message);
+    logger.error('Clustering error', { error: (e as Error).message });
+    increment('errors');
   }
 }
 
@@ -688,11 +714,14 @@ let interval: ReturnType<typeof setInterval> | null = null;
 let clusteringInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startProcessingLoop(): void {
-  console.log(`[processing] Starting processing loop (every ${POLL_INTERVAL / 1000}s)`);
-  console.log(`[processing] Geo API: ${GEO_API}`);
-  console.log(`[processing] AI API: ${AI_API}`);
-  console.log(`[processing] AI Provider: ${AI_PROVIDER}`);
-  console.log(`[processing] Clustering every ${Math.round(CLUSTER_INTERVAL / 1000)}s (${CLUSTER_WINDOW}h window)`);
+  logger.info('Starting processing loop', {
+    interval: `${POLL_INTERVAL / 1000}s`,
+    geoApi: GEO_API,
+    aiApi: AI_API,
+    aiProvider: AI_PROVIDER,
+    clusteringInterval: `${Math.round(CLUSTER_INTERVAL / 1000)}s`,
+    clusteringWindow: `${CLUSTER_WINDOW}h`,
+  });
   
   processBatch(); // Run immediately
   interval = setInterval(processBatch, POLL_INTERVAL);
@@ -715,7 +744,7 @@ export function stopProcessingLoop(): void {
     db.close();
     db = null;
   }
-  console.log('[processing] Stopped');
+  logger.info('Processing loop stopped');
 }
 
 // Run if called directly

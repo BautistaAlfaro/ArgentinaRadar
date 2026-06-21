@@ -9,7 +9,7 @@
  *   - 15s refresh interval
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { ProtestsResponse } from '../../services/api';
@@ -56,19 +56,22 @@ function formatTimeSince(startedAt: string): string {
 export function ProtestLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('protests');
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   const { data } = useLayerData<ProtestsResponse>(
     'http://localhost:3008/api/events/protests?status=active',
     15 * 1000, // 15 seconds
   );
-  const protests = data?.protests ?? [];
+  const protests = useMemo(() => data?.protests ?? [], [data]);
 
   // Render HTML elements on globe
   useEffect(() => {
-
     if (!isActive) return;
 
     if (protests.length === 0) return;
+
+    const g = globeRef.current;
 
     const data: HtmlElementDatum[] = protests.map((p) => ({
       protest: p,
@@ -78,7 +81,7 @@ export function ProtestLayer({ globe }: Props) {
 
     const typeColor = TYPE_COLORS;
 
-    globe
+    g
       .htmlElementsData(data)
       .htmlLat((d: HtmlElementDatum) => d.lat)
       .htmlLng((d: HtmlElementDatum) => d.lng)
@@ -144,9 +147,9 @@ export function ProtestLayer({ globe }: Props) {
       });
 
     return () => {
-      globe.htmlElementsData([]);
+      g.htmlElementsData([]);
     };
-  }, [globe, isActive, protests]);
+  }, [isActive, protests]);
 
   return null;
 }

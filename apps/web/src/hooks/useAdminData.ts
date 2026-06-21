@@ -14,6 +14,8 @@ import {
   fetchServices,
   fetchPipelineStats,
   fetchServiceHealth,
+  fetchQualityStats,
+  fetchTrendingData,
   type KPIData,
   type DailyStat,
   type SystemMetric,
@@ -21,6 +23,9 @@ import {
   type ServicesResponse,
   type PipelineStats,
   type ServiceHealth,
+  type QualityStats,
+  type TrendingResponse,
+  type ClustersResponse,
 } from '../services/adminApi';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
@@ -92,6 +97,30 @@ export function usePipelineStats() {
   });
 }
 
+// ─── Logs ─────────────────────────────────────────────────────────────
+
+const LOG_POLL_INTERVAL = 5_000; // 5 seconds
+
+function useLogs(filters: { service?: string; level?: string; search?: string; limit?: number; offset?: number }) {
+  return useQuery<LogsResponse>({
+    queryKey: ['admin', 'logs', filters],
+    queryFn: () => fetchLogs(filters),
+    refetchInterval: LOG_POLL_INTERVAL,
+    staleTime: 2_000,
+  });
+}
+
+// ─── Metrics ───────────────────────────────────────────────────────────
+
+function useMetrics() {
+  return useQuery<MetricsResponse | null>({
+    queryKey: ['admin', 'metrics'],
+    queryFn: fetchMetrics,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  });
+}
+
 // ─── Service Health (port checks) ────────────────────────────────────
 
 export function useServiceHealth() {
@@ -100,5 +129,29 @@ export function useServiceHealth() {
     queryFn: fetchServiceHealth,
     refetchInterval: SERVICE_POLL_INTERVAL,
     staleTime: 5_000,
+  });
+}
+
+// ─── Quality Stats ──────────────────────────────────────────────────
+
+const QUALITY_POLL_INTERVAL = 30_000; // 30 seconds
+
+export function useQualityStats() {
+  return useQuery<QualityStats | null>({
+    queryKey: ['admin', 'quality-stats'],
+    queryFn: fetchQualityStats,
+    refetchInterval: QUALITY_POLL_INTERVAL,
+    staleTime: 10_000,
+  });
+}
+
+// ─── Trending Topics ─────────────────────────────────────────────────
+
+export function useTrendingTopics() {
+  return useQuery({
+    queryKey: ['news', 'trending', 'clusters'],
+    queryFn: fetchTrendingData,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 }

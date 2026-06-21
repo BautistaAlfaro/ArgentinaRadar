@@ -18,11 +18,15 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { createLogger } = require('../../shared/logger');
+const logger = createLogger('morning-briefing');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const DEFAULT_CHAT_ID = '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1923443777';
 const LAST_BRIEFING_FILE = path.resolve(__dirname, '..', '..', 'data', 'last-briefing.txt');
+const DB_RETRY_DELAY = 1000; // 1 second between DB retries
+const DB_MAX_RETRIES = 3;
 
 // ─── Category helpers ──────────────────────────────────────────────────
 
@@ -66,26 +70,73 @@ function setLastBriefingDate(date) {
   fs.writeFileSync(LAST_BRIEFING_FILE, date, 'utf8');
 }
 
+// ─── DB helper with retry ──────────────────────────────────────────────
+
+/**
+ * Open a DB connection with retry for locked/busy SQLite.
+ * Uses WAL mode and limited retries to avoid crashing the main loop.
+ * @returns {import('better-sqlite3').Database|null}
+ */
+/**
+ * Sleep helper for synchronous blocking (better-sqlite3 is sync).
+ * @param {number} ms
+ */
+function sleep(ms) {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    // Busy-wait — acceptable for retry backoff in a sync context
+  }
+}
+
+function openDbWithRetry() {
+  for (let attempt = 0; attempt < DB_MAX_RETRIES; attempt++) {
+    try {
+      const db = new Database(DB_PATH);
+      db.pragma('journal_mode = WAL');
+      return db;
+    } catch (e) {
+      logger.warn('DB connection attempt failed', { attempt: attempt + 1, maxRetries: DB_MAX_RETRIES, error: e.message });
+      if (attempt < DB_MAX_RETRIES - 1) {
+        // Exponential backoff
+        const delay = DB_RETRY_DELAY * Math.pow(2, attempt);
+        sleep(delay);
+      }
+    }
+  }
+  console.error('[briefing] DB unavailable after retries — skipping');
+  return null;
+}
+
 // ─── DB queries ────────────────────────────────────────────────────────
 
 function fetchTopArticles(db) {
-  return db.prepare(`
-    SELECT id, title, source, url, category
-    FROM news_items
-    WHERE ingested_at >= datetime('now', '-1 day')
-    ORDER BY CAST(ai_score AS REAL) DESC
-    LIMIT 5
-  `).all();
+  try {
+    return db.prepare(`
+      SELECT id, title, source, url, category
+      FROM news_items
+      WHERE ingested_at >= datetime('now', '-1 day')
+      ORDER BY CAST(ai_score AS REAL) DESC
+      LIMIT 5
+    `).all();
+  } catch (e) {
+    console.error('[briefing] Error fetching top articles:', e.message);
+    return [];
+  }
 }
 
 function fetchCategoryCounts(db) {
-  return db.prepare(`
-    SELECT category, COUNT(*) AS c
-    FROM news_items
-    WHERE ingested_at >= datetime('now', '-1 day')
-    GROUP BY category
-    ORDER BY c DESC
-  `).all();
+  try {
+    return db.prepare(`
+      SELECT category, COUNT(*) AS c
+      FROM news_items
+      WHERE ingested_at >= datetime('now', '-1 day')
+      GROUP BY category
+      ORDER BY c DESC
+    `).all();
+  } catch (e) {
+    console.error('[briefing] Error fetching category counts:', e.message);
+    return [];
+  }
 }
 
 // ─── Message formatting ────────────────────────────────────────────────
@@ -135,7 +186,7 @@ async function sendTelegramMessage(chatId, text) {
     });
     return await resp.json();
   } catch (e) {
-    console.error('[briefing] Telegram error:', e.message);
+    logger.error('Telegram error sending briefing', { error: e.message });
     return null;
   }
 }
@@ -150,8 +201,14 @@ async function sendTelegramMessage(chatId, text) {
  * @returns {Promise<boolean>} Whether the briefing was sent
  */
 async function sendMorningBriefing(chatId) {
-  const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
+  const db = openDbWithRetry();
+  if (!db) {
+    await sendTelegramMessage(
+      chatId || DEFAULT_CHAT_ID,
+      '☀️ *Morning Briefing*\n\n⚠️ No se pudo conectar a la base de datos. Intentalo de nuevo más tarde.',
+    ).catch(() => {});
+    return false;
+  }
   try {
     const articles = fetchTopArticles(db);
     const categoryCounts = fetchCategoryCounts(db);
@@ -167,8 +224,17 @@ async function sendMorningBriefing(chatId) {
     const message = formatBriefingMessage(articles, categoryCounts);
     await sendTelegramMessage(chatId || DEFAULT_CHAT_ID, message);
     return true;
+  } catch (e) {
+    console.error('[briefing] Error generating briefing:', e.message);
+    try {
+      await sendTelegramMessage(
+        chatId || DEFAULT_CHAT_ID,
+        '☀️ *Morning Briefing*\n\n⚠️ Error al generar el briefing.',
+      );
+    } catch (_) {}
+    return false;
   } finally {
-    db.close();
+    try { db.close(); } catch (_) {}
   }
 }
 
@@ -179,22 +245,27 @@ async function sendMorningBriefing(chatId) {
  * @returns {Promise<boolean>} Whether the briefing was sent
  */
 async function checkAndSendBriefing() {
-  const today = getTodayDate();
-  const lastSent = getLastBriefingDate();
+  try {
+    const today = getTodayDate();
+    const lastSent = getLastBriefingDate();
 
-  if (lastSent === today) {
-    console.log('[briefing] Already sent today, skipping');
+    if (lastSent === today) {
+      logger.info('Briefing already sent today, skipping');
+      return false;
+    }
+
+    const sent = await sendMorningBriefing(DEFAULT_CHAT_ID);
+    if (sent) {
+      setLastBriefingDate(today);
+      logger.info('Sent briefing', { date: today });
+    } else {
+      logger.info('No articles found, not recording briefing date');
+    }
+    return sent;
+  } catch (e) {
+    console.error('[briefing] Error in checkAndSendBriefing:', e.message);
     return false;
   }
-
-  const sent = await sendMorningBriefing(DEFAULT_CHAT_ID);
-  if (sent) {
-    setLastBriefingDate(today);
-    console.log(`[briefing] Sent briefing for ${today}`);
-  } else {
-    console.log('[briefing] No articles found, not recording date');
-  }
-  return sent;
 }
 
 // ─── Standalone entry point ────────────────────────────────────────────
@@ -202,11 +273,11 @@ async function checkAndSendBriefing() {
 if (require.main === module) {
   checkAndSendBriefing()
     .then(sent => {
-      console.log(sent ? '✓ Briefing sent' : '− Briefing skipped or no articles');
+      logger.info(sent ? 'Briefing sent' : 'Briefing skipped or no articles');
       process.exit(0);
     })
     .catch(err => {
-      console.error('✗ Briefing error:', err);
+      logger.error('Briefing error', { error: err });
       process.exit(1);
     });
 }

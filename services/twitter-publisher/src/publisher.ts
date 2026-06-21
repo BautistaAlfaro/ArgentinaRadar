@@ -10,12 +10,17 @@
  */
 
 import Database from 'better-sqlite3';
+import { createRequire } from 'module';
 import { config } from './config.js';
 import { TwitterApiError, postTweet, uploadMedia } from './twitterClient.js';
 import { postToBluesky } from './blueskyClient.js';
 import { formatTweet } from './formatter.js';
 import { canPublish, getQuotaInfo } from './rateLimiter.js';
 import { moveToDeadLetter } from './deadLetter.js';
+
+const cRequire = createRequire(import.meta.url);
+const { createLogger } = cRequire('../../../shared/logger.js');
+const logger = createLogger('twitter-publisher');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -73,7 +78,7 @@ export async function publishArticle(
   if (!canPublish()) {
     const quota = getQuotaInfo();
     const msg = `Monthly rate limit reached (${quota.used}/${quota.limit})`;
-    console.warn(`[publisher] ⛔ ${msg}`);
+    logger.warn('Rate limit reached (publishArticle)', { used: quota.used, limit: quota.limit });
     return { success: false, error: msg };
   }
 
@@ -109,18 +114,16 @@ export async function publishArticle(
         'UPDATE news_items SET tweet_id = ?, status = ? WHERE id = ?'
       ).run(result.tweetId, 'published', articleId);
 
-      console.log(
-        `[publisher] ✅ Article ${articleId.slice(0, 8)}… published → tweet ${result.tweetId}`
-      );
+      logger.info('Article published', { articleId: articleId.slice(0, 8), tweetId: result.tweetId });
 
       // Also post to Bluesky (non-critical — never fail the pipeline)
       if (config.bluesky.enabled && config.bluesky.password) {
         try {
           const bsky = await postToBluesky(tweetText, config, { articleUrl: url });
-          console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
+          logger.info('Bluesky post succeeded', { uri: bsky.uri });
           await sleep(1000); // rate limit courtesy delay
         } catch (err) {
-          console.warn(`[publisher] ⚠️ Bluesky failed:`, (err as Error).message);
+          logger.warn('Bluesky post failed', { error: (err as Error).message });
         }
       }
 
@@ -131,10 +134,12 @@ export async function publishArticle(
       if (err instanceof TwitterApiError && err.isRetryable && attempt < RETRY_DELAYS.length) {
         // Retryable error → wait and retry
         const delay = RETRY_DELAYS[attempt];
-        console.warn(
-          `[publisher] 🔄 Retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
-            `for ${articleId.slice(0, 8)}… in ${Math.round(delay / 1000)}s: ${lastError}`
-        );
+        logger.warn('Retrying after Twitter API error', {
+          attempt: attempt + 1,
+          maxRetries: RETRY_DELAYS.length,
+          delay: `${Math.round(delay / 1000)}s`,
+          error: lastError,
+        });
         d.prepare(
           "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
         ).run(lastError, historyId);
@@ -145,10 +150,12 @@ export async function publishArticle(
       if (attempt < RETRY_DELAYS.length) {
         // Non-Twitter error (network, etc.) — still retry
         const delay = RETRY_DELAYS[attempt];
-        console.warn(
-          `[publisher] 🔄 Network retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
-            `in ${Math.round(delay / 1000)}s: ${lastError}`
-        );
+        logger.warn('Network retry', {
+          attempt: attempt + 1,
+          maxRetries: RETRY_DELAYS.length,
+          delay: `${Math.round(delay / 1000)}s`,
+          error: lastError,
+        });
         d.prepare(
           "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
         ).run(lastError, historyId);
@@ -197,7 +204,7 @@ export async function publishText(
   if (!twitterConfigured && config.bluesky.enabled && config.bluesky.password) {
     try {
       const bsky = await postToBluesky(text, config, { imageUrl, articleUrl: url });
-      console.log(`[publisher] ✅ Bluesky (no Twitter): ${bsky.uri}`);
+      logger.info('Published to Bluesky (no Twitter)', { uri: bsky.uri });
       return { success: true, tweetId: 'bsky' };
     } catch (err) {
       return { success: false, error: `Bluesky failed: ${(err as Error).message}` };
@@ -210,7 +217,7 @@ export async function publishText(
   if (!canPublish()) {
     const quota = getQuotaInfo();
     const msg = `Monthly rate limit reached (${quota.used}/${quota.limit})`;
-    console.warn(`[publisher] ⛔ ${msg}`);
+    logger.warn('Rate limit reached (publishText)', { used: quota.used, limit: quota.limit });
     return { success: false, error: msg };
   }
 
@@ -228,14 +235,14 @@ export async function publishText(
   // ── 3. Upload image (if provided) ──────────────────────────────
   let mediaIds: string[] | undefined;
   if (imageUrl) {
-    console.log(`[publisher] 🖼️  Uploading image for ${articleId.slice(0, 8)}…: ${imageUrl.slice(0, 80)}…`);
+    logger.info('Uploading image', { articleId: articleId.slice(0, 8), imageUrl: imageUrl.slice(0, 80) });
     try {
       const mediaId = await uploadMedia(imageUrl);
       mediaIds = [mediaId];
-      console.log(`[publisher] ✅ Image uploaded: media_id=${mediaId}`);
+      logger.info('Image uploaded', { mediaId });
     } catch (err) {
       // Image upload failed — log warning and proceed with text-only
-      console.warn(`[publisher] ⚠️  Image upload failed, publishing text-only: ${String(err)}`);
+      logger.warn('Image upload failed, publishing text-only', { error: String(err) });
     }
   }
 
@@ -263,18 +270,16 @@ export async function publishText(
         'UPDATE news_items SET tweet_id = ?, status = ? WHERE id = ?'
       ).run(result.tweetId, 'published', articleId);
 
-      console.log(
-        `[publisher] ✅ Draft ${articleId.slice(0, 8)}… published → tweet ${result.tweetId}: "${headline}…"`
-      );
+      logger.info('Draft published', { articleId: articleId.slice(0, 8), tweetId: result.tweetId });
 
       // Also post to Bluesky (non-critical — never fail the pipeline)
       if (config.bluesky.enabled && config.bluesky.password) {
         try {
           const bsky = await postToBluesky(text, config, { imageUrl, articleUrl: url });
-          console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
+          logger.info('Bluesky post succeeded (draft)', { uri: bsky.uri });
           await sleep(1000); // rate limit courtesy delay
         } catch (err) {
-          console.warn(`[publisher] ⚠️ Bluesky failed:`, (err as Error).message);
+          logger.warn('Bluesky post failed (draft)', { error: (err as Error).message });
         }
       }
 
@@ -284,10 +289,12 @@ export async function publishText(
 
       if (err instanceof TwitterApiError && err.isRetryable && attempt < RETRY_DELAYS.length) {
         const delay = RETRY_DELAYS[attempt];
-        console.warn(
-          `[publisher] 🔄 Retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
-            `for draft ${articleId.slice(0, 8)}… in ${Math.round(delay / 1000)}s: ${lastError}`
-        );
+        logger.warn('Retrying draft after Twitter API error', {
+          attempt: attempt + 1,
+          maxRetries: RETRY_DELAYS.length,
+          delay: `${Math.round(delay / 1000)}s`,
+          error: lastError,
+        });
         d.prepare(
           "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
         ).run(lastError, historyId);
@@ -297,10 +304,12 @@ export async function publishText(
 
       if (attempt < RETRY_DELAYS.length) {
         const delay = RETRY_DELAYS[attempt];
-        console.warn(
-          `[publisher] 🔄 Network retry ${attempt + 1}/${RETRY_DELAYS.length} ` +
-            `in ${Math.round(delay / 1000)}s: ${lastError}`
-        );
+        logger.warn('Network retry (draft)', {
+          attempt: attempt + 1,
+          maxRetries: RETRY_DELAYS.length,
+          delay: `${Math.round(delay / 1000)}s`,
+          error: lastError,
+        });
         d.prepare(
           "UPDATE tweet_history SET status = 'retrying', error = ? WHERE id = ?"
         ).run(lastError, historyId);

@@ -11,6 +11,7 @@ dist/
 .vite/
 __pycache__/
 *.pyc
+logs/
 
 # PostgreSQL data (local dev)
 .pgdata/

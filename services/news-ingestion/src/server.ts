@@ -1,9 +1,16 @@
 import express from 'express';
+import { createRequire } from 'module';
 import { getDb } from './db.js';
 import { getTrendingTopics } from '../../../shared/trending.js';
 import { clusterArticles } from '../../../shared/clustering.js';
 import { semanticSearch } from '../../../shared/semanticSearch.js';
 import type { NewsItem } from '../../../shared/types/index.js';
+
+const cRequire = createRequire(import.meta.url);
+const { createLogger: makeLogger } = cRequire('../../../shared/logger.js');
+const { getMetrics } = cRequire('../../../shared/metrics.js');
+const logger = makeLogger('news-ingestion-server');
+import { ERRORS } from '../../../shared/errorMessages.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
@@ -63,7 +70,7 @@ export function startServer(
 
       res.json({ items, total, limit, offset });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch news items', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -74,13 +81,13 @@ export function startServer(
       const row = db.prepare('SELECT * FROM news_items WHERE id = ?').get(req.params.id) as Record<string, unknown> | undefined;
 
       if (!row) {
-        res.status(404).json({ error: 'Article not found' });
+        res.status(404).json({ error: ERRORS.ARTICLE_NOT_FOUND });
         return;
       }
 
       res.json(rowToJson(row));
     } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch article', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -155,7 +162,7 @@ export function startServer(
 
       res.json({ avgScores, topArticles, sourceRanking, summary });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch quality stats', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -222,7 +229,7 @@ export function startServer(
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to fetch pipeline stats', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -248,7 +255,7 @@ export function startServer(
         },
       });
     } catch (err) {
-      res.status(500).json({ error: 'Health check failed', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -274,7 +281,7 @@ export function startServer(
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to compute trending topics', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -285,7 +292,7 @@ export function startServer(
       const limit = Math.min(parseInt(String(req.query.limit ?? '5'), 10), 20);
 
       if (!q.trim()) {
-        res.status(400).json({ error: 'Query parameter "q" is required' });
+        res.status(400).json({ error: 'El parámetro "q" es obligatorio' });
         return;
       }
 
@@ -300,7 +307,7 @@ export function startServer(
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ error: 'Search failed', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
     }
   });
 
@@ -329,18 +336,97 @@ export function startServer(
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to compute clusters', details: String(err) });
+      res.status(500).json({ error: ERRORS.DB_ERROR, details: String(err) });
+    }
+  });
+
+  // ─── GET /api/admin/logs — structured log viewer ─────────────
+  app.get('/api/admin/logs', (req, res) => {
+    try {
+      const db = getDb();
+      const service = req.query.service as string | undefined;
+      const level = req.query.level as string | undefined;
+      const search = req.query.search as string | undefined;
+      const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10), 200);
+      const offset = Math.max(parseInt(String(req.query.offset ?? '0'), 10), 0);
+
+      let sql = 'SELECT * FROM service_logs';
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+
+      if (service) {
+        conditions.push('service = ?');
+        params.push(service);
+      }
+      if (level) {
+        conditions.push('level = ?');
+        params.push(level);
+      }
+      if (search) {
+        conditions.push('message LIKE ?');
+        params.push(`%${search}%`);
+      }
+
+      if (conditions.length > 0) {
+        sql += ' WHERE ' + conditions.join(' AND ');
+      }
+
+      sql += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+
+      const rows = db.prepare(sql).all(...params);
+
+      // Get total count for pagination
+      let countSql = 'SELECT COUNT(*) as count FROM service_logs';
+      const countParams: unknown[] = [];
+      const countConditions: string[] = [];
+      if (service) {
+        countConditions.push('service = ?');
+        countParams.push(service);
+      }
+      if (level) {
+        countConditions.push('level = ?');
+        countParams.push(level);
+      }
+      if (search) {
+        countConditions.push('message LIKE ?');
+        countParams.push(`%${search}%`);
+      }
+      if (countConditions.length > 0) {
+        countSql += ' WHERE ' + countConditions.join(' AND ');
+      }
+      const { count: total } = db.prepare(countSql).get(...countParams) as { count: number };
+
+      // Get distinct services for the filter dropdown
+      const services = db.prepare(
+        'SELECT DISTINCT service FROM service_logs ORDER BY service'
+      ).all() as Array<{ service: string }>;
+
+      res.json({
+        items: rows,
+        total,
+        limit,
+        offset,
+        services: services.map(s => s.service),
+      });
+    } catch (err) {
+      // If the table doesn't exist yet, return empty
+      res.json({ items: [], total: 0, limit: 50, offset: 0, services: [] });
+    }
+  });
+
+  // ─── GET /api/admin/metrics — pipeline metrics ──────────────
+  app.get('/api/admin/metrics', (_req, res) => {
+    try {
+      const metrics = getMetrics();
+      res.json(metrics);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch metrics', details: String(err) });
     }
   });
 
   const server = app.listen(PORT, () => {
-    console.log(`[server] REST API listening on http://localhost:${PORT}`);
-    console.log(`[server]   GET /api/news            — paginated news list`);
-    console.log(`[server]   GET /api/news/:id         — single article`);
-    console.log(`[server]   GET /api/pipeline/stats   — pipeline dashboard stats`);
-    console.log(`[server]   GET /api/trending         — trending topics`);
-    console.log(`[server]   GET /api/clusters         — article clusters`);
-    console.log(`[server]   GET /health               — service health`);
+    logger.info('REST API listening', { port: PORT });
   });
 
   return server;

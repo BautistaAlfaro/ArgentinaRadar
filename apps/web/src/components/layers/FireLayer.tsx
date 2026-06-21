@@ -7,7 +7,7 @@
  * Refreshes every 3 hours (matching the server-side schedule).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { FireHotspot } from '@shared/types';
@@ -34,19 +34,22 @@ interface Props {
 export function FireLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('fires');
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   const { data } = useLayerData<{ fires: FireHotspot[] }>(
     `${ALERTS_API}/api/alerts/fires`,
     3 * 60 * 60 * 1000, // 3 hours
   );
-  const fires = data?.fires ?? [];
+  const fires = useMemo(() => data?.fires ?? [], [data]);
 
   // Render HTML elements on globe
   useEffect(() => {
-
     if (!isActive) return;
 
     if (fires.length === 0) return;
+
+    const g = globeRef.current;
 
     const data: HtmlElementDatum[] = fires.map((f) => ({
       hotspot: f,
@@ -54,7 +57,7 @@ export function FireLayer({ globe }: Props) {
       lng: f.lng,
     }));
 
-    globe
+    g
       .htmlElementsData(data)
       .htmlLat((d: HtmlElementDatum) => d.lat)
       .htmlLng((d: HtmlElementDatum) => d.lng)
@@ -80,9 +83,9 @@ export function FireLayer({ globe }: Props) {
       });
 
     return () => {
-      globe.htmlElementsData([]);
+      g.htmlElementsData([]);
     };
-  }, [globe, isActive, fires]);
+  }, [isActive, fires]);
 
   return null;
 }

@@ -182,9 +182,63 @@ export async function fetchRevenueData(): Promise<RevenuePoint[]> {
   return generateRevenue(90);
 }
 
-// ─── Pipeline Stats API (calls news-ingestion service directly) ──────
+// ─── Quality Stats ───────────────────────────────────────────────────
+
+export interface QualityStats {
+  avgScores: Array<{
+    day: string;
+    avg_quality: number;
+    avg_engagement: number;
+    avg_relevance: number;
+    article_count: number;
+  }>;
+  topArticles: Array<{
+    id: string;
+    title: string;
+    source: string;
+    category: string | null;
+    quality_score: number;
+    engagement_score: number;
+    relevance_score: number;
+    ingested_at: string;
+  }>;
+  sourceRanking: Array<{
+    source: string;
+    avg_quality: number;
+    avg_engagement: number;
+    avg_relevance: number;
+    article_count: number;
+  }>;
+  summary: {
+    avg_quality: number;
+    avg_engagement: number;
+    avg_relevance: number;
+    scored_articles: number;
+    high_quality: number;
+    medium_quality: number;
+    low_quality: number;
+  };
+}
 
 const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
+
+/**
+ * Fetch article quality stats from the news-ingestion service.
+ * Returns null if the service is unreachable.
+ */
+export async function fetchQualityStats(): Promise<QualityStats | null> {
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_API}/api/quality/stats`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch {
+    return null;
+  }
+}
+
+// ─── Pipeline Stats API (calls news-ingestion service directly) ──────
 
 export interface PipelineStats {
   pipeline: Record<string, number>;
@@ -206,6 +260,123 @@ export interface PipelineStats {
  * Fetch pipeline dashboard stats from the news-ingestion service.
  * Returns null if the service is unreachable.
  */
+// ─── Logs API ─────────────────────────────────────────────────────────
+
+export interface LogEntry {
+  id: number;
+  timestamp: string;
+  level: 'debug' | 'info' | 'warn' | 'error';
+  service: string;
+  message: string;
+  data: string | null;
+}
+
+export interface LogsResponse {
+  items: LogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+  services: string[];
+}
+
+export interface MetricsResponse {
+  today: Record<string, number>;
+  totals: Record<string, number>;
+  uptime_seconds: number;
+}
+
+/**
+ * Fetch structured logs from the news-ingestion service.
+ */
+async function fetchLogs(params: {
+  service?: string;
+  level?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<LogsResponse> {
+  const query = new URLSearchParams();
+  if (params.service) query.set('service', params.service);
+  if (params.level) query.set('level', params.level);
+  if (params.search) query.set('search', params.search);
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.offset) query.set('offset', String(params.offset));
+
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_API}/api/admin/logs?${query.toString()}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return { items: [], total: 0, limit: 50, offset: 0, services: [] };
+    return resp.json();
+  } catch {
+    return { items: [], total: 0, limit: 50, offset: 0, services: [] };
+  }
+}
+
+/**
+ * Fetch pipeline metrics from the news-ingestion service.
+ */
+async function fetchMetrics(): Promise<MetricsResponse | null> {
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_API}/api/admin/metrics`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch {
+    return null;
+  }
+}
+
+// ─── Trending Topics API ─────────────────────────────────────────────
+
+export interface TrendingTopic {
+  topic: string;
+  articleCount: number;
+  sourceCount: number;
+  category: string;
+  latestArticleTitle: string;
+  trendingScore: number;
+}
+
+export interface Cluster {
+  clusterId: string;
+  mainTopic: string;
+  articleCount: number;
+  sourceCount: number;
+  topArticleTitles: string[];
+  consensusScore: number;
+}
+
+export interface TrendingResponse {
+  topics: TrendingTopic[];
+  totalArticles: number;
+  window: string;
+  generatedAt: string;
+}
+
+export interface ClustersResponse {
+  clusters: Cluster[];
+  totalClusters: number;
+  multiSourceClusters: number;
+  window: string;
+  generatedAt: string;
+}
+
+export async function fetchTrendingData(): Promise<{ trending: TrendingResponse | null; clusters: ClustersResponse | null }> {
+  try {
+    const [trendingResp, clustersResp] = await Promise.all([
+      fetch(`${NEWS_SERVICE_API}/api/trending?hours=24`, { signal: AbortSignal.timeout(5_000) }),
+      fetch(`${NEWS_SERVICE_API}/api/clusters?hours=24&threshold=0.3`, { signal: AbortSignal.timeout(5_000) }),
+    ]);
+    const trending = trendingResp.ok ? await trendingResp.json() as TrendingResponse : null;
+    const clusters = clustersResp.ok ? await clustersResp.json() as ClustersResponse : null;
+    return { trending, clusters };
+  } catch {
+    return { trending: null, clusters: null };
+  }
+}
+
 export async function fetchPipelineStats(): Promise<PipelineStats | null> {
   try {
     const resp = await fetch(`${NEWS_SERVICE_API}/api/pipeline/stats`, {
@@ -238,55 +409,46 @@ const SERVICE_HEALTH_DEFS: Array<{ name: string; port: number; label: string }> 
  * Check service health by hitting each service's /health endpoint.
  * Telegram uses a best-effort check via the admin service.
  */
-export async function fetchServiceHealth(): Promise<ServiceHealth[]> {
-  const results: ServiceHealth[] = [];
-
-  for (const svc of SERVICE_HEALTH_DEFS) {
-    if (svc.name === 'telegram') {
-      // Telegram doesn't have a direct port — try admin service proxy
-      try {
-        const resp = await fetch(`${ADMIN_API}/api/admin/services`, {
-          signal: AbortSignal.timeout(3_000),
-        });
-        if (resp.ok) {
-          const body = await resp.json() as ServicesResponse;
-          const tg = body.services.find((s: ServiceStatus) => s.name === 'hermes-bridge');
-          results.push({
-            name: 'telegram',
-            port: tg?.port ?? 0,
-            status: tg?.status === 'running' ? 'up' : 'down',
-            label: 'Telegram Notifier',
-          });
-        } else {
-          results.push({ name: 'telegram', port: 0, status: 'down', label: 'Telegram Notifier' });
-        }
-      } catch {
-        results.push({ name: 'telegram', port: 0, status: 'down', label: 'Telegram Notifier' });
-      }
-      continue;
-    }
-
-    try {
-      const resp = await fetch(`http://127.0.0.1:${svc.port}/health`, {
-        signal: AbortSignal.timeout(3_000),
-      });
-      results.push({
-        name: svc.name,
-        port: svc.port,
-        status: resp.ok ? 'up' : 'down',
-        label: svc.label,
-      });
-    } catch {
-      results.push({
-        name: svc.name,
-        port: svc.port,
-        status: 'down',
-        label: svc.label,
-      });
-    }
+/** Check a single service's health. */
+function checkServiceHealth(svc: typeof SERVICE_HEALTH_DEFS[number]): Promise<ServiceHealth> {
+  if (svc.name === 'telegram') {
+    return fetch(`${ADMIN_API}/api/admin/services`, { signal: AbortSignal.timeout(3_000) })
+      .then(async (resp) => {
+        if (!resp.ok) return { name: 'telegram', port: 0, status: 'down' as const, label: 'Telegram Notifier' };
+        const body = await resp.json() as ServicesResponse;
+        const servicesMap = new Map<string, ServiceStatus>();
+        for (const s of body.services) servicesMap.set(s.name, s);
+        const tg = servicesMap.get('hermes-bridge');
+        return {
+          name: 'telegram',
+          port: tg?.port ?? 0,
+          status: tg?.status === 'running' ? 'up' : 'down',
+          label: 'Telegram Notifier',
+        };
+      })
+      .catch(() => ({ name: 'telegram', port: 0, status: 'down' as const, label: 'Telegram Notifier' }));
   }
 
-  return results;
+  return fetch(`http://127.0.0.1:${svc.port}/health`, { signal: AbortSignal.timeout(3_000) })
+    .then((resp) => ({
+      name: svc.name,
+      port: svc.port,
+      status: resp.ok ? 'up' as const : 'down' as const,
+      label: svc.label,
+    }))
+    .catch(() => ({
+      name: svc.name,
+      port: svc.port,
+      status: 'down' as const,
+      label: svc.label,
+    }));
+}
+
+export async function fetchServiceHealth(): Promise<ServiceHealth[]> {
+  const settled = await Promise.allSettled(SERVICE_HEALTH_DEFS.map(checkServiceHealth));
+  return settled.map((r) =>
+    r.status === 'fulfilled' ? r.value : { name: 'unknown' as const, port: 0, status: 'down' as const, label: 'Unknown' },
+  );
 }
 
 // ═════════════════════════════════════════════════════════════════════

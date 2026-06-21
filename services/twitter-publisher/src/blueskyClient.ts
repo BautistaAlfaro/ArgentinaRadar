@@ -9,7 +9,12 @@
  */
 
 import { BskyAgent, RichText } from '@atproto/api';
+import { createRequire } from 'module';
 import type { Config } from './config.js';
+
+const cRequire = createRequire(import.meta.url);
+const { createLogger } = cRequire('../../../shared/logger.js');
+const logger = createLogger('bluesky-client');
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,6 +113,7 @@ export async function postToBluesky(
     });
 
     results.push({ uri: result.uri, cid: result.cid });
+    logger.info('Published to Bluesky', { uri: result.uri, postIndex: i });
   }
 
   return Array.isArray(textOrTexts) ? results : results[0];

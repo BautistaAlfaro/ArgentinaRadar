@@ -1,204 +1,269 @@
 <#
 .SYNOPSIS
-    ArgentinaRadar — Start all pipeline services
+    ArgentinaRadar — Start all services via PM2 ecosystem
 .DESCRIPTION
-    Starts every service in the ArgentinaRadar pipeline in the correct
-    dependency order. Each service is launched in its own PowerShell
-    window so logs remain visible and independent.
+    Orchestrates the full service stack:
+      1. Verifies/Starts Ollama (prerequisite for ai-processor)
+      2. Checks Python venv for ai-processor
+      3. Launches all 6 services via PM2 ecosystem.config.cjs
+      4. Displays PM2 status table
+      5. Runs health checks with timeout
 
-    Order:
-      1. news-ingestion  (3001) — RSS/ scraping
-      2. geolocation     (3002) — location extraction
-      3. ai-processor    (3013) — NER + embeddings
-      4. event-detector  (3008) — event clustering
-      5. twitter-publisher (3004) — Bluesky + Twitter
-      6. hermes-bridge   (3005) — Telegram bot
-      7. alerts          (3007) — weather, earthquakes
-      8. economic-data   (3006) — dólar, MERVAL
+    Services started (in ecosystem order):
+      news-ingestion (3001) — RSS/scraping ingestion pipeline
+      publisher      (3004) — Twitter/X publisher
+      notifier       (N/A)  — Telegram bot (polling, no HTTP)
+      ai-processor   (3013) — NER + embeddings via FastAPI
+      admin          (3012) — Admin dashboard API
+      web            (5173) — Vite frontend
 
-    Use Ctrl+C in the orchestrator to stop all, or close each window.
-.PARAMETER NoOrchestrator
-    Skip the TypeScript orchestrator and launch raw service processes instead.
-.PARAMETER OrchestratorOnly
-    Only launch the orchestrator (no raw processes).
 .EXAMPLE
     .\scripts\start-all.ps1
-.EXAMPLE
-    .\scripts\start-all.ps1 -NoOrchestrator
 #>
 
-param(
-    [switch]$NoOrchestrator,
-    [switch]$OrchestratorOnly
-)
+param()
 
-# ─── Helper function ──────────────────────────────────────────────────
-function Start-ServiceWindow {
-    param(
-        [string]$Title,
-        [string]$Command,
-        [string]$WorkingDir,
-        [int]$Port
-    )
-    $logPrefix = "[$Title]"
+$ErrorActionPreference = "Stop"
+$rootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
-    Write-Host "  🚀 Starting $Title on port $Port..."
+# ─── Helpers ────────────────────────────────────────────────────────────
 
-    # Start in a new PowerShell window
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoExit -Command `"cd '$WorkingDir'; $Command`""
-    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
-    $psi.UseShellExecute = $true
+function Write-Step($msg) {
+    Write-Host "  → $msg" -ForegroundColor Yellow
+}
 
+function Write-OK($msg) {
+    Write-Host "  ✓ $msg" -ForegroundColor Green
+}
+
+function Write-Fail($msg) {
+    Write-Host "  ✗ $msg" -ForegroundColor Red
+}
+
+function Write-Info($msg) {
+    Write-Host "    $msg" -ForegroundColor Gray
+}
+
+function Test-OllamaRunning {
     try {
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        Write-Host "  ✓ $Title started (PID: $($proc.Id))"
-        return $proc
+        $null = Invoke-WebRequest -Uri "http://localhost:11434" -Method GET -TimeoutSec 3 -ErrorAction Stop
+        return $true
     } catch {
-        Write-Host "  ✗ Failed to start $Title : $_" -ForegroundColor Red
-        return $null
+        return $false
     }
 }
 
-# ─── Header ────────────────────────────────────────────────────────────
+function Test-PortOpen($port) {
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $async = $client.BeginConnect("127.0.0.1", $port, $null, $null)
+        $wait = $async.AsyncWaitHandle.WaitOne(2000)
+        if ($wait) { $client.EndConnect($async); $client.Close(); return $true }
+        $client.Close()
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+# ─── Header ─────────────────────────────────────────────────────────────
 Clear-Host
 Write-Host @"
 
-████████████████████████████████████████████████████████████████████████████
-  ArgentinaRadar — Pipeline Launcher
-████████████████████████████████████████████████████████████████████████████
-
+╔══════════════════════════════════════════════════════════════════════════╗
+║    ArgentinaRadar — PM2 Service Orchestrator                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
 "@ -ForegroundColor Cyan
 
-$rootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-Write-Host "  Project root: $rootDir"
-Write-Host "  Mode:         $(if ($OrchestratorOnly) { 'Orchestrator only' } elseif ($NoOrchestrator) { 'Raw processes' } else { 'Full pipeline' })"
+Write-Host "  Root: $rootDir"
 Write-Host ""
 
-# ─── 1. Orchestrator (TypeScript) — handles all services ──────────────
-if (-not $NoOrchestrator) {
-    Write-Host ""
-    Write-Host "  ─────────────────────────────────────────────────────" -ForegroundColor Yellow
-    Write-Host "  Starting TypeScript Orchestrator..."                   -ForegroundColor Yellow
-    Write-Host "  ─────────────────────────────────────────────────────" -ForegroundColor Yellow
+# ─── Step 1: Check Ollama ───────────────────────────────────────────────
+Write-Host "  ── Prerequisites ──────────────────────────────────────────" -ForegroundColor Cyan
+Write-Step "Checking Ollama service..."
 
-    $orchestratorDir = Join-Path $rootDir "apps/automation"
-    Start-Process powershell -WindowStyle Normal -ArgumentList @"
--NoExit -Command "cd '$orchestratorDir'; Write-Host '[orchestrator] Pipeline Orchestrator' -ForegroundColor Cyan; npx tsx src/orchestrator.ts"
-"@
+if (Test-OllamaRunning) {
+    Write-OK "Ollama is running on http://localhost:11434"
+} else {
+    Write-Step "Ollama not running. Starting Ollama serve..."
+    try {
+        $ollamaProcess = Start-Process -FilePath "ollama.exe" -ArgumentList "serve" -NoNewWindow -PassThru -WindowStyle Hidden
+        Write-OK "Ollama serve launched (PID: $($ollamaProcess.Id))"
 
-    Write-Host "  ✓ Orchestrator launched in a new window" -ForegroundColor Green
-    Write-Host "  ⏳ Wait for health checks to complete..." -ForegroundColor Yellow
-    Start-Sleep -Seconds 5
+        # Wait for the API to become available
+        $maxWait = 15
+        $ready = $false
+        for ($i = 1; $i -le $maxWait; $i++) {
+            Start-Sleep -Seconds 1
+            if (Test-OllamaRunning) { $ready = $true; break }
+        }
+
+        if ($ready) {
+            Write-OK "Ollama API ready at http://localhost:11434"
+        } else {
+            Write-Fail "Ollama did not respond within ${maxWait}s — check manually"
+            Write-Info "You can still start services, but ai-processor may fail if it needs Ollama."
+        }
+    } catch {
+        Write-Fail "Failed to start Ollama: $_"
+        Write-Info "Proceeding anyway — ai-processor may fail if it depends on Ollama."
+    }
 }
 
-# ─── 2. Raw processes (if OrchestratorOnly is not set) ────────────────
-if (-not $OrchestratorOnly) {
-    Write-Host ""
-    Write-Host "  ─────────────────────────────────────────────────────" -ForegroundColor Yellow
-    Write-Host "  Launching individual services..."                      -ForegroundColor Yellow
-    Write-Host "  ─────────────────────────────────────────────────────" -ForegroundColor Yellow
-    Write-Host ""
+# ─── Step 2: Check Python venv for ai-processor ─────────────────────────
+Write-Step "Checking Python venv for ai-processor..."
 
-    $jobs = @()
+$aiProcessorDir = Join-Path $rootDir "services/ai-processor"
+$venvPaths = @(
+    (Join-Path $aiProcessorDir ".venv/Scripts/python.exe"),
+    (Join-Path $aiProcessorDir "venv/Scripts/python.exe")
+)
 
-    # ── news-ingestion (3001) ──────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "news-ingestion" `
-        -Port 3001 `
-        -WorkingDir "$rootDir/services/news-ingestion" `
-        -Command "npx tsx src/index.ts"
-
-    Start-Sleep -Seconds 3
-
-    # ── geolocation (3002) ─────────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "geolocation" `
-        -Port 3002 `
-        -WorkingDir "$rootDir/services/geolocation" `
-        -Command "npx tsx src/server.ts"
-
-    Start-Sleep -Seconds 3
-
-    # ── ai-processor (3013) ────────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "ai-processor" `
-        -Port 3013 `
-        -WorkingDir "$rootDir/services/ai-processor" `
-        -Command "python -m uvicorn src.server:app --host 0.0.0.0 --port 3013"
-
-    Start-Sleep -Seconds 3
-
-    # ── event-detector (3008) ──────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "event-detector" `
-        -Port 3008 `
-        -WorkingDir "$rootDir/services/event-detector" `
-        -Command "npx tsx src/server.ts"
-
-    Start-Sleep -Seconds 3
-
-    # ── twitter-publisher (3004) ──────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "twitter-publisher" `
-        -Port 3004 `
-        -WorkingDir "$rootDir/services/twitter-publisher" `
-        -Command "npx tsx src/index.ts"
-
-    Start-Sleep -Seconds 2
-
-    # ── hermes-bridge (3005) ──────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "hermes-bridge" `
-        -Port 3005 `
-        -WorkingDir "$rootDir/services/hermes-bridge" `
-        -Command "python -m uvicorn src.server:app --host 0.0.0.0 --port 3005"
-
-    Start-Sleep -Seconds 2
-
-    # ── alerts (3007) ──────────────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "alerts" `
-        -Port 3007 `
-        -WorkingDir "$rootDir/services/alerts" `
-        -Command "npx tsx src/server.ts"
-
-    Start-Sleep -Seconds 2
-
-    # ── economic-data (3006) ───────────────────────────────────────────
-    $jobs += Start-ServiceWindow `
-        -Title "economic-data" `
-        -Port 3006 `
-        -WorkingDir "$rootDir/services/economic-data" `
-        -Command "npx tsx src/server.ts"
+$venvFound = $false
+$pythonPath = $null
+foreach ($vp in $venvPaths) {
+    if (Test-Path $vp) {
+        $venvFound = $true
+        $pythonPath = $vp
+        break
+    }
 }
 
-# ─── Summary ───────────────────────────────────────────────────────────
+if ($venvFound) {
+    Write-OK "Python venv found at $pythonPath"
+    Write-Info "ai-processor will use venv Python"
+} else {
+    Write-Fail "No Python venv found at services/ai-processor/.venv or ./venv"
+    Write-Info "Create one: cd services/ai-processor; python -m venv .venv"
+    Write-Info "Then: .venv/Scripts/pip install -r requirements.txt"
+    Write-Info "Proceeding with system Python — may use wrong dependencies."
+}
+
+# Check if uvicorn is available
+try {
+    $uvicornCheck = & python -c "import uvicorn; print('ok')" 2>&1
+    if ($uvicornCheck -eq "ok") {
+        Write-OK "uvicorn is available in Python environment"
+    } else {
+        Write-Fail "uvicorn not found — run: pip install -r services/ai-processor/requirements.txt"
+    }
+} catch {
+    Write-Fail "Python not found in PATH — ai-processor will fail to start"
+}
+
+Write-Host ""
+
+# ─── Step 3: Start All PM2 Services ─────────────────────────────────────
+Write-Host "  ── Starting Services ──────────────────────────────────────" -ForegroundColor Cyan
+Write-Step "Launching all services via PM2 ecosystem..."
+
+$ecosystemPath = Join-Path $rootDir "ecosystem.config.cjs"
+if (-not (Test-Path $ecosystemPath)) {
+    Write-Fail "Ecosystem file not found at $ecosystemPath"
+    exit 1
+}
+
+try {
+    $pm2Output = pm2 start $ecosystemPath 2>&1
+    Write-OK "PM2 ecosystem started"
+    if ($pm2Output) {
+        Write-Info ($pm2Output -join "`n")
+    }
+} catch {
+    Write-Fail "Failed to start PM2 ecosystem: $_"
+    Write-Info "Make sure PM2 is installed: npm install -g pm2"
+    exit 1
+}
+
+# Give services a moment to initialize
+Start-Sleep -Seconds 3
+
+# ─── Step 4: Show PM2 Status ────────────────────────────────────────────
+Write-Host ""
+Write-Host "  ── Service Status ─────────────────────────────────────────" -ForegroundColor Cyan
+try {
+    pm2 status
+} catch {
+    Write-Fail "Could not retrieve PM2 status"
+}
+
+Write-Host ""
+
+# ─── Step 5: Health Checks ─────────────────────────────────────────────
+Write-Host "  ── Health Checks ──────────────────────────────────────────" -ForegroundColor Cyan
+Write-Step "Waiting for services to pass health checks..."
+
+# Retry loop — up to 30s total
+$healthChecks = @(
+    @{ Name = "news-ingestion"; Port = 3001; HasHttp = $true }
+    @{ Name = "publisher";      Port = 3004; HasHttp = $true }
+    @{ Name = "notifier";       Port = $null; HasHttp = $false }
+    @{ Name = "ai-processor";   Port = 3013; HasHttp = $true }
+    @{ Name = "admin";          Port = 3012; HasHttp = $true }
+    @{ Name = "web";            Port = 5173; HasHttp = $true }
+)
+
+$maxRetries = 15  # 15 * 2s = 30s total
+$allHealthy = $false
+
+for ($retry = 1; $retry -le $maxRetries; $retry++) {
+    $healthyCount = 0
+    $totalHttp = 0
+
+    foreach ($svc in $healthChecks) {
+        if (-not $svc.HasHttp) {
+            $healthyCount++
+            continue  # Skip notifier — no HTTP endpoint, just assume PM2 handles it
+        }
+        $totalHttp++
+        if (Test-PortOpen $svc.Port) {
+            try {
+                $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$($svc.Port)/health" -Method GET -TimeoutSec 2 -ErrorAction SilentlyContinue
+                if ($resp.StatusCode -eq 200) { $healthyCount++ }
+            } catch {
+                # Port open but /health not responding yet
+            }
+        }
+    }
+
+    if ($healthyCount -eq $totalHttp) {
+        $allHealthy = $true
+        break
+    }
+
+    if ($retry -eq $maxRetries) {
+        Write-Fail "Some services did not become healthy within $($maxRetries * 2)s"
+    } else {
+        Start-Sleep -Seconds 2
+    }
+}
+
+# ─── Summary ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  ═══════════════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  ✓ All services started!"                                    -ForegroundColor Green
+Write-Host "  Services launched!" -ForegroundColor Green
 Write-Host "  ═══════════════════════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
-Write-Host "  📊 Pipeline status:  http://localhost:3012/api/pipeline/status"
-Write-Host "  🏥 Admin health:     http://localhost:3012/api/admin/health"
-Write-Host "  🌐 Frontend:         http://localhost:5173"
-Write-Host "  🔧 Admin dashboard:  http://localhost:5173/admin"
-Write-Host "  📰 News service:     http://localhost:3001"
-Write-Host "  📍 Geolocation:      http://localhost:3002"
+
+if ($allHealthy) {
+    Write-OK "All HTTP services passed health checks"
+} else {
+    Write-Fail "Some services did not respond to health checks — run .\scripts\health-check.ps1 to diagnose"
+}
+
+Write-Host ""
+Write-Host "  📊 Admin health:     http://localhost:3012/api/admin/health"
+Write-Host "  📊 Health all:       http://localhost:3012/api/admin/health/all"
 Write-Host "  🧠 AI Processor:     http://localhost:3013"
-Write-Host "  ⚡ Event Detector:   http://localhost:3008"
+Write-Host "  🌐 Frontend:         http://localhost:5173"
+Write-Host "  📰 News service:     http://localhost:3001"
 Write-Host "  🐦 Publisher:        http://localhost:3004"
-Write-Host "  🤖 Hermes Bridge:    http://localhost:3005"
-Write-Host "  🔔 Alerts:           http://localhost:3007"
-Write-Host "  💰 Economic Data:    http://localhost:3006"
+Write-Host "  🤖 Notifier:         PM2 process (no HTTP)"
 Write-Host ""
-Write-Host "  ℹ️  Close each PowerShell window to stop a service."
-Write-Host "  ℹ️  Or use the orchestrator window and press Ctrl+C."
+Write-Host "  Commands:" -ForegroundColor Gray
+Write-Host "    pm2 status                     — view all processes" -ForegroundColor Gray
+Write-Host "    pm2 logs <name>                — tail logs for a service" -ForegroundColor Gray
+Write-Host "    pm2 stop ecosystem.config.cjs  — stop all services" -ForegroundColor Gray
+Write-Host "    .\scripts\stop-all.ps1          — graceful stop" -ForegroundColor Gray
+Write-Host "    .\scripts\health-check.ps1       — check all services" -ForegroundColor Gray
 Write-Host ""
-
-# Keep this window open so the user can see the output
-if ($host.Name -eq "ConsoleHost") {
-    Write-Host "  Press any key to close this window..." -ForegroundColor Gray
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-}

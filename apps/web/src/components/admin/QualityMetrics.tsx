@@ -11,49 +11,8 @@
  * Data is fetched from the news-ingestion service's /api/quality/stats endpoint.
  */
 
-import { useEffect, useState } from 'react';
 import { LazyMotion, domAnimation, m as motion } from 'framer-motion';
-
-// ─── Types ───────────────────────────────────────────────────────────
-
-interface QualityStats {
-  avgScores: Array<{
-    day: string;
-    avg_quality: number;
-    avg_engagement: number;
-    avg_relevance: number;
-    article_count: number;
-  }>;
-  topArticles: Array<{
-    id: string;
-    title: string;
-    source: string;
-    category: string | null;
-    quality_score: number;
-    engagement_score: number;
-    relevance_score: number;
-    ingested_at: string;
-  }>;
-  sourceRanking: Array<{
-    source: string;
-    avg_quality: number;
-    avg_engagement: number;
-    avg_relevance: number;
-    article_count: number;
-  }>;
-  summary: {
-    avg_quality: number;
-    avg_engagement: number;
-    avg_relevance: number;
-    scored_articles: number;
-    high_quality: number;
-    medium_quality: number;
-    low_quality: number;
-  };
-}
-
-const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
-const POLL_INTERVAL = 30_000; // 30 seconds
+import { useQualityStats } from '../../hooks/useAdminData';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -112,43 +71,10 @@ function LoadingSkeleton({ className }: { className?: string }) {
 // ─── Main Component ──────────────────────────────────────────────────
 
 export function QualityMetrics() {
-  const [data, setData] = useState<QualityStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function fetchData() {
-      try {
-        const resp = await fetch(`${NEWS_SERVICE_API}/api/quality/stats`, {
-          signal: AbortSignal.timeout(5_000),
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json() as QualityStats;
-        if (mounted) {
-          setData(json);
-          setLoading(false);
-          setError(null);
-        }
-      } catch (e) {
-        if (mounted) {
-          setError((e as Error).message);
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchData();
-    const interval = setInterval(fetchData, POLL_INTERVAL);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  const { data, isLoading, isError, error } = useQualityStats();
 
   // ── Loading state ────────────────────────────────────────────────
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -163,7 +89,7 @@ export function QualityMetrics() {
   }
 
   // ── Error state ──────────────────────────────────────────────────
-  if (error || !data) {
+  if (isError || !data) {
     return (
       <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
         <h3 className="text-sm font-semibold text-slate-400 mb-3">Quality Metrics</h3>
@@ -171,7 +97,7 @@ export function QualityMetrics() {
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-amber-400">
             <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
           </svg>
-          <span>Quality metrics service unavailable. {error ? `(${error})` : ''}</span>
+          <span>Quality metrics service unavailable. {error ? `(${(error as Error).message})` : ''}</span>
         </div>
       </section>
     );

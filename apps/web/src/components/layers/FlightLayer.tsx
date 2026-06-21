@@ -7,7 +7,7 @@
  * Refreshes every 30 seconds (matching the server-side schedule).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { FlightData } from '@shared/types';
@@ -34,19 +34,22 @@ interface Props {
 export function FlightLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('flights');
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   const { data } = useLayerData<FlightResponse>(
     'http://localhost:3007/api/alerts/flights',
     30 * 1000, // 30 seconds
   );
-  const flights = data?.flights ?? [];
+  const flights = useMemo(() => data?.flights ?? [], [data]);
 
   // Render HTML elements on globe
   useEffect(() => {
-
     if (!isActive) return;
 
     if (flights.length === 0) return;
+
+    const g = globeRef.current;
 
     const data: HtmlElementDatum[] = flights.map((f) => ({
       flight: f,
@@ -54,7 +57,7 @@ export function FlightLayer({ globe }: Props) {
       lng: f.lng,
     }));
 
-    globe
+    g
       .htmlElementsData(data)
       .htmlLat((d: HtmlElementDatum) => d.lat)
       .htmlLng((d: HtmlElementDatum) => d.lng)
@@ -96,9 +99,9 @@ export function FlightLayer({ globe }: Props) {
       });
 
     return () => {
-      globe.htmlElementsData([]);
+      g.htmlElementsData([]);
     };
-  }, [globe, isActive, flights]);
+  }, [isActive, flights]);
 
   return null;
 }

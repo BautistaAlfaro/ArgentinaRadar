@@ -65,6 +65,9 @@ export function MapView() {
     // ---- Globe-material enhancements (fires once base texture loads) ----
     const loader = new THREE.TextureLoader();
 
+    // Track cloud mesh locally for cleanup stability (avoids stale ref.current)
+    let cloudMeshInstance: THREE.Mesh | null = null;
+
     globe.onGlobeReady(() => {
       const baseMaterial = globe.globeMaterial();
       if (!baseMaterial) return;
@@ -120,6 +123,7 @@ export function MapView() {
         });
 
         const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+        cloudMeshInstance = cloudMesh;
         cloudMeshRef.current = cloudMesh;
 
         // Attach clouds under the globe mesh so they inherit rotation
@@ -158,6 +162,7 @@ export function MapView() {
     controls.minDistance = 130;
     controls.maxDistance = 600;
 
+    const currentGlobe = globe;
     globeRef.current = globe;
     setGlobeReady(true);
 
@@ -174,20 +179,18 @@ export function MapView() {
       window.removeEventListener('resize', handleResize);
       setGlobeReady(false);
 
-      // Dispose cloud mesh
-      if (cloudMeshRef.current) {
-        cloudMeshRef.current.geometry.dispose();
-        if (Array.isArray(cloudMeshRef.current.material)) {
-          (cloudMeshRef.current.material as THREE.Material[]).forEach((m: THREE.Material) => m.dispose());
+      // Dispose cloud mesh using local variable (not stale ref.current)
+      if (cloudMeshInstance) {
+        cloudMeshInstance.geometry.dispose();
+        if (Array.isArray(cloudMeshInstance.material)) {
+          (cloudMeshInstance.material as THREE.Material[]).forEach((m: THREE.Material) => m.dispose());
         } else {
-          (cloudMeshRef.current.material as THREE.Material).dispose();
+          (cloudMeshInstance.material as THREE.Material).dispose();
         }
-        cloudMeshRef.current = null;
       }
 
-      if (globeRef.current) {
-        globeRef.current._destructor();
-        globeRef.current = null;
+      if (currentGlobe) {
+        currentGlobe._destructor();
       }
     };
   }, [hasWebGL]);

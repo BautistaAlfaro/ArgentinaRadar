@@ -1,0 +1,6 @@
+{
+  "watchdog": true,
+  "autoBackup": true,
+  "autoCleanup": true,
+  "pipelineHealth": true
+}

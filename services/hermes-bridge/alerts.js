@@ -16,6 +16,8 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
+const { createLogger } = require('../../shared/logger');
+const logger = createLogger('alerts');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 
@@ -36,21 +38,27 @@ const PROVINCES = [
 
 /**
  * Open a connection to the shared SQLite DB and ensure the alerts table exists.
+ * @returns {import('better-sqlite3').Database|null} DB instance or null on failure
  */
 function getDb() {
-  const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS alerts (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      keyword    TEXT    NOT NULL,
-      type       TEXT    DEFAULT 'keyword',
-      chat_id    TEXT    NOT NULL,
-      active     INTEGER DEFAULT 1,
-      created_at TEXT    DEFAULT (datetime('now'))
-    )
-  `);
-  return db;
+  try {
+    const db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS alerts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword    TEXT    NOT NULL,
+        type       TEXT    DEFAULT 'keyword',
+        chat_id    TEXT    NOT NULL,
+        active     INTEGER DEFAULT 1,
+        created_at TEXT    DEFAULT (datetime('now'))
+      )
+    `);
+    return db;
+  } catch (e) {
+    console.error(`[alerts] DB connection error: ${e.message}`);
+    return null;
+  }
 }
 
 // ─── CRUD Operations ────────────────────────────────────────────────────
@@ -68,6 +76,10 @@ function addAlert(keyword, type, chatId) {
   if (!normalized) return false;
 
   const db = getDb();
+  if (!db) {
+    console.error('[alerts] Cannot add alert — DB unavailable');
+    return false;
+  }
   try {
     const existing = db.prepare(
       `SELECT id FROM alerts
@@ -81,8 +93,11 @@ function addAlert(keyword, type, chatId) {
     ).run(normalized, type, String(chatId));
 
     return true;
+  } catch (e) {
+    console.error(`[alerts] Error adding alert "${normalized}": ${e.message}`);
+    return false;
   } finally {
-    db.close();
+    try { db.close(); } catch (_) {}
   }
 }
 
@@ -95,6 +110,10 @@ function addAlert(keyword, type, chatId) {
  */
 function removeAlert(keyword, chatId) {
   const db = getDb();
+  if (!db) {
+    console.error('[alerts] Cannot remove alert — DB unavailable');
+    return false;
+  }
   try {
     const result = db.prepare(
       `UPDATE alerts SET active = 0
@@ -102,8 +121,11 @@ function removeAlert(keyword, chatId) {
     ).run(keyword.trim(), String(chatId));
 
     return result.changes > 0;
+  } catch (e) {
+    console.error(`[alerts] Error removing alert "${keyword}": ${e.message}`);
+    return false;
   } finally {
-    db.close();
+    try { db.close(); } catch (_) {}
   }
 }
 
@@ -115,14 +137,21 @@ function removeAlert(keyword, chatId) {
  */
 function listAlerts(chatId) {
   const db = getDb();
+  if (!db) {
+    console.error('[alerts] Cannot list alerts — DB unavailable');
+    return [];
+  }
   try {
     return db.prepare(
       `SELECT keyword, type, created_at FROM alerts
        WHERE chat_id = ? AND active = 1
        ORDER BY created_at DESC`
     ).all(String(chatId));
+  } catch (e) {
+    console.error(`[alerts] Error listing alerts: ${e.message}`);
+    return [];
   } finally {
-    db.close();
+    try { db.close(); } catch (_) {}
   }
 }
 
@@ -143,6 +172,10 @@ function listAlerts(chatId) {
  */
 function checkAlerts(article) {
   const db = getDb();
+  if (!db) {
+    console.error('[alerts] Cannot check alerts — DB unavailable');
+    return [];
+  }
   try {
     const activeAlerts = db.prepare(
       'SELECT keyword, type, chat_id FROM alerts WHERE active = 1'
@@ -190,8 +223,11 @@ function checkAlerts(article) {
     }
 
     return matches;
+  } catch (e) {
+    console.error(`[alerts] Error in checkAlerts: ${e.message}`);
+    return [];
   } finally {
-    db.close();
+    try { db.close(); } catch (_) {}
   }
 }
 
@@ -234,10 +270,10 @@ async function sendAlertNotification(matches, article) {
 
       if (!resp.ok) {
         const err = await resp.text();
-        console.error(`[alerts] Telegram API error for ${match.chat_id}:`, err.slice(0, 200));
+        logger.error('Telegram API error sending alert', { chatId: match.chat_id, error: err.slice(0, 200) });
       }
     } catch (e) {
-      console.error(`[alerts] Network error sending to ${match.chat_id}:`, e.message);
+      logger.error('Network error sending alert', { chatId: match.chat_id, error: e.message });
     }
   }
 }

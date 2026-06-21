@@ -11,6 +11,8 @@ import { Gate } from './components/auth/Gate';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { UserMenu } from './components/auth/UserMenu';
 import { useAuthStore } from './stores/authStore';
+import { ToastProvider } from '@shared/Toast';
+import { ToastContainer } from './components/ui/ToastContainer';
 
 function Header() {
   const role = useAuthStore((s) => s.user?.role ?? null);
@@ -67,17 +69,20 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<MainLayout />} />
-          <Route
-            path="/admin"
-            element={
-              <Gate requiredRole="ADMIN">
-                <AdminDashboard />
-              </Gate>
-            }
-          />
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/" element={<MainLayout />} />
+            <Route
+              path="/admin"
+              element={
+                <Gate requiredRole="ADMIN">
+                  <AdminDashboard />
+                </Gate>
+              }
+            />
+          </Routes>
+          <ToastContainer />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Telegram Approval Notifier — ArgentinaRadar
  * 
  * Polls approval_queue, generates NanoBanana news thumbnails,
@@ -9,9 +9,17 @@
  */
 const Database = require('better-sqlite3');
 const path = require('path');
+const os = require('os');
 const { addAlert, removeAlert, listAlerts, PROVINCES } = require('./alerts');
 const { sendMorningBriefing, checkAndSendBriefing } = require('./morning-briefing.js');
 const scheduleManager = require('../../shared/scheduleManager');
+const { MSG } = require('../../shared/messages.es');
+
+// ─── Markdown escaping helpers ────────────────────────────────────────
+function escapeMd(t) { return (t || '').replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1'); }
+function b(t) { return '*' + escapeMd(t) + '*'; }
+function i(t) { return '_' + escapeMd(t) + '_'; }
+function link(d, u) { return '[' + escapeMd(d) + '](' + (u || '') + ')'; }
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 const BOT_TOKEN = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
@@ -175,52 +183,53 @@ function formatBlueskyTweet(title, source, category, rewrittenTitle) {
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
 async function publishToBluesky(articleId, text, imageUrl, url) {
-  try {
-    const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        article_id: articleId,
-        text: text,
-        image_url: imageUrl || null,
-        url: url || null,
-      }),
+  const doPub = async (label) => {
+    const resp = await fetch('http://127.0.0.1:3004/api/publish-text', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ article_id: articleId, text, image_url: imageUrl || null, url: url || null }),
+      signal: AbortSignal.timeout(15000),
     });
-    const result = await bskyResp.json();
-    if (result.success) {
-      console.log(`[bluesky] ✅ Published ${articleId.slice(0, 8)}`);
-      return { success: true, error: null };
-    }
-    console.log(`[bluesky] ❌ Failed ${articleId.slice(0, 8)}: ${result.error || 'unknown'}`);
-    return { success: false, error: result.error || 'Unknown error' };
+    const result = await resp.json();
+    if (result.success) { console.log(`[bluesky] ✅ Published ${articleId.slice(0, 8)}${label}`); return { success: true, error: null }; }
+    console.warn(`[bluesky] ❌ Failed ${articleId.slice(0, 8)}${label}: ${result.error || 'unknown'}`);
+    return { success: false, error: result.error || 'Error desconocido' };
+  };
+  try {
+    const first = await doPub('');
+    if (first.success) return first;
+    console.warn('[bluesky] ❌ Error al publicar en Bluesky. Reintentando...');
+    await new Promise(r => setTimeout(r, 3000));
+    return await doPub(' (retry)');
   } catch (e) {
-    console.log(`[bluesky] Network error ${articleId.slice(0, 8)}: ${e.message}`);
-    return { success: false, error: e.message };
+    console.warn(`[bluesky] Error de red ${articleId.slice(0, 8)}: ${e.message}. Reintentando...`);
+    await new Promise(r => setTimeout(r, 3000));
+    try { return await doPub(' (retry)'); } catch (e2) {
+      console.error(`[bluesky] ❌ Error al publicar en Bluesky tras reintento: ${e2.message}`);
+      return { success: false, error: e2.message };
+    }
   }
 }
 
 // ─── Telegram API helpers ───────────────────────────────────────────────
 
-async function sendToTelegram(text, keyboard) {
-  const body = JSON.stringify({
-    chat_id: parseInt(CHAT_ID),
-    text: text,
-    parse_mode: 'Markdown',
-    reply_markup: keyboard || undefined,
-  });
-
-  try {
-    const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: body,
-    });
-    const data = await resp.json();
-    return data;
-  } catch (e) {
-    console.error('Telegram error:', e.message);
-    return null;
+async function sendToTelegram(text, keyboard, retries = 1) {
+  for (let a = 0; a <= retries; a++) {
+    try {
+      const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: parseInt(CHAT_ID), text, parse_mode: 'Markdown', reply_markup: keyboard || undefined }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (data.ok) return data;
+      console.error('[telegram] API error (attempt ' + (a + 1) + '/3):', data.description);
+    } catch (e) {
+      console.error('[telegram] Network error (attempt ' + (a + 1) + '/3):', e.message);
+    }
+    if (a < retries) await new Promise(r => setTimeout(r, 2000));
   }
+  return null;
 }
 
 async function sendPhoto(caption, imageUrl, keyboard) {
@@ -291,11 +300,11 @@ async function checkPendingApprovals() {
 
       const keyboard = {
         inline_keyboard: [[
-          { text: '✅ Aprobar', callback_data: `approve:${entry.article_id}` },
-          { text: '⏰ Programar', callback_data: `schedule:${entry.article_id}` },
-          { text: '❌ Descartar', callback_data: `reject:${entry.article_id}` },
+          { text: MSG.BTN_APPROVE, callback_data: `approve:${entry.article_id}` },
+          { text: MSG.BTN_SCHEDULE, callback_data: `schedule:${entry.article_id}` },
+          { text: MSG.BTN_REJECT, callback_data: `reject:${entry.article_id}` },
         ], [
-          { text: '🔍 Ver fuente', url: entry.url },
+          { text: MSG.BTN_SOURCE, url: entry.url },
         ]]
       };
 
@@ -360,7 +369,7 @@ const MAIN_MENU = {
     ],
     [
       { text: '⚙️ Servicios', callback_data: 'menu:services' },
-      { text: '⏰ Programar', callback_data: 'menu:scheduler' },
+      { text: MSG.BTN_SCHEDULE, callback_data: 'menu:scheduler' },
     ],
     [
       { text: '📋 Últimas 24hs', callback_data: 'menu:today' },
@@ -407,7 +416,7 @@ async function showArticleInfo(chatId, messageId, articleId) {
   const article = db.prepare('SELECT id, title, source, url, category, status FROM news_items WHERE id = ?').get(articleId);
   if (!article) {
     return editMessageText(chatId, messageId, '❌ *Artículo no encontrado*', {
-      inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:pending' }]]
+      inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:pending' }]]
     });
   }
 
@@ -420,14 +429,14 @@ async function showArticleInfo(chatId, messageId, articleId) {
 
   if (isPending) {
     buttons.push([
-      { text: '✅ Aprobar', callback_data: `approve:${article.id}` },
-      { text: '❌ Descartar', callback_data: `reject:${article.id}` },
-      { text: '🔍 Ver fuente', url: article.url },
+      { text: MSG.BTN_APPROVE, callback_data: `approve:${article.id}` },
+      { text: MSG.BTN_REJECT, callback_data: `reject:${article.id}` },
+      { text: MSG.BTN_SOURCE, url: article.url },
     ]);
   } else {
-    buttons.push([{ text: '🔍 Ver fuente', url: article.url }]);
+    buttons.push([{ text: MSG.BTN_SOURCE, url: article.url }]);
   }
-  buttons.push([{ text: '🔙 Volver', callback_data: 'menu:pending' }]);
+  buttons.push([{ text: MSG.BTN_BACK, callback_data: 'menu:pending' }]);
 
   return editMessageText(chatId, messageId, text, { inline_keyboard: buttons });
 }
@@ -443,7 +452,7 @@ function statsKeyboard() {
       `⏳ Pendientes: *${pending}*\n` +
       `✅ Aprobados: *${approved}*\n` +
       `🚀 Publicados: *${published}*`,
-    keyboard: { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+    keyboard: { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
   };
 }
 
@@ -470,12 +479,12 @@ function pendingKeyboard(page = 0) {
   const navRow = [];
   const hasMore = (offset + limit) < total;
   if (hasMore) {
-    navRow.push({ text: '▶️ Más', callback_data: `pg:${page + 1}` });
+    navRow.push({ text: MSG.BTN_MORE, callback_data: `pg:${page + 1}` });
   }
-  navRow.push({ text: '🔄 Actualizar', callback_data: `refresh:${page}` });
+  navRow.push({ text: MSG.BTN_REFRESH, callback_data: `refresh:${page}` });
   if (navRow.length) buttons.push(navRow);
 
-  buttons.push([{ text: '🔙 Volver', callback_data: 'menu:main' }]);
+  buttons.push([{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]);
 
   const start = total > 0 ? offset + 1 : 0;
   const end = Math.min(offset + limit, total);
@@ -547,7 +556,7 @@ async function handleMenuAction(action, chatId, messageId) {
   const editMsg = (text, kb) => editMessageText(chatId, messageId, text, kb);
 
   if (action === 'main') {
-    await editMsg('🤖 *ArgentinaRadar Bot*\n\nSeleccioná una opción:', MAIN_MENU);
+          await editMsg(MSG.MENU_MAIN, MAIN_MENU);
   } else if (action === 'stats') {
     const s = statsKeyboard();
     await editMsg(s.text, s.keyboard);
@@ -557,32 +566,32 @@ async function handleMenuAction(action, chatId, messageId) {
   } else if (action === 'breaking') {
     const articles = todayArticles();
     if (!articles.length) {
-      return editMsg('🚨 *Breaking News*\n\nNo hay noticias urgentes en las últimas 24hs.', {
-        inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+      return editMsg(MSG.MENU_BREAKING_EMPTY, {
+        inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
       });
     }
     const lines = articles.map((a, i) => `${i + 1}. [${a.title.substring(0, 60)}](${a.url}) — *${a.source}*`);
-    await editMsg(`🚨 *Breaking News — Últimas 24hs*\n\n${lines.join('\n\n')}`, {
-      inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+    await editMsg(`${MSG.MENU_BREAKING_HEADER}\n\n${lines.join('\n\n')}`, {
+      inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
     });
   } else if (action === 'search') {
     await editMsg(
-      '🔍 *Buscar Noticia*\n\nUsá el comando:\n`/search <término>`\n\nEjemplo: `/search inflación`',
-      { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+      MSG.MENU_SEARCH_HELP,
+      { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
     );
   } else if (action === 'today') {
     const articles = todayArticles();
     if (!articles.length) {
-      return editMsg('📋 *Últimas 24hs*\n\nNo hay artículos en las últimas 24 horas.', {
-        inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+      return editMsg(MSG.MENU_TODAY_EMPTY, {
+        inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
       });
     }
     const buttons = articles.map(a => [{
       text: `📰 ${(a.title || '').substring(0, 40)} — ${a.source}`,
       callback_data: `info:${a.id}`
     }]);
-    buttons.push([{ text: '🔙 Volver', callback_data: 'menu:main' }]);
-    await editMsg('📋 *Últimas 24hs — Mejor puntuadas*\n\nSeleccioná un artículo:', { inline_keyboard: buttons });
+    buttons.push([{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]);
+    await editMsg(MSG.MENU_TODAY_HEADER, { inline_keyboard: buttons });
   } else if (action === 'scheduler') {
     const posts = scheduleManager.getScheduledPosts();
     const pendingCount = posts.filter(p => p.status === 'scheduled').length;
@@ -610,69 +619,48 @@ async function handleMenuAction(action, chatId, messageId) {
       '• `/schedule list` — ver todas\n' +
       '• `/schedule cancel <id>` — cancelar\n' +
       '• `/schedule now <id>` — publicar ya',
-      { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+      { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
     );
   } else if (action === 'services') {
     await editMsg(
-      '⚙️ *Servicios*\n\n' +
-      '🔵 Bluesky Publisher: puerto 3004\n' +
-      '🟢 Telegram Notifier: activo\n' +
-      '🟡 Hermes Bridge: puerto 3005\n\n' +
-      '_Los servicios se gestionan desde el Dashboard_',
-      { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+      MSG.MENU_SERVICES,
+      { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
     );
       } else if (action === 'trending') {
         const trending = await fetchTrending();
         if (!trending || !trending.topics || trending.topics.length === 0) {
-          await editMsg('📈 *Trending Topics*\n\nNo hay suficientes datos para calcular tendencias en las últimas 24hs.', {
-            inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+          await editMsg(MSG.MENU_TRENDING_EMPTY, {
+            inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
           });
         } else {
           const lines = trending.topics.map((t, i) => {
             const score = t.trendingScore.toFixed(0);
             return `${i + 1}. *${t.topic}*\n   📰 ${t.articleCount} artículos · ${t.sourceCount} fuentes · 🏷️ ${t.category}\n   🔥 Score: ${score}`;
           });
-          await editMsg(`📈 *Trending Topics — Últimas 24hs*\n\n${lines.slice(0, 10).join('\n\n')}`, {
-            inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+          await editMsg(`${MSG.MENU_TRENDING_HEADER}\n\n${lines.slice(0, 10).join('\n\n')}`, {
+            inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
           });
         }
       } else if (action === 'alerts') {
     const alerts = listAlerts(chatId);
     if (alerts.length === 0) {
       await editMsg(
-        '🔔 *Alertas*\n\nNo tenés alertas configuradas.\n\n' +
-        '• `/alert add <palabra>` — alerta por palabra clave\n' +
-        '• `/alert add provincia <nombre>` — alerta por provincia\n' +
-        '• `/alert remove <palabra>` — eliminar alerta\n' +
-        '• `/alert list` — ver alertas activas',
-        { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+        MSG.MENU_ALERTS_EMPTY,
+        { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
       );
     } else {
       const lines = alerts.map((a, i) =>
         `${i + 1}. ${a.type === 'province' ? '📍' : '🔤'} *${a.keyword}* (${a.type})`
       );
       await editMsg(
-        `🔔 *Alertas activas (${alerts.length})*\n\n${lines.join('\n')}\n\n` +
-        '• `/alert add <palabra>` — agregar alerta\n' +
-        '• `/alert remove <palabra>` — eliminar alerta',
-        { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+        `${MSG.MENU_ALERTS_LIST(alerts.length)}\n\n${lines.join('\n')}\n\n${MSG.MENU_ALERTS_HELP}`,
+        { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
       );
     }
     } else if (action === 'help') {
     await editMsg(
-      '❓ *Ayuda*\n\n' +
-      '• Las noticias llegan automáticamente para revisión\n' +
-      '• ✅ Aprobar → publica en Bluesky con imagen\n' +
-      '• ❌ Descartar → archiva sin publicar\n' +
-      '• 🚨 `/breaking Título | fuente` → publica al instante en Bluesky\n' +
-      '• ☀️ `/briefing` → morning briefing de hoy\n' +
-      '• 🔔 `/alert` → gestionar alertas de palabras clave/provincias\n' +
-      '• Usá /menu para ver este menú\n' +
-      '• /search <término> → buscar noticias\n' +
-      '• /similar <término> → búsqueda semántica con IA\n' +
-      '• /today → últimas 24hs\n' +
-      '• /fuentes → fuentes RSS activas',
-      { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+      MSG.MENU_HELP,
+      { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
     );
   }
 }
@@ -703,31 +691,33 @@ async function checkCallbacks() {
 
         if (txt === '/start' || txt === '/menu') {
           await sendMsg('🤖 *ArgentinaRadar Bot*\n\nSeleccioná una opción:', MAIN_MENU);
+        } else if (txt === '/panel') {
+          await handlePanelCommand(msg.chat.id);
         } else if (txt === '/stats') {
           const s = statsKeyboard();
           await sendMsg(s.text, s.keyboard);
         } else if (txt === '/fuentes') {
           const sources = sourceStats();
           if (!sources.length) {
-            await sendMsg('📡 *Fuentes RSS*\n\nNo hay fuentes registradas.', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] });
+            await sendMsg('📡 *Fuentes RSS*\n\nNo hay fuentes registradas.', { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] });
           } else {
             const lines = sources.map(s => `${s.source}: ${s.c}`);
             await sendMsg(`📡 *Fuentes RSS — Artículos indexados*\n\n${lines.join(' | ')}`, {
-              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
             });
           }
         } else if (txt === '/today') {
           const articles = todayArticles();
           if (!articles.length) {
             await sendMsg('📋 *Últimas 24hs*\n\nNo hay artículos en las últimas 24 horas.', {
-              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
             });
           } else {
             const buttons = articles.map(a => [{
               text: `📰 ${(a.title || '').substring(0, 40)} — ${a.source}`,
               callback_data: `info:${a.id}`
             }]);
-            buttons.push([{ text: '🔙 Volver', callback_data: 'menu:main' }]);
+            buttons.push([{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]);
             await sendMsg('📋 *Últimas 24hs — Mejor puntuadas*\n\nSeleccioná un artículo:', { inline_keyboard: buttons });
           }
         } else if (txt.startsWith('/search ')) {
@@ -738,14 +728,14 @@ async function checkCallbacks() {
             const results = searchArticles(term);
             if (!results.length) {
               await sendMsg(`🔍 *Sin resultados*\n\nNo se encontraron noticias para "${term}".`, {
-                inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
               });
             } else {
               const buttons = results.map(r => [{
                 text: `📰 ${(r.title || '').substring(0, 40)} — ${r.source}`,
                 callback_data: `info:${r.id}`
               }]);
-              buttons.push([{ text: '🔙 Volver', callback_data: 'menu:main' }]);
+              buttons.push([{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]);
               await sendMsg(`🔍 *Resultados para:* "${term}"\n\nSeleccioná un artículo:`, { inline_keyboard: buttons });
             }
           }
@@ -786,13 +776,13 @@ async function checkCallbacks() {
               '• `/schedule cancel <id>` — cancelar una publicación\n' +
               '• `/schedule now <article_id>` — publicar inmediatamente\n' +
               '• También podés usar el botón "⏰ Programar" en cualquier aprobación.',
-              { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+              { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
             );
           } else if (args === 'list') {
             const posts = scheduleManager.getScheduledPosts();
             if (posts.length === 0) {
               await sendMsg('📭 *No hay publicaciones programadas.*', {
-                inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
               });
             } else {
               const lines = posts.map((p, i) => {
@@ -806,7 +796,7 @@ async function checkCallbacks() {
                 return `${i + 1}. #${id} ${statusEmoji} ${time} — ${(p.text || '').substring(0, 40)}`;
               });
               await sendMsg(`⏰ *Publicaciones Programadas (${posts.length})*\n\n${lines.join('\n')}`, {
-                inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
               });
             }
           } else if (args.startsWith('cancel ')) {
@@ -901,7 +891,7 @@ async function checkCallbacks() {
                   );
                   await sendMsg(
                     `⏰ *Programado* para las ${timeStr}\n\n📰 ${articleInfo.title}\n📌 ${articleInfo.source}\n🆔 Programación: #${id}`,
-                    { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+                    { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
                   );
                 }
               }
@@ -913,7 +903,7 @@ async function checkCallbacks() {
           const trending = await fetchTrending();
           if (!trending || !trending.topics || trending.topics.length === 0) {
             await sendMsg('📈 *Trending Topics*\n\nNo hay suficientes datos para calcular tendencias en las últimas 24hs.', {
-              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
             });
           } else {
             const lines = trending.topics.map((t, i) => {
@@ -921,7 +911,7 @@ async function checkCallbacks() {
               return `${i + 1}. *${t.topic}*\n   📰 ${t.articleCount} artículos · ${t.sourceCount} fuentes · 🏷️ ${t.category}\n   🔥 Score: ${score}`;
             });
             await sendMsg(`📈 *Trending Topics — Últimas 24hs*\n\n${lines.slice(0, 10).join('\n\n')}`, {
-              inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
             });
           }
         } else if (txt.startsWith('/similar ')) {
@@ -939,7 +929,7 @@ async function checkCallbacks() {
                 const data = await resp.json();
                 if (!data.results || data.results.length === 0) {
                   await sendMsg(`🔍 *Sin resultados semánticos*\n\nNo se encontraron artículos similares para "${term}".`, {
-                    inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                    inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
                   });
                 } else {
                   const lines = data.results.map((r, i) => {
@@ -947,7 +937,7 @@ async function checkCallbacks() {
                     return `${i + 1}. [${r.title.substring(0, 50)}](${r.url}) — *${r.source}*\n   🔗 Similitud: ${simPct}%`;
                   });
                   await sendMsg(`🔍 *Búsqueda semántica:* "${term}"\n\n${lines.join('\n\n')}`, {
-                    inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                    inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]]
                   });
                 }
               }
@@ -969,7 +959,7 @@ async function checkCallbacks() {
               '• `/alert remove <palabra>` — eliminar alerta\n' +
               '• `/alert list` — ver alertas activas\n\n' +
               'Provincias disponibles: ' + PROVINCES.join(', '),
-              { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+              { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
             );
           } else if (args.startsWith('add provincia ')) {
             const province = args.slice('add provincia '.length).trim();
@@ -980,7 +970,7 @@ async function checkCallbacks() {
             if (!normalized) {
               await sendMsg(
                 `❌ *Provincia no válida.*\n\nProvincias disponibles:\n${PROVINCES.join(', ')}`,
-                { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+                { inline_keyboard: [[{ text: MSG.BTN_BACK, callback_data: 'menu:main' }]] }
               );
             } else if (addAlert(normalized, 'province', chatId)) {
               await sendMsg(`✅ *Alerta agregada:* 📍 ${normalized} (provincia)`);
@@ -1085,6 +1075,17 @@ async function checkCallbacks() {
         continue;
       }
 
+      // Panel callbacks — unified control panel
+      if (cbData.startsWith('panel:')) {
+        const panelAction = cbData.slice(6);
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callback_query_id: cb.id })
+        });
+        await handlePanelCallback(panelAction, cb.message.chat.id, cb.message.message_id);
+        continue;
+      }
+
       // Article approve/reject callbacks
       const [action, articleId] = cb.data.split(':');
       
@@ -1112,7 +1113,7 @@ async function checkCallbacks() {
         if (cb.message) {
           await editMessageText(cb.message.chat.id, cb.message.message_id,
             `✅ *Aprobado*\n\n📰 ${article?.title || ''}\n📌 ${article?.source || ''}`,
-            { inline_keyboard: [[{ text: '🔍 Ver fuente', url: article?.url || '' }]] }
+            { inline_keyboard: [[{ text: MSG.BTN_SOURCE, url: article?.url || '' }]] }
           );
         }
 
@@ -1133,7 +1134,7 @@ async function checkCallbacks() {
           const article = db.prepare('SELECT title, source, url FROM news_items WHERE id = ?').get(articleId);
           await editMessageText(cb.message.chat.id, cb.message.message_id,
             `❌ *Descartado*\n\n📰 ${article?.title || ''}\n📌 ${article?.source || ''}`,
-            { inline_keyboard: [[{ text: '🔍 Ver fuente', url: article?.url || '' }]] }
+            { inline_keyboard: [[{ text: MSG.BTN_SOURCE, url: article?.url || '' }]] }
           );
         }
         
@@ -1229,19 +1230,130 @@ async function processScheduledPosts() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PANEL SYSTEM — Unified Control Panel (/panel command)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function timeSince(date) {
+  const s = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'min';
+  const h = Math.floor(m / 60);
+  if (h < 48) return h + 'h';
+  return Math.floor(h / 24) + 'd';
+}
+
+function getSystemInfo() {
+  const cpus = os.cpus();
+  const t = os.totalmem(), f = os.freemem();
+  const u = t - f, memPct = ((u / t) * 100).toFixed(1);
+  const up = process.uptime();
+  const cpuPct = Math.min(100, ((os.loadavg()[0] / cpus.length) * 100)).toFixed(0);
+  return { cpuPct, memUsed: (u / 1e9).toFixed(1), memTotal: (t / 1e9).toFixed(1), memPct, uptimeStr: Math.floor(up / 3600) + 'h ' + Math.floor((up % 3600) / 60) + 'm', cpuCores: cpus.length };
+}
+
+async function checkSvc(n, p) {
+  try { const r = await fetch('http://127.0.0.1:' + p + '/health', { signal: AbortSignal.timeout(3000) }); return { n, p, s: r.ok ? 'ok' : 'deg' }; } catch { return { n, p, s: 'down' }; }
+}
+
+function getPipelineStats() {
+  const q = s => db.prepare(s).get().c;
+  const t = q('SELECT COUNT(*)c FROM news_items');
+  const ing = q("SELECT COUNT(*)c FROM news_items WHERE status='ingested'");
+  const pa = q("SELECT COUNT(*)c FROM news_items WHERE status='pending_approval'");
+  const ap = q("SELECT COUNT(*)c FROM approval_queue WHERE status='approved'");
+  const pe = q("SELECT COUNT(*)c FROM approval_queue WHERE status='pending'");
+  const pub = q("SELECT COUNT(*)c FROM news_items WHERE status IN('published','auto_published')");
+  const dis = q("SELECT COUNT(*)c FROM news_items WHERE status='discarded'");
+  const src = q('SELECT COUNT(DISTINCT source)c FROM news_items');
+  const last = db.prepare('SELECT ingested_at FROM news_items ORDER BY ingested_at DESC LIMIT 1').get();
+  const tap = q("SELECT COUNT(*)c FROM approval_queue WHERE status='approved' AND date(reviewed_at)=date('now')");
+  const ttot = q("SELECT COUNT(*)c FROM approval_queue WHERE date(created_at)=date('now')");
+  const tpub = q("SELECT COUNT(*)c FROM news_items WHERE status IN('published','auto_published') AND date(published_at)=date('now')");
+  let sc = 0;
+  try { sc = scheduleManager.getScheduledPosts().filter(p => p.status === 'scheduled').length; } catch (e) {}
+  return { total: t, ingested: ing, pendingApproval: pa, approved: ap, pending: pe, published: pub, discarded: dis, sources: src, lastArticle: last ? last.ingested_at : null, todayApproved: tap, todayTotal: ttot, todayPublished: tpub, scheduledCount: sc };
+}
+
+function panelText(s, sys) {
+  const ta = s.lastArticle ? timeSince(new Date(s.lastArticle.replace(' ', 'T') + 'Z')) : 'nunca';
+  const pct = s.todayTotal > 0 ? Math.round((s.todayApproved / s.todayTotal) * 100) : 0;
+  return '🤖 *ARGENTINA RADAR — Panel de Control*\n\n'
+    + '📡 INGESTIÓN ' + (s.lastArticle ? '🟢' : '🟡') + '\n  ' + s.total + ' artículos | ' + s.sources + ' fuentes | Último: hace ' + ta + '\n\n'
+    + '🧠 AI 🟢\n  Modelo: qwen2.5:7b · Threshold: 5.0 · Calidad min: 40\n\n'
+    + '✅ APROBACIÓN ' + (s.pending > 0 ? '🟡' : '🟢') + '\n  Pendientes: ' + s.pending + ' | Hoy: ' + s.todayApproved + '/' + s.todayTotal + ' (' + pct + '%)\n\n'
+    + '🚀 PUBLICACIÓN 🟢\n  Bluesky: OK · Programados: ' + s.scheduledCount + ' · Publicados hoy: ' + s.todayPublished + '\n\n'
+    + '📊 MONITOREO 🟢\n  CPU: ' + sys.cpuPct + '% | RAM: ' + sys.memUsed + 'GB/' + sys.memTotal + 'GB (' + sys.memPct + '%) | Uptime: ' + sys.uptimeStr + '\n\n'
+    + '⚙️ CONFIGURACIÓN';
+}
+
+function panelKB(s) {
+  return { inline_keyboard: [
+    [{ text: '🔄 Forzar refresh', callback_data: 'panel:ing-refresh' }, { text: '⏸️ Pausa', callback_data: 'panel:ing-pause' }],
+    [{ text: '⚙️ Threshold', callback_data: 'panel:ai-threshold' }, { text: '🔁 Reprocesar', callback_data: 'panel:ai-reprocess' }],
+    [{ text: '📋 Pendientes', callback_data: 'panel:approval' }, { text: '⚡ Auto-aprobar', callback_data: 'panel:approval-auto' }],
+    [{ text: '📤 Publicar', callback_data: 'panel:publish-draft' }, { text: '⏰ Programados', callback_data: 'panel:publish-scheduled' }],
+    [{ text: '🩺 Health', callback_data: 'panel:health-detail' }, { text: '📈 Stats', callback_data: 'panel:stats-detail' }],
+    [{ text: '📡 Fuentes (' + s.sources + ')', callback_data: 'panel:cfg-sources' }, { text: '🔔 Alertas', callback_data: 'panel:cfg-alerts' }],
+    [{ text: '💾 Backup', callback_data: 'panel:cfg-backup' }, { text: '🔄 Reiniciar', callback_data: 'panel:cfg-restart' }],
+    [{ text: '🔙 Menú', callback_data: 'menu:main' }, { text: '🔄 Refrescar', callback_data: 'panel:main' }],
+  ]};
+}
+
+async function handlePanelCommand(chatId) {
+  try { const [s, sys] = await Promise.all([getPipelineStats(), getSystemInfo()]); await sendToTelegram(panelText(s, sys), panelKB(s)); } catch (e) { console.error('[panel]', e.message); }
+}
+
+async function handlePanelCallback(a, chatId, msgId) {
+  const em = (t, k) => editMessageText(chatId, msgId, t, k);
+  try {
+    switch (a) {
+      case 'main': { const [s, sys] = await Promise.all([getPipelineStats(), getSystemInfo()]); await em(panelText(s, sys), panelKB(s)); break; }
+      case 'ingestion': { const s = getPipelineStats(); const la = db.prepare('SELECT title,source,ingested_at FROM news_items ORDER BY ingested_at DESC LIMIT 5').all(); const r = la.map(a => '• ' + escapeMd(a.title.substring(0, 60)) + ' — ' + escapeMd(a.source)).join('\n'); const ta = s.lastArticle ? timeSince(new Date(s.lastArticle.replace(' ', 'T') + 'Z')) : 'N/A'; await em('📡 *Panel de INGESTIÓN*\n\nTotal: ' + b('' + s.total) + ' arts | Fuentes: ' + b('' + s.sources) + ' | Última: ' + b(ta) + '\n\n📰 *Últimos*\n' + r, { inline_keyboard: [[{ text: '🔄 Forzar refresh', callback_data: 'panel:ing-refresh' }], [{ text: '⏸️ Pausar', callback_data: 'panel:ing-pause' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'ai': { const s = getPipelineStats(); await em('🧠 *Panel de IA*\n\n⚙️ Modelo: qwen2.5:7b · Threshold: 5.0\n\n✅ Aprobados: ' + b('' + s.approved) + '\n⏳ Pendientes: ' + b('' + s.pendingApproval) + '\n❌ Descartados: ' + b('' + s.discarded), { inline_keyboard: [[{ text: '⚙️ Threshold', callback_data: 'panel:ai-threshold' }, { text: '🤖 Modelo', callback_data: 'panel:ai-model' }], [{ text: '🔁 Reprocesar', callback_data: 'panel:ai-reprocess' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'approval': { const s = getPipelineStats(); const pa = db.prepare("SELECT n.id,n.title,n.source FROM approval_queue aq JOIN news_items n ON aq.article_id=n.id WHERE aq.status='pending' ORDER BY aq.created_at DESC LIMIT 10").all(); const pt = pa.length ? pa.map((a, i) => (i + 1) + '. ' + b(a.title.substring(0, 50)) + ' — ' + escapeMd(a.source)).join('\n') : '✅ Sin pendientes.'; const bl = Math.min(s.todayTotal, 20); const al = bl > 0 ? Math.round((s.todayApproved / Math.max(s.todayTotal, 1)) * bl) : 0; const bar = '█'.repeat(al) + '░'.repeat(Math.max(bl - al, 0)); const pct = s.todayTotal > 0 ? Math.round((s.todayApproved / s.todayTotal) * 100) : 0; await em('✅ *Panel de APROBACIÓN*\n\n📊 *Hoy*\nAprob: ' + b('' + s.todayApproved) + '/' + s.todayTotal + '\n' + bar + ' ' + pct + '%\n\n⏳ Pendientes: ' + b('' + s.pending) + '\n\n📋 ' + pt, { inline_keyboard: [...(pa.length ? [[{ text: '📋 Ver pendientes', callback_data: 'menu:pending' }]] : []), [{ text: '⚡ Auto-aprobar todas', callback_data: 'panel:approval-auto' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'publish': { const s = getPipelineStats(); let st = 'Sin programaciones.'; try { const as = scheduleManager.getScheduledPosts().filter(p => p.status === 'scheduled').slice(0, 5); if (as.length) st = as.map(p => '• #' + p.id + ' ' + new Date(p.scheduled_for).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) + ' — ' + escapeMd(p.text.substring(0, 40))).join('\n'); } catch (e) {} await em('🚀 *Panel de PUBLICACIÓN*\n\nBluesky: 🟢 OK\nPublicados hoy: ' + b('' + s.todayPublished) + '\nProgramados: ' + b('' + s.scheduledCount) + '\n\n📅 ' + st, { inline_keyboard: [[{ text: '📤 Publicar borrador', callback_data: 'panel:publish-draft' }], [{ text: '⏰ Programados', callback_data: 'panel:publish-scheduled' }], [{ text: '🔄 Reintentar fallidos', callback_data: 'panel:publish-retry' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'monitor': { const sys = getSystemInfo(); const ps = [{ n: 'news-ingestion', p: 3001 }, { n: 'geo', p: 3002 }, { n: 'publisher', p: 3004 }, { n: 'ai', p: 3013 }, { n: 'admin', p: 3012 }, { n: 'frontend', p: 5173 }]; const res = await Promise.all(ps.map(p => checkSvc(p.n, p.p))); const svc = res.map(r => (r.s === 'ok' ? '🟢' : r.s === 'deg' ? '🟡' : '🔴') + ' ' + r.n + ' (' + r.p + ')').join('\n'); await em('📊 *Panel de MONITOREO*\n\n🖥️ CPU: ' + sys.cpuPct + '% (' + sys.cpuCores + 'c) | RAM: ' + sys.memUsed + 'GB/' + sys.memTotal + 'GB (' + sys.memPct + '%) | Up: ' + sys.uptimeStr + '\n\n🌐 *Servicios*\n' + svc, { inline_keyboard: [[{ text: '🩺 Health check', callback_data: 'panel:health-detail' }], [{ text: '📈 Stats', callback_data: 'panel:stats-detail' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'config': { const s = getPipelineStats(); const al = listAlerts(chatId); await em('⚙️ *Panel de CONFIGURACIÓN*\n\n📡 Fuentes: ' + b('' + s.sources) + '\n🔔 Alertas: ' + b('' + al.length) + '\n💾 Backup DB\n🔄 Reiniciar servicios', { inline_keyboard: [[{ text: '📡 Fuentes (' + s.sources + ')', callback_data: 'panel:cfg-sources' }], [{ text: '🔔 Alertas (' + al.length + ')', callback_data: 'panel:cfg-alerts' }], [{ text: '💾 Backup DB', callback_data: 'panel:cfg-backup' }], [{ text: '🔄 Reiniciar', callback_data: 'panel:cfg-restart' }], [{ text: '🤖 Cambiar modelo', callback_data: 'panel:ai-model' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
+      case 'ing-refresh': { await em('⏳ Refrescando...', { inline_keyboard: [] }); try { const r = await fetch('http://127.0.0.1:3001/api/pipeline/stats', { signal: AbortSignal.timeout(5000) }); if (r.ok) await em('✅ Refresh completado. Pipeline activo.', { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); else await em('⚠️ Refresh solicitado.', { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      case 'ing-pause': { await em('⏸️ *Pausa*\n\nPara pausar: `pm2 stop news-ingestion`\nPara reanudar: `pm2 start news-ingestion`', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ingestion' }]] }); break; }
+      case 'ai-threshold': { await em('⚙️ *Threshold*\n\nActual: 5.0 | Calidad min: 40\n\nEditá `config/.env`:\nAI_THRESHOLD=5.0\nMIN_QUALITY_THRESHOLD=40\n\nLuego `pm2 restart ai-processor`', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ai' }]] }); break; }
+      case 'ai-model': { await em('🤖 *Modelo AI*\n\nActual: qwen2.5:7b\n\nOpciones:\n• qwen2.5:7b\n• llama3\n• llama3.1\n• openrouter\n\nEditá AI_MODEL en config/.env y reiniciá.', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ai' }]] }); break; }
+      case 'ai-reprocess': { await em('⏳ Reprocesando...', { inline_keyboard: [] }); try { const r = await fetch('http://127.0.0.1:3001/api/pipeline/stats', { signal: AbortSignal.timeout(8000) }); if (r.ok) await em('✅ Reprocesamiento en curso.', { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); else throw new Error('HTTP ' + r.status); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      case 'approval-auto': { const pc = db.prepare("SELECT COUNT(*)c FROM approval_queue WHERE status='pending'").get().c; if (!pc) { await em('✅ Sin pendientes.', { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; } await em('⚠️ *Auto-aprobar ' + pc + ' noticias?*\nSe publicarán en Bluesky.\n\n_No se puede deshacer._', { inline_keyboard: [[{ text: '✅ Sí', callback_data: 'panel:approval-auto-x' }, { text: '❌ No', callback_data: 'panel:approval' }]] }); break; }
+      case 'approval-auto-x': { await em('⏳ Procesando...', { inline_keyboard: [] }); const pp = db.prepare("SELECT aq.id qid,aq.article_id,aq.image_url,n.title,n.source,n.category,n.url FROM approval_queue aq JOIN news_items n ON aq.article_id=n.id WHERE aq.status='pending' ORDER BY aq.created_at ASC").all(); let ok = 0, fail = 0; for (const e of pp) { try { db.prepare("UPDATE approval_queue SET status='approved',reviewed_at=datetime('now') WHERE id=?").run(e.qid); db.prepare("UPDATE news_items SET status='published' WHERE id=?").run(e.article_id); const rw = await maybeRewriteHeadline(e.title, e.source, e.category); const tw = formatBlueskyTweet(e.title, e.source, e.category, rw); (await publishToBluesky(e.article_id, tw, e.image_url, e.url)).success ? ok++ : fail++; } catch (e2) { fail++; } await new Promise(r => setTimeout(r, 1000)); } await em('✅ *Auto-aprobación completa*\n\n✅ ' + ok + '\n❌ ' + fail + '\nTotal: ' + pp.length, { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; }
+      case 'publish-draft': { await em('📤 *Publicar borrador*\n\nUsá:\n• `/schedule now <id>` — publicar ya\n• `/schedule HH:MM <id>` — programar', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:publish' }]] }); break; }
+      case 'publish-scheduled': { try { const posts = scheduleManager.getScheduledPosts(); if (!posts.length) { await em('📭 Sin programaciones.', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:publish' }]] }); break; } const lines = posts.map((p, i) => { const emo = p.status === 'scheduled' ? '⏳' : p.status === 'published' ? '✅' : p.status === 'failed' ? '❌' : '🚫'; const t = new Date(p.scheduled_for).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }); return (i + 1) + '. #' + p.id + ' ' + emo + ' ' + t + ' — ' + escapeMd(p.text.substring(0, 40)); }).join('\n'); await em('⏰ *Programaciones (' + posts.length + ')*\n\n' + lines + '\n\n_Cancelar: /schedule cancel <id>_', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:publish' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      case 'publish-retry': { let fl = []; try { fl = scheduleManager.getScheduledPosts().filter(p => p.status === 'failed'); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; } if (!fl.length) { await em('✅ Sin fallidos.', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:publish' }]] }); break; } await em('⏳ Reintentando ' + fl.length + '...', { inline_keyboard: [] }); let ret = 0; for (const p of fl) { try { const r = await publishToBluesky(p.article_id, p.text, p.image_url, p.url); if (r.success) { scheduleManager.markPublished(p.id); ret++; } else scheduleManager.markFailedAndRetry(p.id, r.error); } catch (e) { scheduleManager.markFailedAndRetry(p.id, e.message); } await new Promise(r => setTimeout(r, 1500)); } await em('🔄 *Reintento completo*\n\n✅ ' + ret + '\n❌ ' + (fl.length - ret), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; }
+      case 'health-detail': { const sys = getSystemInfo(); const ps = [{ n: 'news-ingestion', p: 3001 }, { n: 'geo', p: 3002 }, { n: 'publisher', p: 3004 }, { n: 'hermes', p: 3005 }, { n: 'ai', p: 3013 }, { n: 'admin', p: 3012 }, { n: 'frontend', p: 5173 }]; const res = await Promise.all(ps.map(p => checkSvc(p.n, p.p))); const lns = res.map(r => (r.s === 'ok' ? '🟢' : r.s === 'deg' ? '🟡' : '🔴') + ' ' + r.n + ' (' + r.p + ')').join('\n'); let dbOk = false; try { db.prepare('SELECT 1').get(); dbOk = true; } catch (e) {} await em('🩺 *Health Check*\n\n🖥️ CPU: ' + sys.cpuPct + '% | RAM: ' + sys.memPct + '% | Up: ' + sys.uptimeStr + '\n\n💾 DB: ' + (dbOk ? '🟢' : '🔴') + ' ' + DB_PATH + '\n\n🌐\n' + lns, { inline_keyboard: [[{ text: '🔄 Refrescar', callback_data: 'panel:health-detail' }], [{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; }
+      case 'stats-detail': { const s = getPipelineStats(); const cats = db.prepare("SELECT category,COUNT(*)c FROM news_items WHERE category IS NOT NULL AND category!='' GROUP BY category ORDER BY c DESC").all(); const cl = cats.map(c => escapeMd(c.category) + ': ' + b('' + c.c)).join('\n'); await em('📈 *Stats Detalladas*\n\n📊 Total: ' + b('' + s.total) + ' | Ingest: ' + b('' + s.ingested) + ' | Pend: ' + b('' + s.pendingApproval) + ' | Aprob: ' + b('' + s.approved) + ' | Pub: ' + b('' + s.published) + ' | Desc: ' + b('' + s.discarded) + '\n\n📰 *Categorías*\n' + (cl || 'sin datos'), { inline_keyboard: [[{ text: '🔄 Refrescar', callback_data: 'panel:stats-detail' }], [{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); break; }
+      case 'cfg-sources': { const sl = db.prepare('SELECT source,COUNT(*)c FROM news_items GROUP BY source ORDER BY c DESC').all(); await em('📡 *Fuentes (' + sl.length + ')*\n\n' + sl.map(s => escapeMd(s.source) + ': ' + s.c + ' arts').join('\n'), { inline_keyboard: [[{ text: '🔙 Config', callback_data: 'panel:config' }]] }); break; }
+      case 'cfg-alerts': { const al = listAlerts(chatId); if (!al.length) await em('🔔 Sin alertas.\n\nUsá /alert add <palabra>', { inline_keyboard: [[{ text: '🔙 Config', callback_data: 'panel:config' }]] }); else await em('🔔 *Alertas (' + al.length + ')*\n\n' + al.map((a, i) => (i + 1) + '. ' + (a.type === 'province' ? '📍' : '🔤') + ' ' + b(a.keyword)).join('\n'), { inline_keyboard: [[{ text: '🔙 Config', callback_data: 'panel:config' }]] }); break; }
+      case 'cfg-backup': { await em('⏳ Backupeando...', { inline_keyboard: [] }); try { const fs = require('fs'); const bd = path.join(path.dirname(DB_PATH), 'backups'); if (!fs.existsSync(bd)) fs.mkdirSync(bd, { recursive: true }); const d = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); const dest = path.join(bd, 'argentina-radar-' + d + '.db'); fs.copyFileSync(DB_PATH, dest); const sz = (fs.statSync(dest).size / 1024 / 1024).toFixed(1); await em('✅ *Backup hecho*\n\n📦 ' + sz + ' MB\n📍 `' + dest + '`', { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      case 'cfg-restart': { await em('⚠️ *Reiniciar servicios*\n\nSe va a ejecutar:\n`pm2 restart notifier publisher`\n\n_El bot se reiniciará._', { inline_keyboard: [[{ text: '✅ Sí', callback_data: 'panel:cfg-restart-x' }, { text: '❌ No', callback_data: 'panel:config' }]] }); break; }
+      case 'cfg-restart-x': { await em('⏳ Reiniciando...', { inline_keyboard: [] }); try { const { execSync } = require('child_process'); execSync('pm2 restart notifier publisher', { timeout: 15000, stdio: 'pipe', windowsHide: true }); await em('✅ *Reinicio enviado*\n\nnotifier y publisher reiniciados.', { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message) + '\n\nReiniciá manualmente.', { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      default: { await em('❌ Acción: `' + escapeMd(a) + '`', { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); }
+    }
+  } catch (e) { console.error('[panel] err:', e.message); try { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Menú', callback_data: 'menu:main' }]] }); } catch (_) {} }
+}
+
 // Main loop
 async function main() {
   console.log('Telegram Approval Notifier started');
   console.log(`Bot: @ArgRadarBot | Chat: ${CHAT_ID}`);
   console.log(`Polling every ${POLL_INTERVAL / 1000}s`);
-  
   while (true) {
-    await checkPendingApprovals();
-    await checkCallbacks();
-    await checkScheduledBriefing();
-    await processScheduledPosts();
+    try { await checkPendingApprovals(); } catch (e) { console.error('[main] Pending approvals:', e.message); }
+    try { await checkCallbacks(); } catch (e) { console.error('[main] Callbacks:', e.message); }
+    try { await checkScheduledBriefing(); } catch (e) { console.error('[main] Briefing:', e.message); }
+    try { await processScheduledPosts(); } catch (e) { console.error('[main] Scheduler:', e.message); }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error('[main] Fatal error:', err.message);
+  console.log('[main] Reiniciando en 10 segundos...');
+  setTimeout(main, 10000);
+});

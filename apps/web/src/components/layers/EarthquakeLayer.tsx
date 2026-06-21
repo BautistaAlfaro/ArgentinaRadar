@@ -10,7 +10,7 @@
  * Refreshes every 60 minutes (matching the server-side schedule).
  */
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { Earthquake } from '@shared/types';
@@ -30,12 +30,14 @@ interface Props {
 export function EarthquakeLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('earthquakes');
+  const globeRef = useRef(globe);
+  globeRef.current = globe;
 
   const { data } = useLayerData<{ earthquakes: Earthquake[] }>(
     `${ALERTS_API}/api/alerts/earthquakes`,
     60 * 60 * 1000, // 60 min
   );
-  const earthquakes = data?.earthquakes ?? [];
+  const earthquakes = useMemo(() => data?.earthquakes ?? [], [data]);
 
   // Render points on globe
   useEffect(() => {
@@ -43,7 +45,9 @@ export function EarthquakeLayer({ globe }: Props) {
 
     if (earthquakes.length === 0) return;
 
-    globe
+    const g = globeRef.current;
+
+    g
       .pointsData(earthquakes)
       .pointLat((d: Earthquake) => d.lat)
       .pointLng((d: Earthquake) => d.lng)
@@ -71,7 +75,7 @@ export function EarthquakeLayer({ globe }: Props) {
         `;
       })
       .onPointHover((hovered: Earthquake | null) => {
-        globe.pointRadius((d: Earthquake) => {
+        globeRef.current.pointRadius((d: Earthquake) => {
           if (d === hovered) {
             const base = d.magnitude >= 7.0 ? 8 : d.magnitude >= 5.0 ? 5 : 3;
             return base * 1.5;
@@ -83,9 +87,9 @@ export function EarthquakeLayer({ globe }: Props) {
       });
 
     return () => {
-      globe.pointsData([]);
+      g.pointsData([]);
     };
-  }, [globe, isActive, earthquakes]);
+  }, [isActive, earthquakes]);
 
   return null;
 }

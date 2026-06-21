@@ -10,7 +10,7 @@
  * Fetches from the admin API on port 3012.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -199,44 +199,318 @@ function ConfirmDialog({
   );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────
+// ─── SourceForm ─────────────────────────────────────────────────────────
 
-export function SourceManager() {
-  const [sources, setSources] = useState<Source[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [actionMsg, setActionMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+const CATEGORIES_LIST = CATEGORIES;
 
-  // Add-source form state
-  const [showForm, setShowForm] = useState(false);
-  const [formName, setFormName] = useState("");
-  const [formUrl, setFormUrl] = useState("");
-  const [formType, setFormType] = useState<"rss" | "scrape">("rss");
-  const [formCategory, setFormCategory] = useState("");
-  const [formSubmitting, setFormSubmitting] = useState(false);
-  const [testResult, setTestResult] = useState<{
+function SourceForm({
+  form,
+  dispatchForm,
+  handleAddSource,
+  handleTestUrl,
+}: {
+  form: FormState;
+  dispatchForm: React.Dispatch<FormAction>;
+  handleAddSource: (e: React.FormEvent) => void;
+  handleTestUrl: () => void;
+}) {
+  return (
+    <form
+      onSubmit={handleAddSource}
+      className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5 space-y-4"
+    >
+      <h3 className="text-sm font-semibold text-slate-200">Nueva fuente</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Name */}
+        <div>
+          <label htmlFor="source-name" className="block text-xs font-medium text-slate-400 mb-1">
+            Nombre
+          </label>
+          <input
+            id="source-name"
+            type="text"
+            value={form.name}
+            onChange={(e) => dispatchForm({ type: "SET_FIELD", field: "name", value: e.target.value })}
+            placeholder="ej: minutouno"
+            className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+            required
+          />
+        </div>
+
+        {/* Type */}
+        <div>
+          <label htmlFor="source-type" className="block text-xs font-medium text-slate-400 mb-1">
+            Tipo
+          </label>
+          <select
+            id="source-type"
+            value={form.type}
+            onChange={(e) => dispatchForm({ type: "SET_FIELD", field: "type", value: e.target.value as "rss" | "scrape" })}
+            className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+          >
+            <option value="rss">RSS</option>
+            <option value="scrape">Scrape</option>
+          </select>
+        </div>
+
+        {/* URL + Test button */}
+        <div className="md:col-span-2">
+          <label htmlFor="source-url" className="block text-xs font-medium text-slate-400 mb-1">
+            URL
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="source-url"
+              type="url"
+              value={form.url}
+              onChange={(e) => {
+                dispatchForm({ type: "SET_FIELD", field: "url", value: e.target.value });
+                dispatchForm({ type: "SET_FIELD", field: "testResult", value: null });
+              }}
+              placeholder="https://ejemplo.com/rss"
+              className="flex-1 px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+              required
+            />
+            <button
+              type="button"
+              onClick={handleTestUrl}
+              disabled={form.testLoading || !form.url.trim()}
+              className="px-4 py-2 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer"
+            >
+              {form.testLoading ? "Testing…" : "Test URL"}
+            </button>
+          </div>
+
+          {/* Test result */}
+          {form.testResult && (
+            <div
+              className={`mt-2 px-3 py-2 rounded-lg text-xs ${
+                form.testResult.ok
+                  ? "bg-emerald-900/30 text-emerald-300 border border-emerald-700/30"
+                  : "bg-red-900/30 text-red-300 border border-red-700/30"
+              }`}
+            >
+              {form.testResult.ok ? (
+                <>
+                  ✅ {form.testResult.title ?? "Accessible"}
+                  {form.testResult.items != null && ` · ${form.testResult.items} items found`}
+                </>
+              ) : (
+                <>❌ {form.testResult.error ?? "Connection failed"}</>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Category */}
+        <div>
+          <label htmlFor="source-category" className="block text-xs font-medium text-slate-400 mb-1">
+            Categoría
+          </label>
+          <select
+            id="source-category"
+            value={form.category}
+            onChange={(e) => dispatchForm({ type: "SET_FIELD", field: "category", value: e.target.value })}
+            className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+          >
+            {CATEGORIES_LIST.map((cat) => (
+              <option key={cat.value} value={cat.value}>
+                {cat.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Submit */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={form.submitting || !form.name.trim() || !form.url.trim()}
+          className="px-5 py-2 text-xs font-medium rounded-lg bg-blue-700 text-white border border-blue-600/50 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+        >
+          {form.submitting ? "Agregando…" : "Agregar fuente"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ─── SourcesTable ────────────────────────────────────────────────────────
+
+function SourcesTable({
+  sources,
+  onToggle,
+  onDelete,
+}: {
+  sources: Source[];
+  onToggle: (name: string, currentEnabled: boolean) => void;
+  onDelete: (name: string) => void;
+}) {
+  if (sources.length === 0) {
+    return (
+      <div className="overflow-hidden rounded-xl border border-slate-700/50">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-800/80 border-b border-slate-700/50">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Name</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">URL</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Articles</th>
+              <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Enabled</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
+                No sources configured. Click "+ Agregar fuente" to add one.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-700/50">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-slate-800/80 border-b border-slate-700/50">
+            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Name</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">URL</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</th>
+            <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Articles</th>
+            <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Enabled</th>
+            <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800">
+          {sources.map((src) => (
+            <tr key={src.name} className="hover:bg-slate-800/40 transition-colors">
+              <td className="px-4 py-3"><StatusDot enabled={src.enabled} /></td>
+              <td className="px-4 py-3">
+                <span className="text-slate-200 font-medium">{src.name}</span>
+                {src.category && (
+                  <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-700/60 text-slate-400">{src.category}</span>
+                )}
+              </td>
+              <td className="px-4 py-3 hidden md:table-cell">
+                <a href={src.url} target="_blank" rel="noopener noreferrer"
+                  className="text-slate-400 hover:text-blue-400 text-xs font-mono truncate max-w-[280px] inline-block align-middle" title={src.url}>
+                  {src.url}
+                </a>
+              </td>
+              <td className="px-4 py-3">
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  src.type === "rss" ? "bg-orange-900/30 text-orange-300" : "bg-purple-900/30 text-purple-300"
+                }`}>{src.type.toUpperCase()}</span>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className="text-slate-300 font-mono text-xs">{src.articleCount.toLocaleString()}</span>
+              </td>
+              <td className="px-4 py-3 text-center">
+                <button type="button" onClick={() => onToggle(src.name, src.enabled)}
+                  className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                    src.enabled ? "bg-emerald-600" : "bg-slate-700"
+                  } cursor-pointer`}
+                  role="switch" aria-checked={src.enabled} aria-label={`Toggle ${src.name}`}>
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    src.enabled ? "translate-x-5" : "translate-x-1"
+                  }`} />
+                </button>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <button type="button" onClick={() => onDelete(src.name)}
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-red-900/30 text-red-400 hover:bg-red-900/50 hover:text-red-300 transition-colors cursor-pointer"
+                  title={`Delete ${src.name}`}>Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Form state types ───────────────────────────────────────────────────
+
+interface FormState {
+  show: boolean;
+  name: string;
+  url: string;
+  type: "rss" | "scrape";
+  category: string;
+  submitting: boolean;
+  testResult: {
     ok: boolean;
     title?: string;
     items?: number;
     error?: string;
-  } | null>(null);
-  const [testLoading, setTestLoading] = useState(false);
+  } | null;
+  testLoading: boolean;
+}
+
+type FormAction =
+  | { type: "SET_FIELD"; field: keyof FormState; value: unknown }
+  | { type: "RESET" };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "SET_FIELD":
+      return { ...state, [action.field]: action.value };
+    case "RESET":
+      return { ...INITIAL_FORM_STATE, show: false };
+    default:
+      return state;
+  }
+}
+
+const INITIAL_FORM_STATE: FormState = {
+  show: false,
+  name: "",
+  url: "",
+  type: "rss",
+  category: "",
+  submitting: false,
+  testResult: null,
+  testLoading: false,
+};
+
+// ─── Main Component ────────────────────────────────────────────────────
+
+export function SourceManager() {
+  // Grouped data state: sources + loading + error
+  const [dataState, setDataState] = useState<{
+    sources: Source[];
+    loading: boolean;
+    error: string | null;
+  }>({ sources: [], loading: true, error: null });
+  const { sources, loading, error } = dataState;
+  const [actionMsg, setActionMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Add-source form state (grouped via useReducer)
+  const [form, dispatchForm] = useReducer(formReducer, INITIAL_FORM_STATE);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const deleteLoadingRef = useRef(false);
 
   // ─── Load sources ─────────────────────────────────────────────────
 
   const loadSources = useCallback(async () => {
     try {
-      setError(null);
+      setDataState((prev) => ({ ...prev, error: null }));
       const data = await fetchSources();
-      setSources(data);
+      setDataState((prev) => ({ ...prev, sources: data }));
     } catch (err) {
-      setError((err as Error).message);
+      setDataState((prev) => ({ ...prev, error: (err as Error).message }));
     } finally {
-      setLoading(false);
+      setDataState((prev) => ({ ...prev, loading: false }));
     }
   }, []);
 
@@ -256,48 +530,43 @@ export function SourceManager() {
   const handleAddSource = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!formName.trim() || !formUrl.trim()) return;
+      if (!form.name.trim() || !form.url.trim()) return;
 
-      setFormSubmitting(true);
+      dispatchForm({ type: "SET_FIELD", field: "submitting", value: true });
       try {
         await addSourceApi({
-          name: formName.trim(),
-          type: formType,
-          url: formUrl.trim(),
-          category: formCategory || undefined,
+          name: form.name.trim(),
+          type: form.type,
+          url: form.url.trim(),
+          category: form.category || undefined,
         });
-        showToast("success", `Source "${formName}" added successfully`);
-        setShowForm(false);
-        setFormName("");
-        setFormUrl("");
-        setFormType("rss");
-        setFormCategory("");
-        setTestResult(null);
+        showToast("success", `Source "${form.name}" added successfully`);
+        dispatchForm({ type: "RESET" });
         await loadSources();
       } catch (err) {
         showToast("error", `Failed to add source: ${(err as Error).message}`);
       } finally {
-        setFormSubmitting(false);
+        dispatchForm({ type: "SET_FIELD", field: "submitting", value: false });
       }
     },
-    [formName, formUrl, formType, formCategory, loadSources, showToast],
+    [form.name, form.url, form.type, form.category, loadSources, showToast],
   );
 
   // ─── Test URL ─────────────────────────────────────────────────────
 
   const handleTestUrl = useCallback(async () => {
-    if (!formUrl.trim()) return;
-    setTestLoading(true);
-    setTestResult(null);
+    if (!form.url.trim()) return;
+    dispatchForm({ type: "SET_FIELD", field: "testLoading", value: true });
+    dispatchForm({ type: "SET_FIELD", field: "testResult", value: null });
     try {
-      const result = await testSourceUrl(formUrl.trim());
-      setTestResult(result);
+      const result = await testSourceUrl(form.url.trim());
+      dispatchForm({ type: "SET_FIELD", field: "testResult", value: result });
     } catch (err) {
-      setTestResult({ ok: false, error: (err as Error).message });
+      dispatchForm({ type: "SET_FIELD", field: "testResult", value: { ok: false, error: (err as Error).message } });
     } finally {
-      setTestLoading(false);
+      dispatchForm({ type: "SET_FIELD", field: "testLoading", value: false });
     }
-  }, [formUrl]);
+  }, [form.url]);
 
   // ─── Toggle source ────────────────────────────────────────────────
 
@@ -305,17 +574,23 @@ export function SourceManager() {
     async (name: string, currentEnabled: boolean) => {
       const newEnabled = !currentEnabled;
       // Optimistic update
-      setSources((prev) =>
-        prev.map((s) => (s.name === name ? { ...s, enabled: newEnabled } : s)),
-      );
+      setDataState((prev) => ({
+        ...prev,
+        sources: prev.sources.map((s) =>
+          s.name === name ? { ...s, enabled: newEnabled } : s
+        ),
+      }));
       try {
         await toggleSourceApi(name, newEnabled);
         showToast("success", `Source "${name}" ${newEnabled ? "enabled" : "disabled"}`);
       } catch (err) {
         // Revert on failure
-        setSources((prev) =>
-          prev.map((s) => (s.name === name ? { ...s, enabled: currentEnabled } : s)),
-        );
+        setDataState((prev) => ({
+          ...prev,
+          sources: prev.sources.map((s) =>
+            s.name === name ? { ...s, enabled: currentEnabled } : s
+          ),
+        }));
         showToast("error", `Failed to toggle: ${(err as Error).message}`);
       }
     },
@@ -326,7 +601,7 @@ export function SourceManager() {
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return;
-    setDeleteLoading(true);
+    deleteLoadingRef.current = true;
     try {
       await deleteSourceApi(deleteTarget);
       showToast("success", `Source "${deleteTarget}" removed`);
@@ -335,7 +610,7 @@ export function SourceManager() {
     } catch (err) {
       showToast("error", `Failed to delete: ${(err as Error).message}`);
     } finally {
-      setDeleteLoading(false);
+      deleteLoadingRef.current = false;
     }
   }, [deleteTarget, loadSources, showToast]);
 
@@ -373,12 +648,12 @@ export function SourceManager() {
         <button
           type="button"
           onClick={() => {
-            setShowForm(!showForm);
-            setTestResult(null);
+            dispatchForm({ type: "SET_FIELD", field: "show", value: !form.show });
+            if (form.show) dispatchForm({ type: "SET_FIELD", field: "testResult", value: null });
           }}
           className="px-4 py-2 text-xs font-medium rounded-lg bg-blue-700 text-white border border-blue-600/50 hover:bg-blue-600 transition-colors cursor-pointer"
         >
-          {showForm ? "Cancelar" : "+ Agregar fuente"}
+          {form.show ? "Cancelar" : "+ Agregar fuente"}
         </button>
       </div>
 
@@ -415,258 +690,21 @@ export function SourceManager() {
       )}
 
       {/* ── Add Source Form ─────────────────────────────────────────── */}
-      {showForm && (
-        <form
-          onSubmit={handleAddSource}
-          className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5 space-y-4"
-        >
-          <h3 className="text-sm font-semibold text-slate-200">Nueva fuente</h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Name */}
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                Nombre
-              </label>
-              <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="ej: minutouno"
-                className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-                required
-              />
-            </div>
-
-            {/* Type */}
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                Tipo
-              </label>
-              <select
-                value={formType}
-                onChange={(e) => setFormType(e.target.value as "rss" | "scrape")}
-                className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-              >
-                <option value="rss">RSS</option>
-                <option value="scrape">Scrape</option>
-              </select>
-            </div>
-
-            {/* URL + Test button */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                URL
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={formUrl}
-                  onChange={(e) => {
-                    setFormUrl(e.target.value);
-                    setTestResult(null);
-                  }}
-                  placeholder="https://ejemplo.com/rss"
-                  className="flex-1 px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={handleTestUrl}
-                  disabled={testLoading || !formUrl.trim()}
-                  className="px-4 py-2 text-xs font-medium rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 cursor-pointer"
-                >
-                  {testLoading ? "Testing…" : "Test URL"}
-                </button>
-              </div>
-
-              {/* Test result */}
-              {testResult && (
-                <div
-                  className={`mt-2 px-3 py-2 rounded-lg text-xs ${
-                    testResult.ok
-                      ? "bg-emerald-900/30 text-emerald-300 border border-emerald-700/30"
-                      : "bg-red-900/30 text-red-300 border border-red-700/30"
-                  }`}
-                >
-                  {testResult.ok ? (
-                    <>
-                      ✅ {testResult.title ?? "Accessible"}
-                      {testResult.items != null && ` · ${testResult.items} items found`}
-                    </>
-                  ) : (
-                    <>❌ {testResult.error ?? "Connection failed"}</>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
-                Categoría
-              </label>
-              <select
-                value={formCategory}
-                onChange={(e) => setFormCategory(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
-              >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Submit */}
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={formSubmitting || !formName.trim() || !formUrl.trim()}
-              className="px-5 py-2 text-xs font-medium rounded-lg bg-blue-700 text-white border border-blue-600/50 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-            >
-              {formSubmitting ? "Agregando…" : "Agregar fuente"}
-            </button>
-          </div>
-        </form>
+      {form.show && (
+        <SourceForm
+          form={form}
+          dispatchForm={dispatchForm}
+          handleAddSource={handleAddSource}
+          handleTestUrl={handleTestUrl}
+        />
       )}
 
       {/* ── Sources Table ────────────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-xl border border-slate-700/50">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-800/80 border-b border-slate-700/50">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">
-                URL
-              </th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Type
-              </th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Articles
-              </th>
-              <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Enabled
-              </th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {sources.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">
-                  No sources configured. Click "+ Agregar fuente" to add one.
-                </td>
-              </tr>
-            ) : (
-              sources.map((src) => (
-                <tr
-                  key={src.name}
-                  className="hover:bg-slate-800/40 transition-colors"
-                >
-                  {/* Status dot */}
-                  <td className="px-4 py-3">
-                    <StatusDot enabled={src.enabled} />
-                  </td>
-
-                  {/* Name */}
-                  <td className="px-4 py-3">
-                    <span className="text-slate-200 font-medium">
-                      {src.name}
-                    </span>
-                    {src.category && (
-                      <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded-full bg-slate-700/60 text-slate-400">
-                        {src.category}
-                      </span>
-                    )}
-                  </td>
-
-                  {/* URL */}
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <a
-                      href={src.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-slate-400 hover:text-blue-400 text-xs font-mono truncate max-w-[280px] inline-block align-middle"
-                      title={src.url}
-                    >
-                      {src.url}
-                    </a>
-                  </td>
-
-                  {/* Type */}
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        src.type === "rss"
-                          ? "bg-orange-900/30 text-orange-300"
-                          : "bg-purple-900/30 text-purple-300"
-                      }`}
-                    >
-                      {src.type.toUpperCase()}
-                    </span>
-                  </td>
-
-                  {/* Article count */}
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-slate-300 font-mono text-xs">
-                      {src.articleCount.toLocaleString()}
-                    </span>
-                  </td>
-
-                  {/* Enabled toggle */}
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleToggle(src.name, src.enabled)}
-                      className={`
-                        relative inline-flex h-6 w-10 items-center rounded-full
-                        transition-colors duration-200
-                        focus:outline-none focus:ring-2 focus:ring-blue-500/50
-                        ${src.enabled ? "bg-emerald-600" : "bg-slate-700"}
-                        cursor-pointer
-                      `}
-                      role="switch"
-                      aria-checked={src.enabled}
-                      aria-label={`Toggle ${src.name}`}
-                    >
-                      <span
-                        className={`
-                          inline-block h-4 w-4 rounded-full bg-white shadow-sm
-                          transition-transform duration-200
-                          ${src.enabled ? "translate-x-5" : "translate-x-1"}
-                        `}
-                      />
-                    </button>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(src.name)}
-                      className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-red-900/30 text-red-400 hover:bg-red-900/50 hover:text-red-300 transition-colors cursor-pointer"
-                      title={`Delete ${src.name}`}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <SourcesTable
+        sources={sources}
+        onToggle={handleToggle}
+        onDelete={(name) => setDeleteTarget(name)}
+      />
 
       {/* ── Summary bar ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-4 text-[11px] text-slate-600">
@@ -689,7 +727,7 @@ export function SourceManager() {
           message={`Are you sure you want to delete source "${deleteTarget}"? This cannot be undone.`}
           onConfirm={handleDeleteConfirm}
           onCancel={() => {
-            if (!deleteLoading) setDeleteTarget(null);
+            if (!deleteLoadingRef.current) setDeleteTarget(null);
           }}
         />
       )}

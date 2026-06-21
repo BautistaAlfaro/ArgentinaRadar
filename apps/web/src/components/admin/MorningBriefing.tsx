@@ -146,6 +146,178 @@ function Skeleton() {
   );
 }
 
+// ── Top Events Section ─────────────────────────────────────────────────
+
+function TopEventsSection({ events }: { events: NonNullable<BriefingData['digest']>['topEvents'] | null | undefined }) {
+  if (!events || events.length === 0) return null;
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">
+        🔥 Top Events
+      </h3>
+      <div className="space-y-2">
+        {events.slice(0, 5).map((event: { id: string; title: string; impact: number; summary?: string; category?: string }, i: number) => (
+          <m.div
+            key={event.id ?? i}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-slate-700/20 border border-slate-700/30"
+          >
+            <span className="text-xs font-bold text-slate-500 w-5 mt-0.5">{i + 1}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-slate-200 truncate">{event.title}</p>
+                {event.category && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 uppercase">{event.category}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-amber-400">{impactStars(event.impact)}</span>
+                <span className="text-[10px] text-slate-500">Impact: {event.impact}</span>
+              </div>
+            </div>
+          </m.div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Predictions Section ────────────────────────────────────────────────
+
+function PredictionsSection({ predictions }: { predictions: BriefingData['predictions'] | undefined }) {
+  if (!predictions || predictions.length === 0) return null;
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">
+        🔮 Today's Predictions
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {predictions.slice(0, 6).map((pred, i) => (
+          <m.div
+            key={pred.entityName ?? i}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05 }}
+            className="px-3 py-2.5 rounded-lg bg-slate-700/20 border border-slate-700/30"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium text-slate-200 truncate">{pred.entityName}</p>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                pred.confidence >= 0.7
+                  ? 'bg-emerald-500/10 text-emerald-400'
+                  : pred.confidence >= 0.4
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : 'bg-slate-500/10 text-slate-400'
+              }`}>
+                {(pred.confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">{pred.reason}</p>
+          </m.div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Patterns Section ───────────────────────────────────────────────────
+
+function PatternsSection({ patterns }: { patterns: BriefingData['patterns'] | undefined }) {
+  if (!patterns || patterns.length === 0) return null;
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">
+        📊 Patterns Discovered
+      </h3>
+      <div className="space-y-1.5">
+        {patterns.slice(0, 5).map((pat, i) => (
+          <div
+            key={`${pat.entityName}-${i}`}
+            className="flex items-start gap-2 px-3 py-2 rounded-lg bg-slate-700/15"
+          >
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${
+              pat.type === 'weekly' ? 'bg-blue-500/10 text-blue-400' :
+              pat.type === 'contextual' ? 'bg-purple-500/10 text-purple-400' :
+              'bg-amber-500/10 text-amber-400'
+            }`}>
+              {pat.type}
+            </span>
+            <p className="text-xs text-slate-400 flex-1">{pat.description}</p>
+            <span className="text-[10px] text-slate-500">{(pat.confidence * 100).toFixed(0)}%</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Health Report Section ──────────────────────────────────────────────
+
+function HealthReportSection({ healthReport }: { healthReport: NonNullable<BriefingData['healthReport']> }) {
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-slate-300 mb-2">
+        🏥 System Health
+      </h3>
+      <div className="rounded-lg bg-slate-700/20 p-3 border border-slate-700/30">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-slate-400">Health Score</span>
+          <span className={`text-sm font-bold ${
+            healthReport.score >= 80 ? 'text-emerald-400' :
+            healthReport.score >= 60 ? 'text-amber-400' :
+            'text-red-400'
+          }`}>
+            {healthReport.score}/100
+          </span>
+        </div>
+        {healthReport.services && (
+          <div className="flex flex-wrap gap-1.5">
+            {healthReport.services.slice(0, 12).map((svc) => (
+              <span
+                key={svc.name}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
+                  svc.status === 'ok'
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : svc.status === 'degraded'
+                      ? 'bg-amber-500/10 text-amber-400'
+                      : 'bg-red-500/10 text-red-400'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  svc.status === 'ok' ? 'bg-emerald-500' :
+                  svc.status === 'degraded' ? 'bg-amber-500' : 'bg-red-500'
+                }`} />
+                {svc.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {healthReport.budget && (
+          <div className="mt-2 pt-2 border-t border-slate-700/30">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500">AI Budget Used</span>
+              <span className={`text-[10px] font-medium ${
+                healthReport.budget.percentageUsed > 90
+                  ? 'text-red-400'
+                  : healthReport.budget.percentageUsed > 75
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+              }`}>
+                {healthReport.budget.percentageUsed.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export function MorningBriefing() {
@@ -306,175 +478,17 @@ export function MorningBriefing() {
           )}
 
           {/* ── Top 5 Events ────────────────────────────────────────── */}
-          {briefing?.digest?.topEvents && briefing.digest.topEvents.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                🔥 Top Events
-              </h3>
-              <div className="space-y-2">
-                {briefing.digest.topEvents.slice(0, 5).map((event, i) => (
-                  <m.div
-                    key={event.id ?? i}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-slate-700/20 border border-slate-700/30"
-                  >
-                    <span className="text-xs font-bold text-slate-500 w-5 mt-0.5">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-slate-200 truncate">
-                          {event.title}
-                        </p>
-                        {event.category && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 uppercase">
-                            {event.category}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-amber-400">
-                          {impactStars(event.impact)}
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                          Impact: {event.impact}
-                        </span>
-                      </div>
-                    </div>
-                  </m.div>
-                ))}
-              </div>
-            </section>
-          )}
+          <TopEventsSection events={briefing?.digest?.topEvents} />
 
           {/* ── Predictions ─────────────────────────────────────────── */}
-          {briefing?.predictions && briefing.predictions.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                🔮 Today's Predictions
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {briefing.predictions.slice(0, 6).map((pred, i) => (
-                  <m.div
-                    key={pred.entityName ?? i}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="px-3 py-2.5 rounded-lg bg-slate-700/20 border border-slate-700/30"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-sm font-medium text-slate-200 truncate">
-                        {pred.entityName}
-                      </p>
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
-                        pred.confidence >= 0.7
-                          ? 'bg-emerald-500/10 text-emerald-400'
-                          : pred.confidence >= 0.4
-                            ? 'bg-amber-500/10 text-amber-400'
-                            : 'bg-slate-500/10 text-slate-400'
-                      }`}>
-                        {(pred.confidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">
-                      {pred.reason}
-                    </p>
-                  </m.div>
-                ))}
-              </div>
-            </section>
-          )}
+          <PredictionsSection predictions={briefing?.predictions} />
 
           {/* ── Patterns ────────────────────────────────────────────── */}
-          {briefing?.patterns && briefing.patterns.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                📊 Patterns Discovered
-              </h3>
-              <div className="space-y-1.5">
-                {briefing.patterns.slice(0, 5).map((pat, i) => (
-                  <div
-                    key={`${pat.entityName}-${i}`}
-                    className="flex items-start gap-2 px-3 py-2 rounded-lg bg-slate-700/15"
-                  >
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${
-                      pat.type === 'weekly' ? 'bg-blue-500/10 text-blue-400' :
-                      pat.type === 'contextual' ? 'bg-purple-500/10 text-purple-400' :
-                      'bg-amber-500/10 text-amber-400'
-                    }`}>
-                      {pat.type}
-                    </span>
-                    <p className="text-xs text-slate-400 flex-1">
-                      {pat.description}
-                    </p>
-                    <span className="text-[10px] text-slate-500">
-                      {(pat.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <PatternsSection patterns={briefing?.patterns} />
 
           {/* ── Health Report ───────────────────────────────────────── */}
           {briefing?.healthReport && (
-            <section>
-              <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                🏥 System Health
-              </h3>
-              <div className="rounded-lg bg-slate-700/20 p-3 border border-slate-700/30">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-400">Health Score</span>
-                  <span className={`text-sm font-bold ${
-                    briefing.healthReport.score >= 80 ? 'text-emerald-400' :
-                    briefing.healthReport.score >= 60 ? 'text-amber-400' :
-                    'text-red-400'
-                  }`}>
-                    {briefing.healthReport.score}/100
-                  </span>
-                </div>
-                {briefing.healthReport.services && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {briefing.healthReport.services.slice(0, 12).map((svc) => (
-                      <span
-                        key={svc.name}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                          svc.status === 'ok'
-                            ? 'bg-emerald-500/10 text-emerald-400'
-                            : svc.status === 'degraded'
-                              ? 'bg-amber-500/10 text-amber-400'
-                              : 'bg-red-500/10 text-red-400'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          svc.status === 'ok' ? 'bg-emerald-500' :
-                          svc.status === 'degraded' ? 'bg-amber-500' : 'bg-red-500'
-                        }`} />
-                        {svc.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {briefing.healthReport.budget && (
-                  <div className="mt-2 pt-2 border-t border-slate-700/30">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">AI Budget Used</span>
-                      <span className={`text-[10px] font-medium ${
-                        briefing.healthReport.budget.percentageUsed > 90
-                          ? 'text-red-400'
-                          : briefing.healthReport.budget.percentageUsed > 75
-                            ? 'text-amber-400'
-                            : 'text-emerald-400'
-                      }`}>
-                        {briefing.healthReport.budget.percentageUsed.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
+            <HealthReportSection healthReport={briefing.healthReport} />
           )}
 
           {/* ── Footer note ─────────────────────────────────────────── */}
