@@ -33,6 +33,7 @@ model News {
   category    Category? @relation(fields: [categoryId], references: [id])
   publishedAt DateTime
   ingestedAt  DateTime @default(now())
+  status      String   @default("ingested") // pipeline: ingested → geolocated → filtered → published | discarded
   embedding   Unsupported("vector(1536)")?
 
   newsEvents NewsEvent[]
@@ -40,6 +41,7 @@ model News {
   @@index([publishedAt])
   @@index([ingestedAt])
   @@index([sourceId])
+  @@index([status])
   // @@index([embedding]) — pgvector IVFFlat index handled via raw SQL
 }
 

@@ -12,3 +12,34 @@ export type {
   Category,
   AiCost,
 } from "@prisma/client";
+
+// ── Dual-Write Adapter ────────────────────────────────────
+export { DualWriteAdapter, resetModeCache } from "./dual-write.js";
+export type { WriteMode, NewsStatus } from "./dual-write.js";
+export type {
+  NewsInsertInput,
+  EventInsertInput,
+  TweetInsertInput,
+  SqliteLocation,
+} from "./mapping.js";
+export {
+  upsertSource,
+  upsertCategory,
+  upsertLocation,
+  mapNewsToPostgres,
+  mapEventToPostgres,
+  mapTweetToPostgres,
+  addNewsEventRelation,
+  parseSqliteLocation,
+  parseSqliteSources,
+} from "./mapping.js";
+
+// ── Health ────────────────────────────────────────────────
+export {
+  checkPostgresHealth,
+  checkSqliteHealth,
+  getDualWriteStatus,
+  setLastError,
+  getLastError,
+} from "./health.js";
+export type { HealthStatus } from "./health.js";

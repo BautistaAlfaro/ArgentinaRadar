@@ -176,6 +176,27 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+    // ─── Event Detector (Node.js / Express) — PR 2.2 ────────────
+    {
+      name: 'event-detector',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/event-detector/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3008',
+        AI_PROCESSOR_URL: 'http://localhost:3010',
+      },
+      watch: ['services/event-detector/src', 'shared/types'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'event-detector-error.log'),
+      out_file: path.join(LOG_DIR, 'event-detector-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
     // ─── AI Processor (Python / FastAPI) — PR 2.1 ────────────────
     {
       name: 'ai-processor',
@@ -195,6 +216,26 @@ module.exports = {
       max_memory_restart: '500M',
       error_file: path.join(LOG_DIR, 'ai-processor-error.log'),
       out_file: path.join(LOG_DIR, 'ai-processor-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+    // ─── Trend Analyzer (Node.js / Express) — PR 3.1 ─────────────
+    {
+      name: 'trend-analyzer',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/trend-analyzer/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3009',
+        ANALYSIS_INTERVAL: '1800000',
+      },
+      watch: ['services/trend-analyzer/src', 'shared/types'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'trend-analyzer-error.log'),
+      out_file: path.join(LOG_DIR, 'trend-analyzer-out.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
