@@ -14,10 +14,6 @@ if (!article) { console.log('No articles found'); process.exit(1); }
 const ARTICLE_ID = article.id;
 const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
 
-// Insert into approval_queue
-db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, created_at)
-  VALUES (?, 'pending', ?, datetime('now'))`).run(ARTICLE_ID, article.title);
-
 // Build NanoBanana prompt
 const headline = article.title.substring(0, 80);
 const source = article.source.toUpperCase();
@@ -26,6 +22,10 @@ const nanoPrompt = `Professional Argentine news thumbnail. ${headline}. Dark blu
 // Generate image
 const encoded = encodeURIComponent(nanoPrompt);
 const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=` + Math.floor(Math.random() * 1000);
+
+// Insert into approval_queue with image_url
+db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_url, image_prompt, created_at)
+  VALUES (?, 'pending', ?, ?, ?, datetime('now'))`).run(ARTICLE_ID, article.title, imageUrl, nanoPrompt);
 
 (async () => {
   const kb = {

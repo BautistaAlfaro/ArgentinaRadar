@@ -41,11 +41,12 @@ console.log('🔄 Polling for callbacks (45s)... Press Ctrl+C to stop');
 
           // Bluesky publish
           try {
+            const aq = DB.prepare('SELECT image_url FROM approval_queue WHERE article_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1').get(articleId);
             const art = DB.prepare('SELECT title, source FROM news_items WHERE id = ?').get(articleId);
             const text = (art ? art.title.substring(0, 250) + '\n\n' + art.source : 'Actualidad') + ' #ArgentinaRadar';
             const b = await fetch('http://127.0.0.1:3004/api/publish-text', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ article_id: articleId, text: text })
+              body: JSON.stringify({ article_id: articleId, text: text, image_url: aq?.image_url })
             });
             const bd = await b.json();
             console.log('   Bluesky:', bd.success ? '✅ Published' : '❌ ' + bd.error);

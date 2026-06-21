@@ -35,6 +35,7 @@ export interface BlueskyPostResult {
 export async function postToBluesky(
   text: string,
   config: Config,
+  imageUrl?: string,
 ): Promise<BlueskyPostResult> {
   const agent = new BskyAgent({ service: 'https://bsky.social' });
 
@@ -46,7 +47,29 @@ export async function postToBluesky(
   // Bluesky has a 300 character limit
   const truncated = text.length > 300 ? text.slice(0, 297) + '...' : text;
 
-  const result = await agent.post({ text: truncated });
+  // Upload image if provided
+  let embed: { $type: string; images: Array<{ image: any; alt: string }> } | undefined;
+  if (imageUrl) {
+    try {
+      const resp = await fetch(imageUrl);
+      const buffer = await resp.arrayBuffer();
+      const blob = await agent.uploadBlob(new Uint8Array(buffer), {
+        encoding: 'image/jpeg',
+      });
+      embed = {
+        $type: 'app.bsky.embed.images',
+        images: [{ image: blob.data.blob, alt: truncated.slice(0, 100) }],
+      };
+    } catch (e) {
+      console.warn(`[bluesky] ⚠️ Image upload failed, posting text-only: ${e.message}`);
+    }
+  }
 
+  if (embed) {
+    const result = await agent.post({ text: truncated, embed });
+    return { uri: result.uri, cid: result.cid };
+  }
+
+  const result = await agent.post({ text: truncated });
   return { uri: result.uri, cid: result.cid };
 }

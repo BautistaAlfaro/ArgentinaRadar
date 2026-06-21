@@ -124,7 +124,8 @@ async function checkCallbacks() {
       });
       
       if (action === 'approve') {
-        // Get article info
+        // Get article info + image_url
+        const aq = db.prepare('SELECT image_url FROM approval_queue WHERE article_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1').get(articleId, 'pending');
         const article = db.prepare('SELECT title, source FROM news_items WHERE id = ?').get(articleId);
         
         // Mark as approved
@@ -139,7 +140,7 @@ async function checkCallbacks() {
             const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ article_id: articleId, text: tweetText }),
+              body: JSON.stringify({ article_id: articleId, text: tweetText, image_url: aq?.image_url }),
             });
             const bskyResult = await bskyResp.json();
             console.log(`Bluesky: ${bskyResult.success ? 'OK' : 'FAIL'} — ${articleId.slice(0,8)}`);

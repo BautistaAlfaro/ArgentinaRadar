@@ -195,7 +195,7 @@ export async function publishText(
   const twitterConfigured = !!(config.twitter.apiKey && config.twitter.accessToken);
   if (!twitterConfigured && config.bluesky.enabled && config.bluesky.password) {
     try {
-      const bsky = await postToBluesky(text, config);
+      const bsky = await postToBluesky(text, config, imageUrl);
       console.log(`[publisher] ✅ Bluesky (no Twitter): ${bsky.uri}`);
       return { success: true, tweetId: 'bsky' };
     } catch (err) {
