@@ -1,11 +1,11 @@
 /**
- * Weather Alerts — SMN (Servicio Meteorológico Nacional)
+ * Weather Alerts — Open-Meteo (free API)
  *
- * Fetches weather alerts for Argentina provinces from the SMN API.
- * Parses alerts by province with severity levels (yellow/orange/red).
+ * Fetches weather data from Open-Meteo API for major Argentine cities.
+ * Generates alerts based on weather conditions (heavy rain, extreme temps, etc.)
  * Refreshes every 30 minutes.
  *
- * API: https://ssl.smn.gob.ar/service/alerts/warnings (XML)
+ * API: https://api.open-meteo.com/v1/forecast (free, no registration required)
  * Fallback: structured mock data representing common alert patterns.
  */
 
@@ -48,6 +48,20 @@ const PROVINCE_POLYGONS: Record<string, number[][][]> = {
   Formosa: [[[-63.0, -27.5], [-57.5, -27.5], [-57.5, -22.5], [-63.0, -22.5], [-63.0, -27.5]]],
   'San Luis': [[[-67.5, -36.0], [-64.5, -36.0], [-64.5, -32.0], [-67.5, -32.0], [-67.5, -36.0]]],
 };
+
+// ─── Major Argentine cities for weather monitoring ─────────────────
+const CITIES = [
+  { name: 'Buenos Aires', province: 'CABA', lat: -34.6, lon: -58.4 },
+  { name: 'Córdoba', province: 'Córdoba', lat: -31.4, lon: -64.2 },
+  { name: 'Rosario', province: 'Santa Fe', lat: -32.9, lon: -60.7 },
+  { name: 'Mendoza', province: 'Mendoza', lat: -32.9, lon: -68.8 },
+  { name: 'Tucumán', province: 'Tucumán', lat: -26.8, lon: -65.2 },
+  { name: 'La Plata', province: 'Buenos Aires', lat: -34.9, lon: -57.9 },
+  { name: 'Mar del Plata', province: 'Buenos Aires', lat: -38.0, lon: -57.6 },
+  { name: 'Salta', province: 'Salta', lat: -24.8, lon: -65.4 },
+  { name: 'Santa Fe', province: 'Santa Fe', lat: -31.6, lon: -60.7 },
+  { name: 'Neuquén', province: 'Neuquén', lat: -38.9, lon: -68.1 },
+];
 
 // ─── Severity ordering ─────────────────────────────────────────────
 const SEVERITY_ORDER: Record<string, number> = {
@@ -106,96 +120,130 @@ let lastFetch: number = 0;
 const REFRESH_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Parse SMN XML alert response into our WeatherAlert format.
- * The SMN API returns XML with <Aviso> elements containing province,
- * severity, description, and polygon coordinates.
+ * Generate weather alerts based on Open-Meteo forecast data.
  */
-function parseSmnXml(xml: string): WeatherAlert[] {
+function generateAlertsFromWeather(data: any, city: typeof CITIES[0]): WeatherAlert[] {
   const alerts: WeatherAlert[] = [];
+  const hourly = data.hourly;
+  
+  if (!hourly || !hourly.time || hourly.time.length === 0) return alerts;
 
-  try {
-    // Simple regex-based XML parser for SMN alerts
-    const avisoRegex = /<Aviso[^>]*>([\s\S]*?)<\/Aviso>/gi;
-    let match: RegExpExecArray | null;
+  // Check next 6 hours for severe weather
+  const nextHours = Math.min(6, hourly.time.length);
+  
+  let maxPrecipitation = 0;
+  let maxWindSpeed = 0;
+  let minTemp = Infinity;
+  let maxTemp = -Infinity;
 
-    while ((match = avisoRegex.exec(xml)) !== null) {
-      const avisoXml = match[1];
+  for (let i = 0; i < nextHours; i++) {
+    const precip = hourly.precipitation?.[i] || 0;
+    const wind = hourly.wind_speed_10m?.[i] || 0;
+    const temp = hourly.temperature_2m?.[i] || 0;
+    
+    maxPrecipitation = Math.max(maxPrecipitation, precip);
+    maxWindSpeed = Math.max(maxWindSpeed, wind);
+    minTemp = Math.min(minTemp, temp);
+    maxTemp = Math.max(maxTemp, temp);
+  }
 
-      const getField = (tag: string): string => {
-        const fieldMatch = new RegExp(`<${tag}>([^<]*)<\\/${tag}>`).exec(avisoXml);
-        return fieldMatch ? fieldMatch[1].trim() : '';
-      };
+  const coordinates = PROVINCE_POLYGONS[city.province];
+  if (!coordinates) return alerts;
 
-      const province = getField('provincia');
-      const severityRaw = getField('severidad').toLowerCase();
-      const event = getField('fenomeno');
-      const description = getField('descripcion');
+  // Heavy rain alert (>10mm in 6 hours)
+  if (maxPrecipitation > 10) {
+    const severity = maxPrecipitation > 30 ? 'red' : maxPrecipitation > 20 ? 'orange' : 'yellow';
+    alerts.push({
+      province: city.province,
+      severity,
+      event: 'Lluvias intensas',
+      description: `Se esperan lluvias intensas con acumulados de hasta ${maxPrecipitation.toFixed(1)}mm en las próximas 6 horas.`,
+      coordinates,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
-      // Map severity to our enum
-      let severity: 'yellow' | 'orange' | 'red' = 'yellow';
-      if (severityRaw.includes('naranja') || severityRaw === 'orange') severity = 'orange';
-      if (severityRaw.includes('roja') || severityRaw === 'red') severity = 'red';
+  // Strong wind alert (>60 km/h)
+  if (maxWindSpeed > 60) {
+    const severity = maxWindSpeed > 100 ? 'red' : maxWindSpeed > 80 ? 'orange' : 'yellow';
+    alerts.push({
+      province: city.province,
+      severity,
+      event: 'Vientos fuertes',
+      description: `Ráfagas de viento que pueden superar los ${Math.round(maxWindSpeed)} km/h.`,
+      coordinates,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 
-      // Get polygon coordinates if available
-      const coordsMatch = new RegExp(`<poligono>([^<]*)<\\/poligono>`).exec(avisoXml);
-      let coordinates = PROVINCE_POLYGONS[province] ?? [];
-
-      if (coordsMatch && coordsMatch[1].trim()) {
-        try {
-          const parsed = JSON.parse(coordsMatch[1]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            coordinates = parsed;
-          }
-        } catch {
-          // Fall back to province polygon
-        }
-      }
-
-      if (province && event) {
-        alerts.push({
-          province,
-          severity,
-          event,
-          description,
-          coordinates,
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[WeatherAlerts] Failed to parse SMN XML:', err);
+  // Extreme temperature alert
+  if (maxTemp > 40) {
+    alerts.push({
+      province: city.province,
+      severity: 'orange',
+      event: 'Ola de calor',
+      description: `Temperaturas que pueden superar los ${Math.round(maxTemp)}°C.`,
+      coordinates,
+      updatedAt: new Date().toISOString(),
+    });
+  } else if (minTemp < -5) {
+    alerts.push({
+      province: city.province,
+      severity: 'yellow',
+      event: 'Heladas',
+      description: `Temperaturas que pueden descender a ${Math.round(minTemp)}°C.`,
+      coordinates,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   return alerts;
 }
 
 /**
- * Fetch weather alerts from SMN API.
+ * Fetch weather data from Open-Meteo API for a city.
+ */
+async function fetchCityWeather(city: typeof CITIES[0]): Promise<WeatherAlert[]> {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,precipitation,wind_speed_10m&timezone=America/Argentina/Buenos_Aires&forecast_days=1`;
+    
+    const response = await axios.get(url, { timeout: 10000 });
+    
+    if (response.status === 200 && response.data) {
+      return generateAlertsFromWeather(response.data, city);
+    }
+    
+    return [];
+  } catch (err) {
+    console.warn(`[WeatherAlerts] Failed to fetch weather for ${city.name}:`, (err as Error).message);
+    return [];
+  }
+}
+
+/**
+ * Fetch weather alerts from Open-Meteo API for all major Argentine cities.
  * Falls back to mock data if the API is unreachable.
  */
-async function fetchFromSmn(): Promise<WeatherAlert[]> {
-  const urls = [
-    'https://ssl.smn.gob.ar/service/alerts/warnings',
-    'https://ws.smn.gob.ar/alerts/warnings',
-  ];
-
-  for (const url of urls) {
-    try {
-      const response = await axios.get(url, { timeout: 10000 });
-      if (response.status === 200 && response.data) {
-        const xml = typeof response.data === 'string' ? response.data : String(response.data);
-        const parsed = parseSmnXml(xml);
-        if (parsed.length > 0) {
-          console.log(`[WeatherAlerts] Fetched ${parsed.length} alerts from SMN`);
-          return parsed;
-        }
-      }
-    } catch (err) {
-      console.warn(`[WeatherAlerts] SMN API failed (${url}):`, (err as Error).message);
+async function fetchFromOpenMeteo(): Promise<WeatherAlert[]> {
+  const allAlerts: WeatherAlert[] = [];
+  
+  // Fetch weather for all cities in parallel
+  const results = await Promise.allSettled(
+    CITIES.map(city => fetchCityWeather(city))
+  );
+  
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      allAlerts.push(...result.value);
     }
   }
-
-  console.warn('[WeatherAlerts] All SMN endpoints failed, using mock data');
+  
+  if (allAlerts.length > 0) {
+    console.log(`[WeatherAlerts] Generated ${allAlerts.length} alerts from Open-Meteo`);
+    return allAlerts;
+  }
+  
+  console.warn('[WeatherAlerts] Open-Meteo returned no alerts, using mock data');
   return MOCK_ALERTS;
 }
 
@@ -204,7 +252,7 @@ async function fetchFromSmn(): Promise<WeatherAlert[]> {
  */
 export async function refreshWeatherAlerts(): Promise<WeatherAlert[]> {
   try {
-    cachedAlerts = await fetchFromSmn();
+    cachedAlerts = await fetchFromOpenMeteo();
     lastFetch = Date.now();
   } catch (err) {
     console.error('[WeatherAlerts] Refresh failed:', err);

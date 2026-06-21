@@ -18,7 +18,7 @@ if _dotenv_path.exists():
 
 # --- OpenRouter ---
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
-MODEL_NAME: str = os.environ.get("MODEL_NAME", "mistralai/mistral-nemo-instruct-2407")
+MODEL_NAME: str = os.environ.get("MODEL_NAME", "mistralai/mistral-7b-instruct:free")
 OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- Database ---
@@ -34,4 +34,4 @@ GEOLOCATION_URL: str = os.environ.get("GEOLOCATION_URL", "http://localhost:3002"
 
 # --- Cost tracking ---
 AI_DAILY_BUDGET: float = float(os.environ.get("AI_DAILY_BUDGET", "0.50"))
-COST_PER_1K_TOKENS: float = 0.0002  # Mistral Nemo pricing via OpenRouter
+COST_PER_1K_TOKENS: float = 0.0  # Free model

@@ -37,8 +37,6 @@ export function ProvinceBoundaries({ globe }: Props) {
 
     globe
       .polygonsData(features)
-      .polygonLat((d: ProvinceFeature) => d.properties.centroid[1])
-      .polygonLng((d: ProvinceFeature) => d.properties.centroid[0])
       .polygonAltitude(0.002)
       .polygonCapColor((d: ProvinceFeature) => {
         const index = features.indexOf(d);

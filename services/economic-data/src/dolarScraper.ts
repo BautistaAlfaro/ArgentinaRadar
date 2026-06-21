@@ -1,8 +1,8 @@
 /**
  * Dólar blue scraper.
  *
- * Primary: DolarHoy.com (HTML scrape)
- * Fallback: Ámbito API
+ * Primary: DolarAPI (free, no scraping needed)
+ * Fallback: DolarHoy.com (HTML scrape) + Ámbito API
  *
  * Averages rates from multiple sources. If one source fails, uses the
  * other and flags the result as `partial`.
@@ -24,6 +24,35 @@ export interface DolarBlueResult {
   partial: boolean;
   /** Timestamp of fetch */
   timestamp: string;
+}
+
+/**
+ * Fetch dólar blue from DolarAPI (free, stable JSON API).
+ * Returns null if the request fails.
+ */
+async function fetchDolarAPI(): Promise<{ compra: number; venta: number } | null> {
+  try {
+    const { data } = await axios.get('https://dolarapi.com/v1/dolares/blue', {
+      timeout: REQUEST_TIMEOUT,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+      },
+    });
+
+    // DolarAPI returns: { moneda, casa, nombre, compra, venta, fechaActualizacion }
+    if (data && typeof data.compra === 'number' && typeof data.venta === 'number') {
+      console.log(`[dolarScraper] DolarAPI: compra=${data.compra}, venta=${data.venta}`);
+      return { compra: data.compra, venta: data.venta };
+    }
+
+    console.warn('[dolarScraper] DolarAPI: unexpected response shape');
+    return null;
+  } catch (err) {
+    console.warn('[dolarScraper] DolarAPI failed:', (err as Error).message);
+    return null;
+  }
 }
 
 /**
@@ -173,19 +202,24 @@ async function fetchAmbitoApi(): Promise<{ compra: number; venta: number } | nul
 
 /**
  * Fetch dólar blue from all available sources, averaging results.
- * Uses DolarHoy as primary, Ámbito as fallback.
+ * Uses DolarAPI as primary (most stable), DolarHoy and Ámbito as fallbacks.
  */
 export async function fetchDolarBlue(): Promise<DolarBlueResult> {
   const timestamp = new Date().toISOString();
   const sources: Array<{ name: string; compra: number; venta: number }> = [];
 
-  // Try primary source
+  // Try primary source (DolarAPI - free, stable)
+  const dolarAPI = await fetchDolarAPI();
+  if (dolarAPI) {
+    sources.push({ name: 'DolarAPI', ...dolarAPI });
+  }
+
+  // Try fallback sources
   const dolarHoy = await scrapeDolarHoy();
   if (dolarHoy) {
     sources.push({ name: 'DolarHoy', ...dolarHoy });
   }
 
-  // Try fallback
   const ambito = await fetchAmbitoApi();
   if (ambito) {
     sources.push({ name: 'Ámbito', ...ambito });
