@@ -14,6 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { geolocate } from './index.js';
 import type { ExtractedLocation } from './index.js';
+import { createLoop } from '@shared/utils/shutdown';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -202,8 +203,8 @@ const server = app.listen(PORT, () => {
   console.log(`[geolocation] Polling news service at ${NEWS_SERVICE_URL} every ${POLL_INTERVAL_MS}ms`);
 
   // Start background polling
-  pollAndGeolocate();
-  setInterval(pollAndGeolocate, POLL_INTERVAL_MS);
+  const geoLoop = createLoop('geolocation', pollAndGeolocate, POLL_INTERVAL_MS);
+  geoLoop.start();
 });
 
 // Graceful shutdown

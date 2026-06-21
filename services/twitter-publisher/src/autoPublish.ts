@@ -30,6 +30,7 @@ import {
   getQuotaInfo,
 } from './rateLimiter.js';
 import { moveToDeadLetter } from './deadLetter.js';
+import { createLoop } from '@shared/utils/shutdown';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -62,15 +63,21 @@ function getDb(): Database.Database {
  *
  * Runs an immediate check on start, then repeats every `POLL_INTERVAL`.
  */
+let _autoPublishLoop: ReturnType<typeof createLoop> | null = null;
+
 export function startAutoPublish(): void {
+  if (_autoPublishLoop) return;
   console.log(
     '[autoPublish] Starting event-based auto-publish loop ' +
       `(every ${Math.round(POLL_INTERVAL / 1000)}s, impact >= 70)`
   );
+  _autoPublishLoop = createLoop('autoPublish', runAutoPublish, POLL_INTERVAL);
+  _autoPublishLoop.start();
+}
 
-  // First run immediately, then on interval
-  runAutoPublish();
-  setInterval(runAutoPublish, POLL_INTERVAL);
+export function stopAutoPublish(): void {
+  _autoPublishLoop?.stop();
+  _autoPublishLoop = null;
 }
 
 // ---------------------------------------------------------------------------
