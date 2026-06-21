@@ -181,15 +181,8 @@ export function AdminDashboard() {
 
       {/* ─── Main Content ───────────────────────────────────────────── */}
       <div className="p-6 space-y-6">
-        <AnimatePresence mode="wait">
-          {activeTab === 'overview' && (
-            <m.div
-              key={range}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            >
+        {activeTab === 'overview' && (
+          <div>
               {/* ── KPI Cards ──────────────────────────────────────────── */}
             <Suspense fallback={
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -289,37 +282,24 @@ export function AdminDashboard() {
             <Suspense fallback={<LoadingSkeleton className="h-64" />}>
               <SystemMetrics metrics={systemMetrics ?? EMPTY_ARRAY} />
             </Suspense>
-          </m.div>
+          </div>
           )}
 
           {activeTab === 'briefing' && (
-            <m.div
-              key="briefing"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            >
+            <div>
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <MorningBriefing />
               </Suspense>
-            </m.div>
+            </div>
           )}
 
           {activeTab === 'services' && (
-            <m.div
-              key="services"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            >
+            <div>
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <ServiceControlPanel />
               </Suspense>
-            </m.div>
+            </div>
           )}
-        </AnimatePresence>
       </div>
     </div>
   );
