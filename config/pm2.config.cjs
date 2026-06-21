@@ -187,7 +187,7 @@ module.exports = {
       env: {
         NODE_ENV: 'development',
         PORT: '3008',
-        AI_PROCESSOR_URL: 'http://localhost:3010',
+        AI_PROCESSOR_URL: 'http://localhost:3013',
       },
       watch: ['services/event-detector/src', 'shared/types'],
       max_memory_restart: '500M',
@@ -202,12 +202,12 @@ module.exports = {
       name: 'ai-processor',
       cwd: path.join(ROOT, 'services', 'ai-processor'),
       script: 'cmd.exe',
-      args: '/c python -m uvicorn src.server:app --host 0.0.0.0 --port 3010',
+      args: '/c python -m uvicorn src.server:app --host 0.0.0.0 --port 3013',
       interpreter: 'none',
       windowsHide: true,
       env: {
         NODE_ENV: 'development',
-        PORT: '3010',
+        PORT: '3013',
         PYTHONPATH: '.',
         DAILY_BUDGET: '2.00',
         AI_PROVIDER: 'openai',

@@ -7,6 +7,7 @@
  */
 
 import { useTrends } from '../../hooks/useTrends';
+import { useRadarStore } from '../../stores/radarStore';
 import type { TrendingEntity } from '../../services/api';
 
 const TYPE_COLORS: Record<string, string> = {
@@ -22,6 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function TrendingTopics() {
+  const selectedProvince = useRadarStore((s) => s.selectedProvince);
   const { trends, isLoading, isError } = useTrends();
 
   return (
@@ -31,6 +33,11 @@ export function TrendingTopics() {
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
           Tendencias
         </h2>
+        {selectedProvince && (
+          <p className="text-[10px] text-blue-400 mt-1">
+            Mostrando tendencias relacionadas con {selectedProvince}
+          </p>
+        )}
       </div>
 
       {/* List */}

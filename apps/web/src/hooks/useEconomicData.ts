@@ -45,7 +45,14 @@ async function fetchEnrichedData(): Promise<EconomicDataResponse> {
  * the raw response for custom use.
  */
 export function useEconomicData() {
-  const query = useQuery<EconomicDataResponse>({
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery<EconomicDataResponse>({
     queryKey: ['economic-data'],
     queryFn: fetchEnrichedData,
     refetchInterval: 60_000, // 60 seconds
@@ -55,7 +62,7 @@ export function useEconomicData() {
   });
 
   // Derive simple lookup maps for convenient access
-  const indicators = query.data?.indicators ?? [];
+  const indicators = data?.indicators ?? [];
 
   const byType = indicators.reduce<Record<string, EnrichedIndicator>>((acc, ind) => {
     acc[ind.type] = ind;
@@ -67,7 +74,7 @@ export function useEconomicData() {
   const riesgoPais = byType['riesgo_pais'] ?? null;
   const reservasBcra = byType['reservas_bcra'] ?? null;
 
-  const staleStatus = query.data?.staleStatus ?? [];
+  const staleStatus = data?.staleStatus ?? [];
 
   return {
     /** All indicators from the API */
@@ -83,13 +90,13 @@ export function useEconomicData() {
     hasStaleData: staleStatus.some((s) => s.stale),
     staleStatus,
     /** Raw query state */
-    isLoading: query.isLoading,
-    isError: query.isError,
-    error: query.error,
-    isFetching: query.isFetching,
+    isLoading,
+    isError,
+    error,
+    isFetching,
     /** Refetch manually */
-    refetch: query.refetch,
+    refetch,
     /** Timestamp of last successful fetch */
-    serverTime: query.data?.serverTime ?? null,
+    serverTime: data?.serverTime ?? null,
   };
 }

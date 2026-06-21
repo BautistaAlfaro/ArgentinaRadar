@@ -6,7 +6,7 @@
 
 export const config = {
   /** URL of the ai-processor service (embeddings, GPT verification). */
-  aiProcessorUrl: process.env.AI_PROCESSOR_URL || 'http://localhost:3010',
+  aiProcessorUrl: process.env.AI_PROCESSOR_URL || 'http://localhost:3013',
 
   /** HTTP port for this service. */
   port: parseInt(process.env.PORT || '3008', 10),

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { MapView } from './components/MapView';
 import { Sidebar } from './components/panels/Sidebar';
+import { ProvinceDetailPanel } from './components/panels/ProvinceDetailPanel';
 import { EconomicTicker } from './components/panels/EconomicTicker';
 import { ArgentinaTitle } from './components/ArgentinaTitle';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -48,6 +49,7 @@ function MainLayout() {
         map={<MapView />}
         ticker={<EconomicTicker />}
       />
+      <ProvinceDetailPanel />
     </>
   );
 }

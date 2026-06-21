@@ -22,6 +22,7 @@ import { AICostChart } from '../components/admin/charts/AICostChart';
 import { SystemMetrics } from '../components/admin/SystemMetrics';
 import { InsecurityPanel } from '../components/admin/InsecurityPanel';
 import { ProtestPanel } from '../components/admin/ProtestPanel';
+import { PoliticalRadar } from '../components/admin/PoliticalRadar';
 import { MorningBriefing } from '../components/admin/MorningBriefing';
 
 type Range = '7d' | '30d' | '90d';

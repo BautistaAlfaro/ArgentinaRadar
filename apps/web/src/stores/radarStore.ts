@@ -17,6 +17,14 @@ export type LayerId =
 
 export type PanelId = 'news' | 'economic' | 'alerts' | 'security' | 'protests';
 
+export interface ProvinceStats {
+  province: string;
+  eventsToday: number;
+  eventsThisWeek: number;
+  alertsActive: number;
+  economicIndicator: string | null;
+}
+
 export interface PanelVisibility {
   news: boolean;
   economic: boolean;
@@ -36,6 +44,8 @@ export interface RadarState {
   activeLayers: Set<LayerId>;
   /** Currently selected province name, or null */
   selectedProvince: string | null;
+  /** Stats for the currently selected province */
+  provinceStats: ProvinceStats | null;
   /** Currently selected news article location (for map centering) */
   selectedNewsLocation: SelectedNewsLocation | null;
   /** Panel visibility toggles */
@@ -55,6 +65,10 @@ export interface RadarActions {
   deactivateLayer: (layer: LayerId) => void;
   /** Select a province (null to deselect) */
   selectProvince: (province: string | null) => void;
+  /** Clear province selection and stats */
+  clearProvinceSelection: () => void;
+  /** Set province stats */
+  setProvinceStats: (stats: ProvinceStats | null) => void;
   /** Select a news article location (null to clear) */
   selectNewsLocation: (location: SelectedNewsLocation | null) => void;
   /** Toggle a panel's visibility */
@@ -71,6 +85,7 @@ export const useRadarStore = create<RadarStore>((set) => ({
   // State
   activeLayers: new Set<LayerId>(['provinces', 'events']),
   selectedProvince: null,
+  provinceStats: null,
   selectedNewsLocation: null,
   selectedEventId: null,
   panelVisibility: {
@@ -111,7 +126,13 @@ export const useRadarStore = create<RadarStore>((set) => ({
     }),
 
   selectProvince: (province) =>
-    set({ selectedProvince: province }),
+    set({ selectedProvince: province, provinceStats: null }),
+
+  clearProvinceSelection: () =>
+    set({ selectedProvince: null, provinceStats: null }),
+
+  setProvinceStats: (stats) =>
+    set({ provinceStats: stats }),
 
   selectNewsLocation: (location) =>
     set({ selectedNewsLocation: location }),

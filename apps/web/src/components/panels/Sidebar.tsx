@@ -18,6 +18,7 @@ import { PoliticalPanel } from './PoliticalPanel';
 import { TrendingTopics } from './TrendingTopics';
 import { EventTimeline } from '../EventTimeline';
 import { useAuthStore } from '../../stores/authStore';
+import { useRadarStore } from '../../stores/radarStore';
 
 type TabId = 'events' | 'trending' | 'political' | 'news';
 
@@ -36,6 +37,8 @@ const TABS: TabDefinition[] = [
 export function Sidebar() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const role = useAuthStore((s) => s.user?.role ?? null);
+  const selectedProvince = useRadarStore((s) => s.selectedProvince);
+  const clearProvinceSelection = useRadarStore((s) => s.clearProvinceSelection);
 
   const handleKeyDown = (e: React.KeyboardEvent, tabId: TabId) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -68,6 +71,29 @@ export function Sidebar() {
           );
         })}
       </div>
+
+      {/* Province filter badge */}
+      {selectedProvince && (
+        <div className="px-3 py-2 bg-blue-900/30 border-b border-blue-800/30 shrink-0">
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-400 shrink-0">
+              <path fillRule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zm-1.032-9.814a2.5 2.5 0 112.682 0A2.5 2.5 0 018.66 9.12z" clipRule="evenodd" />
+            </svg>
+            <span className="text-xs font-medium text-blue-300 flex-1 truncate">
+              {selectedProvince}
+            </span>
+            <button
+              onClick={clearProvinceSelection}
+              className="p-0.5 rounded text-blue-400 hover:text-white hover:bg-blue-700/50 transition-colors cursor-pointer"
+              aria-label="Quitar filtro de provincia"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">

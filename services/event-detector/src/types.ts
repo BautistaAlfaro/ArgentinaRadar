@@ -45,6 +45,8 @@ export interface Event {
   articles: NewsArticle[];
   timeline: TimelineEntry[];
   createdAt: string;
+  /** Optional geolocation data (lat, lng, province, city). */
+  location?: { lat?: number; lng?: number; province?: string; city?: string } | null;
 }
 
 export interface DetectPayload {

@@ -7,6 +7,7 @@ import { useEvents } from '../hooks/useEvents';
 import { useRadarStore } from '../stores/radarStore';
 import { MapLibreFallback } from './MapLibreFallback';
 import { ProvinceBoundaries } from './layers/ProvinceBoundaries';
+import { ProvinceGlobePopup } from './layers/ProvinceGlobePopup';
 import { NewsMarkers } from './layers/NewsMarkers';
 import { EventMarkers } from './layers/EventMarkers';
 import { WeatherLayer } from './layers/WeatherLayer';
@@ -44,6 +45,7 @@ export function MapView() {
 
   // Selected news location → center map
   const selectedNewsLocation = useRadarStore((s) => s.selectedNewsLocation);
+  const selectedProvince = useRadarStore((s) => s.selectedProvince);
   const selectNewsLocation = useRadarStore((s) => s.selectNewsLocation);
 
   useEffect(() => {
@@ -204,6 +206,15 @@ export function MapView() {
     );
   }, [selectedNewsLocation]);
 
+  // Reset globe view when province selection is cleared
+  useEffect(() => {
+    if (!globeRef.current || selectedProvince !== null) return;
+    globeRef.current.pointOfView(
+      { lat: -38.4, lng: -63.6, altitude: 2.5 },
+      600,
+    );
+  }, [selectedProvince]);
+
   // Clear selection when clicking off
   const handleContainerClick = (e: React.MouseEvent) => {
     // Only clear if clicking directly on the container (not on a marker/globe)
@@ -226,6 +237,7 @@ export function MapView() {
       {globeReady && globeRef.current && (
         <>
           <ProvinceBoundaries globe={globeRef.current} />
+          <ProvinceGlobePopup globe={globeRef.current} containerRef={containerRef} />
           <NewsMarkers globe={globeRef.current} articles={articles} />
           <EventMarkers globe={globeRef.current} events={events} />
           <WeatherLayer globe={globeRef.current} />

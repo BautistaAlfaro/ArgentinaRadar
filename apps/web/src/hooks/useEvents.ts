@@ -8,6 +8,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchEvents } from '../services/api';
+import { useRadarStore } from '../stores/radarStore';
 import type { ConsensusLevel, EventItem } from '../services/api';
 
 interface UseEventsOptions {
@@ -30,6 +31,8 @@ interface UseEventsResult {
 }
 
 export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
+  const selectedProvince = useRadarStore((s) => s.selectedProvince);
+
   const {
     impactMin,
     consensus,
@@ -39,7 +42,10 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
     withLocation = false,
   } = options;
 
-  const queryKey = ['events', impactMin, consensus, province, limit];
+  // Auto-filter by selected province from store unless explicitly overridden
+  const effectiveProvince = province ?? selectedProvince ?? undefined;
+
+  const queryKey = ['events', impactMin, consensus, effectiveProvince, limit];
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey,
@@ -47,7 +53,7 @@ export function useEvents(options: UseEventsOptions = {}): UseEventsResult {
       fetchEvents({
         impact_min: impactMin,
         consensus,
-        province,
+        province: effectiveProvince,
         limit,
       }),
     refetchInterval,
