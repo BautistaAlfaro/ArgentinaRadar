@@ -1135,13 +1135,13 @@ async def _process_telegram_updates() -> None:
 
 async def approval_loop() -> None:
     """
-    Background task: poll for new events and Telegram updates.
-
+    Background task: poll for new approval_queue entries AND events.
+    
     Two-phase loop:
-      1. Poll event-detector for new events (every APPROVAL_EVENT_POLL_INTERVAL)
-      2. Poll Telegram for callback updates (every APPROVAL_POLL_INTERVAL)
+      1. Poll approval_queue for pending articles (every APPROVAL_POLL_INTERVAL)
+      2. Poll event-detector for new events (every APPROVAL_EVENT_POLL_INTERVAL)
+      3. Poll Telegram for callback updates (every APPROVAL_POLL_INTERVAL)
     """
-    # Ensure table exists on startup
     _ensure_approval_table()
 
     print(f"[approval] 🔄 Starting approval loop "
@@ -1152,7 +1152,10 @@ async def approval_loop() -> None:
 
     while True:
         try:
-            # Phase 1: Poll for new events every event_poll interval
+            # Phase 1: Check for pending approval_queue entries (every tick)
+            await _send_pending_queue_approvals()
+
+            # Phase 2: Poll for new events every event_poll interval
             if event_tick <= 0:
                 events = await _fetch_trending_events()
                 if events:
@@ -1160,7 +1163,7 @@ async def approval_loop() -> None:
                     await _send_approvals_for_events(events)
                 event_tick = APPROVAL_EVENT_POLL_INTERVAL
 
-            # Phase 2: Poll Telegram for callbacks every tick
+            # Phase 3: Poll Telegram for callbacks every tick
             await _process_telegram_updates()
 
         except Exception as exc:
@@ -1170,3 +1173,63 @@ async def approval_loop() -> None:
 
         await asyncio.sleep(APPROVAL_POLL_INTERVAL)
         event_tick -= APPROVAL_POLL_INTERVAL
+
+
+async def _send_pending_queue_approvals() -> None:
+    """Check approval_queue for pending entries and send to Telegram."""
+    try:
+        conn = _get_read_conn()
+        pending = conn.execute(
+            "SELECT id, article_id, draft_tweet, image_url, image_prompt "
+            "FROM approval_queue "
+            "WHERE status = 'pending' AND telegram_message_id IS NULL "
+            "LIMIT 5"
+        ).fetchall()
+        
+        if not pending:
+            return
+            
+        print(f"[approval] 📨 Sending {len(pending)} pending approvals to Telegram")
+        
+        for entry in pending:
+            entry_id, article_id, draft_tweet, image_url, image_prompt = entry
+            
+            # Build inline keyboard
+            keyboard = {
+                "inline_keyboard": [[
+                    {"text": "✅ Aprobar", "callback_data": f"approve:{article_id}"},
+                    {"text": "❌ Descartar", "callback_data": f"reject:{article_id}"},
+                ]]
+            }
+            
+            # Get article title for context
+            article = conn.execute(
+                "SELECT title, source FROM news_items WHERE id = ?", (article_id,)
+            ).fetchone()
+            
+            title = article[0] if article else "Noticia"
+            source = article[1] if article else "Desconocido"
+            
+            caption = (
+                f"📰 *{title[:200]}*\n\n"
+                f"📝 *Draft:* {draft_tweet[:300]}\n\n"
+                f"📌 Fuente: {source}"
+            )
+            
+            try:
+                result = await _telegram_request("sendMessage", {
+                    "chat_id": TELEGRAM_CHAT_ID,
+                    "text": caption,
+                    "parse_mode": "Markdown",
+                    "reply_markup": keyboard,
+                })
+                
+                if result.get("ok") and result.get("result", {}).get("message_id"):
+                    msg_id = result["result"]["message_id"]
+                    _set_telegram_msg_id(entry_id, msg_id, str(TELEGRAM_CHAT_ID))
+                    print(f"[approval] ✅ Sent approval for {article_id[:8]} → msg {msg_id}")
+            except Exception as e:
+                print(f"[approval] ⚠️ Failed to send approval for {article_id[:8]}: {e}")
+                
+    except Exception as exc:
+        print(f"[approval] ⚠️ Error in _send_pending_queue_approvals: {exc}")
