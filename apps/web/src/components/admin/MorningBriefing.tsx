@@ -95,13 +95,14 @@ function impactStars(impact: number): string {
 
 // ── Semaphore indicator ────────────────────────────────────────────────
 
+const SEMAPHORE_COLORS = {
+  green: { dot: 'bg-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: 'All Systems' },
+  yellow: { dot: 'bg-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400', label: 'Degraded' },
+  red: { dot: 'bg-red-500', bg: 'bg-red-500/10', text: 'text-red-400', label: 'Critical' },
+} as const;
+
 function Semaphore({ status }: { status: 'green' | 'yellow' | 'red' }) {
-  const colors = {
-    green: { dot: 'bg-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: 'All Systems' },
-    yellow: { dot: 'bg-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400', label: 'Degraded' },
-    red: { dot: 'bg-red-500', bg: 'bg-red-500/10', text: 'text-red-400', label: 'Critical' },
-  };
-  const c = colors[status];
+  const c = SEMAPHORE_COLORS[status];
 
   return (
     <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${c.bg}`}>
@@ -219,6 +220,7 @@ export function MorningBriefing() {
           <button
             onClick={fetchData}
             className="px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors cursor-pointer"
+            aria-label="Retry briefing"
           >
             Retry
           </button>

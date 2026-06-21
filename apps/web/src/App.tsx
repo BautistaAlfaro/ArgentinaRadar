@@ -63,7 +63,7 @@ export function App() {
           <Route
             path="/admin"
             element={
-              <Gate role="ADMIN">
+              <Gate requiredRole="ADMIN">
                 <AdminDashboard />
               </Gate>
             }

@@ -24,7 +24,7 @@ interface PaginatedResponse<T> {
 }
 
 // ─── Fetch news items ─────────────────────────────────────────────
-export async function fetchNews(params?: {
+async function fetchNews(params?: {
   category?: string;
   status?: string;
   limit?: number;
@@ -66,7 +66,7 @@ export async function fetchGeolocatedNews(params?: {
 }
 
 // ─── Geolocate text ───────────────────────────────────────────────
-export async function geolocateText(text: string): Promise<{
+async function geolocateText(text: string): Promise<{
   province: string;
   city: string | null;
   neighborhood: string | null;
@@ -97,7 +97,7 @@ export async function fetchEconomicData(): Promise<EconomicIndicator[]> {
 }
 
 // ─── Fetch service health ─────────────────────────────────────────
-export async function fetchServiceHealth(serviceUrl: string): Promise<{
+async function fetchServiceHealth(serviceUrl: string): Promise<{
   status: string;
   uptime: number;
 }> {
@@ -161,7 +161,7 @@ export async function fetchEvent(id: string): Promise<EventDetail> {
   return resp.json();
 }
 
-export async function fetchTrendingEvents(): Promise<EventItem[]> {
+async function fetchTrendingEvents(): Promise<EventItem[]> {
   const resp = await fetch(`${EVENT_API}/api/events/trending`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch trending events: ${resp.status} ${resp.statusText}`);
@@ -350,25 +350,25 @@ export interface FlightResponse {
   updatedAt: string | null;
 }
 
-export async function fetchWeatherAlerts(): Promise<WeatherAlertResponse> {
+async function fetchWeatherAlerts(): Promise<WeatherAlertResponse> {
   const resp = await fetch(`${ALERTS_API}/api/alerts/weather`);
   if (!resp.ok) throw new Error(`Weather alerts fetch failed: ${resp.status}`);
   return resp.json();
 }
 
-export async function fetchEarthquakes(): Promise<EarthquakeResponse> {
+async function fetchEarthquakes(): Promise<EarthquakeResponse> {
   const resp = await fetch(`${ALERTS_API}/api/alerts/earthquakes`);
   if (!resp.ok) throw new Error(`Earthquakes fetch failed: ${resp.status}`);
   return resp.json();
 }
 
-export async function fetchFires(): Promise<FireResponse> {
+async function fetchFires(): Promise<FireResponse> {
   const resp = await fetch(`${ALERTS_API}/api/alerts/fires`);
   if (!resp.ok) throw new Error(`Fires fetch failed: ${resp.status}`);
   return resp.json();
 }
 
-export async function fetchFlights(): Promise<FlightResponse> {
+async function fetchFlights(): Promise<FlightResponse> {
   const resp = await fetch(`${ALERTS_API}/api/alerts/flights`);
   if (!resp.ok) throw new Error(`Flights fetch failed: ${resp.status}`);
   return resp.json();

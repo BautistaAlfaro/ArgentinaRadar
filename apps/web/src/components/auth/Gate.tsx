@@ -2,8 +2,8 @@
  * Gate — role-based route guard.
  *
  * Usage:
- *   <Gate role="ADMIN">        → only ADMIN
- *   <Gate role="VIP">          → VIP or ADMIN
+ *   <Gate requiredRole="ADMIN">        → only ADMIN
+ *   <Gate requiredRole="VIP">          → VIP or ADMIN
  *   <Gate>                     → any authenticated user
  *
  * When access is denied, shows an "Access Denied" panel with a
@@ -16,7 +16,7 @@ import { AuthModal } from './AuthModal';
 
 interface GateProps {
   /** Minimum role required to see children. Omit to protect any authenticated user. */
-  role?: UserRole;
+  requiredRole?: UserRole;
   /** Content to render when authorized */
   children: React.ReactNode;
   /** Optional custom fallback when unauthorized (default: access denied panel) */
@@ -29,15 +29,15 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
   ADMIN: 2,
 };
 
-export function Gate({ role, children, fallback }: GateProps) {
+export function Gate({ requiredRole, children, fallback }: GateProps) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   let hasAccess: boolean;
-  if (role) {
+  if (requiredRole) {
     const userRole = user?.role ?? 'VISITOR';
-    hasAccess = ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[role];
+    hasAccess = ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[requiredRole];
   } else {
     hasAccess = isAuthenticated;
   }
@@ -74,10 +74,10 @@ export function Gate({ role, children, fallback }: GateProps) {
             Acceso restringido
           </h2>
           <p className="text-sm text-slate-400 mb-6">
-            {role ? (
+            {requiredRole ? (
               <>
                 Necesitas permisos de{' '}
-                <span className="text-blue-400 font-medium">{role}</span>{' '}
+                <span className="text-blue-400 font-medium">{requiredRole}</span>{' '}
                 para acceder a esta sección.
               </>
             ) : (

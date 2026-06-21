@@ -227,12 +227,23 @@ export function MapView() {
     return <MapLibreFallback />;
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectNewsLocation(null);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
       className="w-full h-full relative"
       style={{ minHeight: 0 }}
       onClick={handleContainerClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      aria-label="Clear map selection"
     >
       {globeReady && globeRef.current && (
         <>

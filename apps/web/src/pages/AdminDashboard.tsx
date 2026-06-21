@@ -10,7 +10,7 @@
  */
 
 import { lazy, Suspense, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, m, domAnimation, AnimatePresence } from 'framer-motion';
 import { useKPIs, useDailyStats, useSystemMetrics, useRevenue } from '../hooks/useAdminData';
 
 // Lazy-load admin components to code-split heavy chart libraries (recharts)
@@ -28,6 +28,8 @@ const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').t
 const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
 
 // ─── Suspense fallbacks ──────────────────────────────────────────
+const EMPTY_ARRAY: [] = [];
+const ZERO = 0;
 function LoadingSkeleton({ className }: { className?: string }) {
   return <div className={`bg-slate-800 rounded-xl animate-pulse ${className ?? ''}`} />;
 }
@@ -124,12 +126,14 @@ export function AdminDashboard() {
               {TABS.map((tab) => (
                 <button
                   key={tab.value}
+                  type="button"
                   onClick={() => setActiveTab(tab.value)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
                     activeTab === tab.value
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
+                  aria-label={`Tab: ${tab.label}`}
                 >
                   {tab.icon} {tab.label}
                 </button>
@@ -142,12 +146,14 @@ export function AdminDashboard() {
                 {RANGE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => setRange(opt.value)}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
                       range === opt.value
                         ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
+                    aria-label={`Select range: ${opt.label}`}
                   >
                     {opt.label}
                   </button>
@@ -157,6 +163,7 @@ export function AdminDashboard() {
 
             {/* Refresh indicator */}
             <button
+              type="button"
               onClick={() => window.location.reload()}
               className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800/60 cursor-pointer"
               title="Refresh data"
@@ -174,7 +181,7 @@ export function AdminDashboard() {
       <div className="p-6 space-y-6">
         <AnimatePresence mode="wait">
           {activeTab === 'overview' ? (
-            <motion.div
+            <m.div
               key={range}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -192,37 +199,37 @@ export function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <KPICard
                   icon={Icons.tweets}
-                  value={kpis?.tweetsPublished.total ?? 0}
+                  value={kpis?.tweetsPublished.total ?? ZERO}
                   label="Tweets Published"
-                  trend={kpis?.tweetsPublished.trend ?? 0}
-                  sparkline={kpis?.tweetsPublished.sparkline ?? []}
+                  trend={kpis?.tweetsPublished.trend ?? ZERO}
+                  sparkline={kpis?.tweetsPublished.sparkline ?? EMPTY_ARRAY}
                   accent="blue"
                   format="compact"
                 />
                 <KPICard
                   icon={Icons.news}
-                  value={kpis?.newsProcessed.total ?? 0}
+                  value={kpis?.newsProcessed.total ?? ZERO}
                   label="News Processed"
-                  trend={kpis?.newsProcessed.trend ?? 0}
-                  sparkline={kpis?.newsProcessed.sparkline ?? []}
+                  trend={kpis?.newsProcessed.trend ?? ZERO}
+                  sparkline={kpis?.newsProcessed.sparkline ?? EMPTY_ARRAY}
                   accent="emerald"
                   format="compact"
                 />
                 <KPICard
                   icon={Icons.revenue}
-                  value={kpis?.revenue.usd ?? 0}
+                  value={kpis?.revenue.usd ?? ZERO}
                   label="Revenue (USD)"
-                  trend={kpis?.revenue.trend ?? 0}
-                  sparkline={kpis?.revenue.sparkline ?? []}
+                  trend={kpis?.revenue.trend ?? ZERO}
+                  sparkline={kpis?.revenue.sparkline ?? EMPTY_ARRAY}
                   accent="amber"
                   format="currency"
                 />
                 <KPICard
                   icon={Icons.users}
-                  value={kpis?.activeUsers.total ?? 0}
+                  value={kpis?.activeUsers.total ?? ZERO}
                   label="Active Users"
-                  trend={kpis?.activeUsers.trend ?? 0}
-                  sparkline={kpis?.activeUsers.sparkline ?? []}
+                  trend={kpis?.activeUsers.trend ?? ZERO}
+                  sparkline={kpis?.activeUsers.sparkline ?? EMPTY_ARRAY}
                   accent="violet"
                 />
               </div>
@@ -231,25 +238,25 @@ export function AdminDashboard() {
             {/* ── Charts Grid ────────────────────────────────────────── */}
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <NewsProcessingChart data={dailyStats ?? []} />
-                <RevenueChart data={revenue ?? []} />
+                <NewsProcessingChart data={dailyStats ?? EMPTY_ARRAY} />
+                <RevenueChart data={revenue ?? EMPTY_ARRAY} />
               </div>
             </Suspense>
 
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <SystemHealthChart
-                  metrics={systemMetrics ?? []}
+                  metrics={systemMetrics ?? EMPTY_ARRAY}
                   dimension={systemDimension}
                 />
-                <EventDetectionChart data={dailyStats ?? []} />
+                <EventDetectionChart data={dailyStats ?? EMPTY_ARRAY} />
               </div>
             </Suspense>
 
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <UserActivityChart data={dailyStats ?? []} />
-                <AICostChart data={dailyStats ?? []} />
+                <UserActivityChart data={dailyStats ?? EMPTY_ARRAY} />
+                <AICostChart data={dailyStats ?? EMPTY_ARRAY} />
               </div>
             </Suspense>
 
@@ -278,11 +285,11 @@ export function AdminDashboard() {
 
             {/* ── System Metrics ─────────────────────────────────────── */}
             <Suspense fallback={<LoadingSkeleton className="h-64" />}>
-              <SystemMetrics metrics={systemMetrics ?? []} />
+              <SystemMetrics metrics={systemMetrics ?? EMPTY_ARRAY} />
             </Suspense>
-          </motion.div>
+          </m.div>
           ) : (
-            <motion.div
+            <m.div
               key="briefing"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -292,7 +299,7 @@ export function AdminDashboard() {
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <MorningBriefing />
               </Suspense>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
       </div>

@@ -168,20 +168,21 @@ export function NewsFeed() {
 }
 
 // ─── Article Card ─────────────────────────────────────────
+
+const CATEGORY_COLORS: Record<string, string> = {
+  politica: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  economia: 'bg-green-500/20 text-green-400 border-green-500/30',
+  sociedad: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  deportes: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+};
+
 interface ArticleCardProps {
   article: NewsItem;
   onClick: (article: NewsItem) => void;
 }
 
 function ArticleCard({ article, onClick }: ArticleCardProps) {
-  const categoryColors: Record<string, string> = {
-    politica: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    economia: 'bg-green-500/20 text-green-400 border-green-500/30',
-    sociedad: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    deportes: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  };
-
-  const catColor = categoryColors[article.category] ?? 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+  const catColor = CATEGORY_COLORS[article.category] ?? 'bg-slate-500/20 text-slate-400 border-slate-500/30';
 
   const timeAgo = getTimeAgo(article.publishedAt);
 
