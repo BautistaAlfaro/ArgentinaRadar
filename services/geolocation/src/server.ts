@@ -14,7 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { geolocate } from './index.js';
 import type { ExtractedLocation } from './index.js';
-import { createLoop } from '@shared/utils/shutdown';
+import { createLoop } from '../../../shared/utils/shutdown';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

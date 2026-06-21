@@ -30,7 +30,7 @@ import {
   getQuotaInfo,
 } from './rateLimiter.js';
 import { moveToDeadLetter } from './deadLetter.js';
-import { createLoop } from '@shared/utils/shutdown';
+import { createLoop } from '../../../shared/utils/shutdown';
 
 // ---------------------------------------------------------------------------
 // Constants
