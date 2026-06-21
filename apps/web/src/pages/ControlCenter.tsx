@@ -35,14 +35,12 @@ const EMPTY_CATEGORIES: { category: string; count: number }[] = [];
  * └──────────────────────────────────────────────┘
  */
 
-import { API } from '@shared/apiConfig';
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LazyMotion, domAnimation, m as motion } from "framer-motion";
-import { ServiceStatusBar } from "../components/admin/ServiceStatusBar";
-import { PipelineLive } from "../components/admin/PipelineLive";
-import { QuickActions } from "../components/admin/QuickActions";
-import { LiveStats } from "../components/admin/LiveStats";
+import { PipelineView } from "../components/admin/PipelineView";
+import { ServiceCards } from "../components/admin/ServiceCards";
+import { API } from '@shared/apiConfig';
 
 // ─── Lazy-loaded existing charts ─────────────────────────────────────
 
@@ -330,67 +328,70 @@ export function ControlCenter() {
           {/* Section 1: Mini Pipeline Stats */}
           <MiniPipeStats pipeline={pipeData} />
 
-          {/* Section 2: Service Status Bar */}
-          <ServiceStatusBar />
+          {/* Section 2: Service Status */}
+          <ServiceCards services={null} isLoading={false} />
 
-          {/* Section 3: Pipeline Live */}
-          <PipelineLive />
+          {/* Section 3: Pipeline */}
+          <PipelineView pipeline={pipeData} approvalQueue={pipelineStats?.approvalQueue ?? {}} isLoading={statsLoading} />
 
-          {/* Section 4: Live Stats */}
-          <LiveStats />
-
-          {/* Section 5: Charts + Actions Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Charts area (2/3) */}
-            <div className="lg:col-span-2 space-y-5">
-              {/* Charts grid */}
-              <Suspense
-                fallback={
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <LoadingSkeleton className="h-72" />
-                    <LoadingSkeleton className="h-72" />
-                  </div>
-                }
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <NewsProcessingChart data={dailyData} />
-                  <EventDetectionChart data={dailyData} />
-                </div>
-              </Suspense>
-
-              <Suspense
-                fallback={
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <LoadingSkeleton className="h-72" />
-                    <LoadingSkeleton className="h-72" />
-                  </div>
-                }
-              >
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <SystemHealthChart
-                    metrics={systemMetrics as any[]}
-                    dimension={systemDimension}
-                  />
-                  {/* Category Distribution (reuse CategoryChart) */}
-                  <Suspense fallback={<LoadingSkeleton className="h-72" />}>
-                    <CategoryChart
-                      categories={categories ?? EMPTY_CATEGORIES}
-                      isLoading={false}
-                    />
-                  </Suspense>
-                </div>
-              </Suspense>
+          {/* Section 4: System Info */}
+          <div className="grid grid-cols-3 gap-3 text-xs text-slate-400">
+            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
+              <span className="text-slate-500">CPU</span>
+              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.cpu ?? '—'}%</p>
             </div>
-
-            {/* Actions area (1/3) */}
-            <div className="space-y-5">
-              <QuickActions />
+            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
+              <span className="text-slate-500">RAM</span>
+              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.memory ?? '—'} MB</p>
             </div>
+            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
+              <span className="text-slate-500">Uptime</span>
+              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.uptime ?? '—'}</p>
+            </div>
+          </div>
+
+          {/* Section 5: Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <LoadingSkeleton className="h-72" />
+                  <LoadingSkeleton className="h-72" />
+                </div>
+              }
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <NewsProcessingChart data={dailyData} />
+                <EventDetectionChart data={dailyData} />
+              </div>
+            </Suspense>
+
+            <Suspense
+              fallback={
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <LoadingSkeleton className="h-72" />
+                  <LoadingSkeleton className="h-72" />
+                </div>
+              }
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <SystemHealthChart
+                  metrics={systemMetrics as any[]}
+                  dimension={systemDimension}
+                />
+                <CategoryChart
+                  categories={categories ?? EMPTY_CATEGORIES}
+                  isLoading={false}
+                />
+              </div>
+            </Suspense>
           </div>
 
           {/* Section 6: Activity Feed */}
           <Suspense fallback={<LoadingSkeleton className="h-64" />}>
-            <ActivityFeed items={recentActivity} isLoading={false} />
+            <ActivityFeed items={recentActivity as any} isLoading={false} />
           </Suspense>
         </div>
       </div>
