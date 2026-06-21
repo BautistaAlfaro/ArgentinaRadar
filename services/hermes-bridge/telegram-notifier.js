@@ -1,7 +1,11 @@
 /**
- * Simple Telegram Approval Notifier
- * Polls approval_queue and sends approval requests to Telegram with inline buttons.
- * Runs as a standalone Node.js process.
+ * Telegram Approval Notifier — ArgentinaRadar
+ * 
+ * Polls approval_queue, generates NanoBanana news thumbnails,
+ * sends to Telegram with inline approve/reject buttons, and
+ * handles callbacks to publish on Bluesky with images.
+ * 
+ * Also serves as the Telegram bot command handler (menu, stats, etc.)
  */
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -12,6 +16,65 @@ const CHAT_ID = '1923443777';
 const POLL_INTERVAL = 10000; // 10 seconds
 
 const db = new Database(DB_PATH);
+
+// ─── NanoBanana Prompt Builder ──────────────────────────────────────────
+
+/**
+ * Build a rich NanoBanana-style image prompt for Pollinations.ai.
+ * 
+ * Style: Only Fonseca (dramático, alto contraste) + MDZ Online (limpio, periodístico).
+ * Colors: dark blue #003087 + gold #FFD700. Horizontal 16:9 news thumbnail.
+ */
+function buildNanoBananaPrompt(title, source, category) {
+  const headline = title.substring(0, 100).replace(/[*_`[\]()#+-.!]/g, '');
+  const sourceName = source.toUpperCase();
+  const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
+    category === 'economia' ? '💰' : category === 'deportes' ? '⚽' : '📰';
+  
+  return [
+    'Professional Argentine news thumbnail, horizontal 16:9 layout.',
+    `Headline: "${headline}".`,
+    'Style: dramatic Argentine TV news ("Only Fonseca" channel style) — high contrast, cinematic lighting, photorealistic.',
+    `Color palette: dark navy blue (#003087) background with gold (#FFD700) accents and text.`,
+    `Source badge: ${sourceName} logo in top corner.`,
+    'Elements: bold news typography, expressive faces if relevant, dramatic shadows.',
+    'Red "ULTIMO MOMENTO" banner element (subtle, professional).',
+    'No cartoon, no illustration — photorealistic news broadcast style.',
+    'Clean modern composition, professional Argentine journalism aesthetic.'
+  ].join(' ');
+}
+
+// ─── Bluesky Tweet Formatter ────────────────────────────────────────────
+
+/**
+ * Format article text for Bluesky (300 char limit).
+ * 
+ * Format: 🇦🇷 {headline} | 📰 {source} | {category_emoji} | #ArgentinaRadar
+ */
+function formatBlueskyTweet(title, source, category) {
+  const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
+    category === 'economia' ? '💰' : category === 'deportes' ? '⚽' :
+    category === 'policial' ? '🚔' : category === 'sociedad' ? '🌎' : '📰';
+  
+  const catTag = category ? ` #${category.charAt(0).toUpperCase() + category.slice(1)}` : '';
+  const suffix = `\n\n📌 ${source} | ${catEmoji} | #ArgentinaRadar${catTag}`;
+  const suffixLen = suffix.length;
+  
+  // Smart truncation: cut at last space before limit
+  let headline = title.trim();
+  const maxHeadline = 300 - suffixLen;
+  if (headline.length > maxHeadline) {
+    headline = headline.substring(0, maxHeadline - 3);
+    // Cut at last space for clean break
+    const lastSpace = headline.lastIndexOf(' ');
+    if (lastSpace > maxHeadline * 0.7) headline = headline.substring(0, lastSpace);
+    headline += '...';
+  }
+  
+  return `🇦🇷 ${headline}${suffix}`;
+}
+
+// ─── Telegram API helpers ───────────────────────────────────────────────
 
 async function sendToTelegram(text, keyboard) {
   const body = JSON.stringify({
@@ -57,7 +120,7 @@ async function sendPhoto(caption, imageUrl, keyboard) {
 async function checkPendingApprovals() {
   try {
     const pending = db.prepare(
-      `SELECT aq.id, aq.article_id, aq.draft_tweet, n.title, n.source 
+      `SELECT aq.id, aq.article_id, aq.draft_tweet, n.title, n.source, n.category
        FROM approval_queue aq 
        JOIN news_items n ON aq.article_id = n.id 
        WHERE aq.status = 'pending' AND (aq.telegram_message_id IS NULL OR aq.telegram_message_id = 0)
@@ -74,11 +137,10 @@ async function checkPendingApprovals() {
         `DELETE FROM approval_queue WHERE article_id = ? AND id != ? AND status = 'pending'`
       ).run(entry.article_id, entry.id);
 
-      // Build NanoBanana prompt + image URL
-      const headline = (entry.title || '').substring(0, 80);
-      const source = (entry.source || 'ARGENTINA').toUpperCase();
-      const nanoPrompt = `Professional Argentine news thumbnail. ${headline}. Dark blue (#003087) and gold (#FFD700). ${source} logo. Dramatic lighting, photorealistic, cinematic. Clean modern layout. ULTIMO MOMENTO banner.`;
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1024&height=1024&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+      // Build NanoBanana prompt + image URL (16:9 landscape for Bluesky)
+      const category = entry.category || 'general';
+      const nanoPrompt = buildNanoBananaPrompt(entry.title, entry.source, category);
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
       // Save image_url for later Bluesky publish
       db.prepare('UPDATE approval_queue SET image_url = ?, image_prompt = ? WHERE id = ?')
@@ -268,10 +330,10 @@ async function checkCallbacks() {
         }),
       });
       
-      if (action === 'approve') {
-        // Get article info + image_url
+        if (action === 'approve') {
+        // Get article info + image_url + category
         const aq = db.prepare('SELECT image_url FROM approval_queue WHERE article_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1').get(articleId, 'pending');
-        const article = db.prepare('SELECT title, source FROM news_items WHERE id = ?').get(articleId);
+        const article = db.prepare('SELECT title, source, category FROM news_items WHERE id = ?').get(articleId);
         
         // Mark as approved
         db.prepare('UPDATE approval_queue SET status = ?, reviewed_at = datetime("now") WHERE article_id = ?')
@@ -280,7 +342,7 @@ async function checkCallbacks() {
         
         // Publish to Bluesky
         if (article) {
-          const tweetText = article.title ? `${article.title.slice(0, 250)}\n\n📌 ${article.source} #ArgentinaRadar` : 'Novedad #ArgentinaRadar';
+          const tweetText = formatBlueskyTweet(article.title, article.source, article.category);
           try {
             const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
               method: 'POST',

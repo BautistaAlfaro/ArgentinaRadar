@@ -14,14 +14,26 @@ if (!article) { console.log('No articles found'); process.exit(1); }
 const ARTICLE_ID = article.id;
 const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
 
-// Build NanoBanana prompt
-const headline = article.title.substring(0, 80);
-const source = article.source.toUpperCase();
-const nanoPrompt = `Professional Argentine news thumbnail. ${headline}. Dark blue (#003087) and gold (#FFD700). ${source} logo. Dramatic lighting, photorealistic, cinematic. Clean modern layout. ULTIMO MOMENTO banner.`;
+// Build rich NanoBanana prompt
+const headline = article.title.substring(0, 100).replace(/[*_`[\]()#+-.!]/g, '');
+const source = (article.source || 'ARGENTINA').toUpperCase();
+const category = article.category || 'general';
+const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
+  category === 'economia' ? '💰' : category === 'deportes' ? '⚽' : '📰';
+const nanoPrompt = [
+  `Professional Argentine news thumbnail, horizontal 16:9 layout.`,
+  `Headline: "${headline}".`,
+  `Style: dramatic Argentine TV news ("Only Fonseca" style) — high contrast, cinematic lighting, photorealistic.`,
+  `Color palette: dark navy blue (#003087) background with gold (#FFD700) accents and text.`,
+  `Source badge: ${source} logo in top corner.`,
+  `Elements: bold news typography, expressive faces if relevant, dramatic shadows.`,
+  `Red "ULTIMO MOMENTO" banner element (subtle, professional).`,
+  `No cartoon, no illustration — photorealistic news broadcast style.`,
+  `Clean modern composition, professional Argentine journalism aesthetic.`
+].join(' ');
 
-// Generate image
-const encoded = encodeURIComponent(nanoPrompt);
-const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=` + Math.floor(Math.random() * 1000);
+// Generate image — 16:9 landscape for Bluesky
+const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=` + Math.floor(Math.random() * 1000);
 
 // Insert into approval_queue with image_url — use telegram_message_id=-1 as placeholder
 // so the notifier skips it (it's being handled manually with image)
@@ -37,9 +49,9 @@ db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_u
   };
 
   const caption = [
-    '📰 *' + article.title + '*',
+    `${catEmoji} *${article.title}*`,
     '',
-    '📌 ' + article.source + ' | #ArgentinaRadar'
+    `📌 ${article.source}${category !== 'general' ? ' · ' + category : ''} | #ArgentinaRadar`
   ].join('\n');
 
   // Send photo + caption + buttons
