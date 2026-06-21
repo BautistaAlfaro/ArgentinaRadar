@@ -67,25 +67,31 @@ app.get('/api/news/geolocated', (req, res) => {
     const province = req.query.province as string | undefined;
 
     const d = getDb();
-    let sql = `SELECT * FROM news_items WHERE location IS NOT NULL AND status IN ('geolocated','filtered','published','discarded')`;
+    const conditions: string[] = [
+      "location IS NOT NULL",
+      "status IN ('geolocated','filtered','published','discarded')",
+    ];
     const params: unknown[] = [];
 
     if (category) {
-      sql += ' AND category = ?';
+      conditions.push('category = ?');
       params.push(category);
     }
     if (province) {
-      sql += ' AND json_extract(location, \'$.province\') LIKE ?';
+      conditions.push("json_extract(location, '$.province') LIKE ?");
       params.push(`%${province}%`);
     }
 
-    sql += ' ORDER BY published_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    const whereClause = conditions.join(' AND ');
 
-    const rows = d.prepare(sql).all(...params) as Array<Record<string, unknown>>;
-    const total = (d.prepare(
-      `SELECT COUNT(*) as count FROM news_items WHERE location IS NOT NULL AND status IN ('geolocated','filtered','published','discarded')`
-    ).get() as { count: number }).count;
+    // Data query with ordering and pagination
+    const dataSql = `SELECT * FROM news_items WHERE ${whereClause} ORDER BY published_at DESC LIMIT ? OFFSET ?`;
+    const dataParams = [...params, limit, offset];
+    const rows = d.prepare(dataSql).all(...dataParams) as Array<Record<string, unknown>>;
+
+    // Count query with same filters (no pagination)
+    const countSql = `SELECT COUNT(*) as count FROM news_items WHERE ${whereClause}`;
+    const total = (d.prepare(countSql).get(...params) as { count: number }).count;
 
     const items = rows.map((row) => ({
       id: row.id,
