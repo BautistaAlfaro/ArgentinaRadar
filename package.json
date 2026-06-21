@@ -4,6 +4,7 @@
   "private": true,
   "workspaces": [
     "apps/*",
+    "packages/*",
     "services/*"
   ],
   "scripts": {
@@ -19,7 +20,12 @@
     "dev:all": "pm2 start config/pm2.config.cjs",
     "stop": "pm2 stop all",
     "logs": "pm2 logs",
-    "build": "npm run build --workspace=@argentinaradar/web"
+    "build": "npm run build --workspace=@argentinaradar/web",
+    "db:generate": "npm run prisma:generate --workspace=@argentinaradar/database",
+    "db:migrate": "npm run prisma:migrate --workspace=@argentinaradar/database",
+    "db:studio": "npm run prisma:studio --workspace=@argentinaradar/database",
+    "db:validate": "npm run prisma:validate --workspace=@argentinaradar/database",
+    "queue:check": "node packages/queue/src/check.js"
   },
   "devDependencies": {
     "pm2": "^5.4.0",

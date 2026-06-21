@@ -1,0 +1,168 @@
+// ─────────────────────────────────────────────────────────
+//  ArgentinaRadar v2 — Prisma Schema (PostgreSQL + pgvector)
+// ─────────────────────────────────────────────────────────
+//   Models:   11 (News, Source, Event, NewsEvent, Entity,
+//                  EventEntity, Location, Trend, Tweet,
+//                  Category, AiCost)
+//   Extension: pgvector (vector(1536))
+//   Indexes:  IVFFlat on embedding, B-tree on impact,
+//             publishedAt, ingestedAt, type+tier, etc.
+// ─────────────────────────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector]
+}
+
+// ── News ─────────────────────────────────────────────────
+model News {
+  id          String   @id @default(uuid())
+  title       String
+  summary     String?
+  url         String   @unique
+  sourceId    String
+  source      Source    @relation(fields: [sourceId], references: [id])
+  content     String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  publishedAt DateTime
+  ingestedAt  DateTime @default(now())
+  embedding   Unsupported("vector(1536)")?
+
+  newsEvents NewsEvent[]
+
+  @@index([publishedAt])
+  @@index([ingestedAt])
+  @@index([sourceId])
+  // @@index([embedding]) — pgvector IVFFlat index handled via raw SQL
+}
+
+// ── Source ───────────────────────────────────────────────
+model Source {
+  id          String @id @default(uuid())
+  name        String @unique
+  type        String // "rss" | "scrape" | "api"
+  url         String
+  reliability Float  @default(1.0)
+
+  news News[]
+}
+
+// ── Event ────────────────────────────────────────────────
+model Event {
+  id             String   @id @default(uuid())
+  title          String
+  summary        String?
+  impactScore    Int      @default(0)
+  mediaConsensus String   @default("low")  // "high" | "medium" | "low"
+  location       Json?    // { lat, lng, province, city }
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  newsEvents NewsEvent[]
+  entities   EventEntity[]
+  tweets     Tweet[]
+
+  @@index([impactScore(sort: Desc)])
+  @@index([createdAt])
+}
+
+// ── NewsEvent (M:N join) ─────────────────────────────────
+model NewsEvent {
+  newsId     String
+  eventId    String
+  confidence Float  @default(1.0)
+
+  news  News  @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([newsId, eventId])
+}
+
+// ── Entity ───────────────────────────────────────────────
+model Entity {
+  id           String @id @default(uuid())
+  name         String @unique
+  type         String // "person" | "organization" | "place"
+  tier         Int    @default(3)  // 1 | 2 | 3
+  mentionCount Int    @default(0)
+
+  createdAt DateTime @default(now())
+  events    EventEntity[]
+
+  @@index([type, tier])
+}
+
+// ── EventEntity (M:N join) ───────────────────────────────
+model EventEntity {
+  eventId  String
+  entityId String
+
+  event  Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  entity Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, entityId])
+}
+
+// ── Location ─────────────────────────────────────────────
+model Location {
+  id       String @id @default(uuid())
+  name     String
+  province String
+  lat      Float
+  lng      Float
+
+  @@unique([name, province])
+}
+
+// ── Trend ────────────────────────────────────────────────
+model Trend {
+  id         String   @id @default(uuid())
+  entityName String
+  score      Float
+  growthRate Float
+
+  detectedAt DateTime @default(now())
+
+  @@index([detectedAt])
+  @@index([score(sort: Desc)])
+}
+
+// ── Tweet ────────────────────────────────────────────────
+model Tweet {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tweetId     String   @unique // Twitter's native tweet ID
+  text        String
+  postedAt    DateTime @default(now())
+  impactScore Int
+
+  @@index([postedAt])
+}
+
+// ── Category ─────────────────────────────────────────────
+model Category {
+  id   String @id @default(uuid())
+  name String @unique
+  slug String @unique
+
+  news News[]
+}
+
+// ── AiCost ───────────────────────────────────────────────
+model AiCost {
+  id     String   @id @default(uuid())
+  date   DateTime
+  tokens Int
+  cost   Float
+  model  String
+
+  @@index([date])
+}

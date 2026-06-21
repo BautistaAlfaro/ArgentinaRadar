@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+.env.local
 *.db
 *.db-shm
 *.db-wal
@@ -10,3 +11,9 @@ dist/
 .vite/
 __pycache__/
 *.pyc
+
+# PostgreSQL data (local dev)
+.pgdata/
+
+# Prisma
+packages/database/node_modules/

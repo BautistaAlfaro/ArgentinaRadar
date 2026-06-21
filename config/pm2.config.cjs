@@ -176,5 +176,27 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+    // ─── AI Processor (Python / FastAPI) — PR 2.1 ────────────────
+    {
+      name: 'ai-processor',
+      cwd: path.join(ROOT, 'services', 'ai-processor'),
+      script: 'cmd.exe',
+      args: '/c python -m uvicorn src.server:app --host 0.0.0.0 --port 3010',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3010',
+        PYTHONPATH: '.',
+        DAILY_BUDGET: '2.00',
+        AI_PROVIDER: 'openai',
+      },
+      watch: ['src'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'ai-processor-error.log'),
+      out_file: path.join(LOG_DIR, 'ai-processor-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
   ],
 };
