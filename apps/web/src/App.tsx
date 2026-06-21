@@ -2,6 +2,7 @@ import { Layout } from './components/Layout';
 import { MapView } from './components/MapView';
 import { LayerToggle } from './components/panels/LayerToggle';
 import { NewsFeed } from './components/panels/NewsFeed';
+import { EconomicTicker } from './components/panels/EconomicTicker';
 
 export function App() {
   return (
@@ -22,13 +23,7 @@ export function App() {
         </aside>
       }
       map={<MapView />}
-      ticker={
-        <footer className="h-12 bg-slate-800/80 backdrop-blur-sm border-t border-slate-700/50 shrink-0 flex items-center px-4">
-          <span className="text-xs text-slate-500">
-            ArgentinaRadar v0.1.0 — Desarrollando...
-          </span>
-        </footer>
-      }
+      ticker={<EconomicTicker />}
     />
   );
 }

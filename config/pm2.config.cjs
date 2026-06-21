@@ -134,5 +134,27 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+
+    // ─── Economic Data (Node.js / Express) ──────────────────────
+    {
+      name: 'economic-data',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/economic-data/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3006',
+        DB_PATH: path.join(ROOT, 'data', 'argentina-radar.db'),
+        HERMES_ALERT_URL: 'http://localhost:3005/api/alerts',
+      },
+      watch: ['services/economic-data/src', 'shared/types'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'economic-data-error.log'),
+      out_file: path.join(LOG_DIR, 'economic-data-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
   ],
 };
