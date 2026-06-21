@@ -2,7 +2,11 @@ node_modules/
 dist/
 .env
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 .DS_Store
 *.log
 .vite/
+__pycache__/
+*.pyc
