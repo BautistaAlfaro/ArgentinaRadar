@@ -12,6 +12,7 @@
 import Database from 'better-sqlite3';
 import { config } from './config.js';
 import { TwitterApiError, postTweet, uploadMedia } from './twitterClient.js';
+import { postToBluesky } from './blueskyClient.js';
 import { formatTweet } from './formatter.js';
 import { canPublish, getQuotaInfo } from './rateLimiter.js';
 import { moveToDeadLetter } from './deadLetter.js';
@@ -111,6 +112,17 @@ export async function publishArticle(
       console.log(
         `[publisher] ✅ Article ${articleId.slice(0, 8)}… published → tweet ${result.tweetId}`
       );
+
+      // Also post to Bluesky (non-critical — never fail the pipeline)
+      if (config.bluesky.enabled && config.bluesky.password) {
+        try {
+          const bsky = await postToBluesky(tweetText, config);
+          console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
+          await sleep(1000); // rate limit courtesy delay
+        } catch (err) {
+          console.warn(`[publisher] ⚠️ Bluesky failed:`, (err as Error).message);
+        }
+      }
 
       return { success: true, tweetId: result.tweetId };
     } catch (err) {
@@ -239,6 +251,17 @@ export async function publishText(
       console.log(
         `[publisher] ✅ Draft ${articleId.slice(0, 8)}… published → tweet ${result.tweetId}: "${headline}…"`
       );
+
+      // Also post to Bluesky (non-critical — never fail the pipeline)
+      if (config.bluesky.enabled && config.bluesky.password) {
+        try {
+          const bsky = await postToBluesky(text, config);
+          console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
+          await sleep(1000); // rate limit courtesy delay
+        } catch (err) {
+          console.warn(`[publisher] ⚠️ Bluesky failed:`, (err as Error).message);
+        }
+      }
 
       return { success: true, tweetId: result.tweetId };
     } catch (err) {

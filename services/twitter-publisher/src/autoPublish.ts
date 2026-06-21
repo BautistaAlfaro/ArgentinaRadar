@@ -22,6 +22,7 @@ import { fetchTrendingEvents } from './eventClient.js';
 import type { TrendingEvent } from './eventClient.js';
 import { formatEventTweet } from './formatter.js';
 import { postTweet, TwitterApiError } from './twitterClient.js';
+import { postToBluesky } from './blueskyClient.js';
 import {
   canPublishMonthly,
   canPublishDaily,
@@ -174,6 +175,17 @@ async function runAutoPublish(): Promise<void> {
             `[autoPublish] Published event "${event.title.slice(0, 60)}..." ` +
               `-> tweet ${result.tweetId}`
           );
+
+          // Also post to Bluesky (non-critical — never fail the pipeline)
+          if (config.bluesky.enabled && config.bluesky.password) {
+            try {
+              const bsky = await postToBluesky(tweetText, config);
+              console.log(`[autoPublish] ✅ Bluesky: ${bsky.uri}`);
+              await sleep(1000); // rate limit courtesy delay
+            } catch (err) {
+              console.warn(`[autoPublish] ⚠️ Bluesky failed:`, (err as Error).message);
+            }
+          }
 
           break; // exit retry loop
         } catch (err) {

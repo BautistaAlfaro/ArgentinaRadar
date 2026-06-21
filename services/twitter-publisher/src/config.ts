@@ -14,6 +14,8 @@ const __dirname = path.dirname(__filename);
 // ─── Resolve project root ───────────────────────────────────
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 
+export type Config = typeof config;
+
 export const config = {
   twitter: {
     apiKey: process.env.TWITTER_API_KEY ?? '',
@@ -38,6 +40,12 @@ export const config = {
     path:
       process.env.DB_PATH ??
       path.resolve(PROJECT_ROOT, 'data', 'argentina-radar.db'),
+  },
+
+  bluesky: {
+    enabled: process.env.BSKY_ENABLED !== 'false',
+    identifier: process.env.BSKY_IDENTIFIER || 'argentinaradar.bsky.social',
+    password: process.env.BSKY_APP_PASSWORD || '',
   },
 
   publishing: {
@@ -65,5 +73,13 @@ if (missing.length > 0) {
   console.warn(
     `[config] ⚠️  Missing Twitter credentials: ${missing.join(', ')}. ` +
       'Publishing to Twitter will fail until these are set.'
+  );
+}
+
+// Bluesky validation
+if (config.bluesky.enabled && !config.bluesky.password) {
+  console.warn(
+    '[config] ⚠️  Missing BSKY_APP_PASSWORD. ' +
+      'Bluesky publishing will be skipped until this is set.'
   );
 }
