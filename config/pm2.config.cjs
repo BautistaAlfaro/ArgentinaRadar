@@ -219,6 +219,52 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+    // ─── Night Owl (Node.js / Express) — Fase 1 ───────────────────
+    {
+      name: 'night-owl',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/night-owl/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3011',
+        NIGHT_OWL_ENABLED: 'true',
+        NIGHT_OWL_BUDGET_PER_NIGHT: '1.00',
+        TIMEZONE: 'America/Argentina/Buenos_Aires',
+      },
+      watch: ['services/night-owl/src', 'shared/types'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'night-owl-error.log'),
+      out_file: path.join(LOG_DIR, 'night-owl-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ─── Auth Service (Node.js / Express) — Fase 1 Roles ────────
+    {
+      name: 'auth',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/auth/src/index.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3010',
+        JWT_SECRET: 'dev-jwt-secret-change-in-production',
+        JWT_EXPIRES_IN: '15m',
+        REFRESH_TOKEN_EXPIRES_IN: '7d',
+      },
+      watch: ['services/auth/src', 'packages/auth-middleware/src', 'packages/database/src'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'auth-error.log'),
+      out_file: path.join(LOG_DIR, 'auth-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
     // ─── Trend Analyzer (Node.js / Express) — PR 3.1 ─────────────
     {
       name: 'trend-analyzer',
@@ -236,6 +282,29 @@ module.exports = {
       max_memory_restart: '500M',
       error_file: path.join(LOG_DIR, 'trend-analyzer-error.log'),
       out_file: path.join(LOG_DIR, 'trend-analyzer-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
+
+    // ─── Admin Dashboard (Node.js / Express) — Fase 1 Dashboard ───
+    {
+      name: 'admin',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/admin/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        ADMIN_PORT: '3012',
+        JWT_SECRET: 'dev-jwt-secret-change-in-production',
+        EVENT_DETECTOR_URL: 'http://localhost:3008',
+        COLLECTOR_INTERVAL: '3600000',
+      },
+      watch: ['services/admin/src', 'packages/auth-middleware/src', 'packages/database/src'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'admin-error.log'),
+      out_file: path.join(LOG_DIR, 'admin-out.log'),
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },

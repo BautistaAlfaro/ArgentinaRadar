@@ -11,6 +11,13 @@ export type {
   Tweet,
   Category,
   AiCost,
+  User,
+  Session,
+  Role,
+  KPI,
+  SystemMetric,
+  DailyStats,
+  Subscription,
 } from "@prisma/client";
 
 // ── Dual-Write Adapter ────────────────────────────────────

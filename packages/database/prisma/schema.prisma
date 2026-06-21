@@ -168,3 +168,92 @@ model AiCost {
 
   @@index([date])
 }
+
+// ── Role ─────────────────────────────────────────────────
+enum Role {
+  VISITOR
+  VIP
+  ADMIN
+}
+
+// ── User ─────────────────────────────────────────────────
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(VIP)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions      Session[]
+  subscriptions Subscription[]
+}
+
+// ── Session (refresh tokens) ─────────────────────────────
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ── Admin Dashboard ──────────────────────────────────────
+
+model KPI {
+  id        String   @id @default(uuid())
+  name      String   // "tweets_published", "news_processed", "revenue", "active_users"
+  value     Float
+  unit      String   // "count", "USD", "percentage"
+  category  String   // "engagement", "financial", "system"
+  date      DateTime @default(now())
+  metadata  Json?    // datos adicionales
+
+  @@index([name, date])
+  @@index([category, date])
+}
+
+model SystemMetric {
+  id          String   @id @default(uuid())
+  service     String   // "news-ingestion", "ai-processor", etc.
+  metric      String   // "cpu_usage", "memory_mb", "requests_per_min"
+  value       Float
+  timestamp   DateTime @default(now())
+
+  @@index([service, metric, timestamp])
+  @@index([timestamp])
+}
+
+model DailyStats {
+  id                String   @id @default(uuid())
+  date              DateTime @unique
+  newsIngested      Int      @default(0)
+  newsGeolocated    Int      @default(0)
+  newsFiltered      Int      @default(0)
+  eventsDetected    Int      @default(0)
+  tweetsPublished   Int      @default(0)
+  aiCost            Float    @default(0)
+  activeUsers       Int      @default(0)
+  revenue           Float    @default(0)
+
+  @@index([date])
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      String   // "free", "vip", "enterprise"
+  amount    Float    @default(0)
+  startDate DateTime @default(now())
+  endDate   DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isActive, endDate])
+}

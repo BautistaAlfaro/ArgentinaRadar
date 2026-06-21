@@ -17,6 +17,8 @@
     "dev:hermes": "cd services/hermes-bridge && python -m uvicorn src.server:app --reload",
     "dev:eco": "npm run dev --workspace=@argentinaradar/economic-data",
     "dev:alerts": "npm run dev --workspace=@argentinaradar/alerts",
+    "dev:night-owl": "npm run dev --workspace=@argentinaradar/night-owl",
+    "dev:admin": "npm run dev --workspace=@argentinaradar/admin",
     "dev:all": "pm2 start config/pm2.config.cjs",
     "stop": "pm2 stop all",
     "logs": "pm2 logs",
