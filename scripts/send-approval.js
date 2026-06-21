@@ -23,9 +23,10 @@ const nanoPrompt = `Professional Argentine news thumbnail. ${headline}. Dark blu
 const encoded = encodeURIComponent(nanoPrompt);
 const imageUrl = `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=` + Math.floor(Math.random() * 1000);
 
-// Insert into approval_queue with image_url
-db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_url, image_prompt, created_at)
-  VALUES (?, 'pending', ?, ?, ?, datetime('now'))`).run(ARTICLE_ID, article.title, imageUrl, nanoPrompt);
+// Insert into approval_queue with image_url — use telegram_message_id=-1 as placeholder
+// so the notifier skips it (it's being handled manually with image)
+db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_url, image_prompt, telegram_message_id, created_at)
+  VALUES (?, 'pending', ?, ?, ?, -1, datetime('now'))`).run(ARTICLE_ID, article.title, imageUrl, nanoPrompt);
 
 (async () => {
   const kb = {
