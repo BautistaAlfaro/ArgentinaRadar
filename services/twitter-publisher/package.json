@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node --loader ts-node/esm src/index.ts",
-    "dev": "node --loader ts-node/esm --watch src/index.ts",
+    "dev": "npx tsx --env-file=../../config/.env --watch src/index.ts",
     "build": "tsc",
     "server": "node --loader ts-node/esm src/server.ts"
   },
@@ -13,6 +13,7 @@
     "@atproto/api": "^0.13.35",
     "axios": "^1.7.0",
     "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.0",
     "express": "^4.21.0",
     "oauth-1.0a": "^2.2.6"
   },

@@ -4,6 +4,13 @@
  * Starts the Express REST API server and the auto-publish background loop.
  */
 
+/**
+ * Twitter Publisher — entry point.
+ *
+ * .env loaded via Node.js --env-file flag in npm script.
+ * Starts the Express REST API server and the auto-publish background loop.
+ */
+
 import { config } from './config.js';
 import { startServer } from './server.js';
 import { startAutoPublish } from './autoPublish.js';

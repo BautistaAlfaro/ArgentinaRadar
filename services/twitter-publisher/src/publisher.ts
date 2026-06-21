@@ -191,6 +191,20 @@ export async function publishText(
   text: string,
   imageUrl?: string,
 ): Promise<PublishResult> {
+  // ── 0. If Twitter not configured, post to Bluesky directly ───────
+  const twitterConfigured = !!(config.twitter.apiKey && config.twitter.accessToken);
+  if (!twitterConfigured && config.bluesky.enabled && config.bluesky.password) {
+    try {
+      const bsky = await postToBluesky(text, config);
+      console.log(`[publisher] ✅ Bluesky (no Twitter): ${bsky.uri}`);
+      return { success: true, tweetId: 'bsky' };
+    } catch (err) {
+      return { success: false, error: `Bluesky failed: ${(err as Error).message}` };
+    }
+  }
+  if (!twitterConfigured && !config.bluesky.password) {
+    return { success: false, error: 'Neither Twitter nor Bluesky configured' };
+  }
   // ── 1. Check monthly rate limit ─────────────────────────────────
   if (!canPublish()) {
     const quota = getQuotaInfo();
