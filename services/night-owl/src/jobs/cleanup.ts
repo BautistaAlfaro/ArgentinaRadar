@@ -35,6 +35,10 @@ const EVENT_RETENTION_DAYS = 30;
 const SESSION_RETENTION_DAYS = 7;
 const TREND_RETENTION_DAYS = 14;
 
+const PUBLISHED_TWEET_RETENTION_DAYS = parseInt(process.env.PUBLISHED_TWEET_RETENTION_DAYS ?? '7', 10);
+const NEWS_ITEM_RETENTION_DAYS = parseInt(process.env.NEWS_ITEM_RETENTION_DAYS ?? '30', 10);
+const TWEET_HISTORY_RETENTION_DAYS = parseInt(process.env.TWEET_HISTORY_RETENTION_DAYS ?? '90', 10);
+
 const { Pool } = pg;
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -67,6 +71,9 @@ export const runCleanup: JobFn = async (_data) => {
   let archivedEvents = 0;
   let cleanedSessions = 0;
   let deletedTrends = 0;
+  let deletedTweetDrafts = 0;
+  let purgedArticles = 0;
+  let deletedTweetHistory = 0;
   let sqliteDbSizeMB = 0;
   let vacuumDone = false;
   let checkpointDone = false;
@@ -188,18 +195,81 @@ export const runCleanup: JobFn = async (_data) => {
     console.error('[Cleanup] Failed to delete old trends:', (err as Error).message);
   }
 
-  // ── 6. Summary ──────────────────────────────────────────────────────
+  // ── 6. Purge published tweet drafts from approval_queue ────────────────
+  let db2: Database.Database | null = null;
+  try {
+    db2 = new Database(DB_PATH);
+    db2.pragma('journal_mode = WAL');
+
+    // Step 6: published tweet drafts older than retention window
+    const draftResult = db2
+      .prepare(
+        `DELETE FROM approval_queue
+         WHERE status = 'published'
+           AND published_at < datetime('now', '-' || ? || ' days')`,
+      )
+      .run(PUBLISHED_TWEET_RETENTION_DAYS);
+    deletedTweetDrafts = draftResult.changes;
+    console.log(
+      `[Cleanup] Deleted ${deletedTweetDrafts} published tweet drafts older than ${PUBLISHED_TWEET_RETENTION_DAYS} days`,
+    );
+
+    // Step 7: published/discarded news_items older than retention window
+    const articleResult = db2
+      .prepare(
+        `DELETE FROM news_items
+         WHERE status IN ('published', 'discarded')
+           AND ingested_at < datetime('now', '-' || ? || ' days')`,
+      )
+      .run(NEWS_ITEM_RETENTION_DAYS);
+    purgedArticles = articleResult.changes;
+    console.log(
+      `[Cleanup] Purged ${purgedArticles} old published/discarded articles older than ${NEWS_ITEM_RETENTION_DAYS} days`,
+    );
+
+    // Step 8: tweet_history records older than retention window
+    const historyResult = db2
+      .prepare(
+        `DELETE FROM tweet_history
+         WHERE posted_at < datetime('now', '-' || ? || ' days')`,
+      )
+      .run(TWEET_HISTORY_RETENTION_DAYS);
+    deletedTweetHistory = historyResult.changes;
+    console.log(
+      `[Cleanup] Deleted ${deletedTweetHistory} old tweet history records older than ${TWEET_HISTORY_RETENTION_DAYS} days`,
+    );
+
+    // Step 9: run VACUUM again if any rows were deleted in steps 6-8
+    const newDeletions = deletedTweetDrafts + purgedArticles + deletedTweetHistory;
+    if (newDeletions > 0) {
+      db2.exec('VACUUM');
+      console.log('[Cleanup] Post-purge VACUUM completed');
+    }
+  } catch (err) {
+    console.error('[Cleanup] Failed during SQLite purge steps:', (err as Error).message);
+  } finally {
+    if (db2) db2.close();
+  }
+
+  // ── Summary ──────────────────────────────────────────────────────────
   const totalCleaned = cleanedSessions + deletedTrends;
+  const totalPurged = deletedTweetDrafts + purgedArticles + deletedTweetHistory;
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
 
-  console.log('═══════════════════════════════════════');
+  console.log('===========================================');
   console.log(`[Job:cleanup] Complete in ${elapsed}s`);
-  console.log(`  Archived events:  ${archivedEvents}`);
-  console.log(`  Cleaned sessions: ${cleanedSessions}`);
-  console.log(`  Deleted trends:   ${deletedTrends}`);
-  console.log(`  SQLite VACUUM:    ${vacuumDone ? 'yes' : 'no'}`);
-  console.log(`  PG CHECKPOINT:    ${checkpointDone ? 'yes' : 'no'}`);
-  console.log(`  DB size:          ${sqliteDbSizeMB} MB`);
-  console.log(`  Summary:          Archived ${archivedEvents} events, cleaned ${totalCleaned} records, DB size: ${sqliteDbSizeMB} MB`);
-  console.log('═══════════════════════════════════════');
+  console.log(`  Archived events:       ${archivedEvents}`);
+  console.log(`  Cleaned sessions:      ${cleanedSessions}`);
+  console.log(`  Deleted trends:        ${deletedTrends}`);
+  console.log(`  Tweet drafts purged:   ${deletedTweetDrafts}`);
+  console.log(`  Articles purged:       ${purgedArticles}`);
+  console.log(`  Tweet history purged:  ${deletedTweetHistory}`);
+  console.log(`  SQLite VACUUM:         ${vacuumDone ? 'yes' : 'no'}`);
+  console.log(`  PG CHECKPOINT:         ${checkpointDone ? 'yes' : 'no'}`);
+  console.log(`  DB size:               ${sqliteDbSizeMB} MB`);
+  console.log(
+    `  Summary: Archived ${archivedEvents} events, cleaned ${totalCleaned} records, ` +
+    `purged ${totalPurged} pipeline records, DB size: ${sqliteDbSizeMB} MB`,
+  );
+  console.log('===========================================');
 };

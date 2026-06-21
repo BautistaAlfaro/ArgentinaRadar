@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { MapView } from './components/MapView';
 import { Sidebar } from './components/panels/Sidebar';
@@ -7,47 +7,15 @@ import { ProvinceDetailPanel } from './components/panels/ProvinceDetailPanel';
 import { EconomicTicker } from './components/panels/EconomicTicker';
 import { ArgentinaTitle } from './components/ArgentinaTitle';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { Markets } from './pages/Markets';
 import { Gate } from './components/auth/Gate';
 import { AuthProvider } from './components/auth/AuthProvider';
-import { UserMenu } from './components/auth/UserMenu';
-import { useAuthStore } from './stores/authStore';
+import { Header } from './components/Header';
 import { ToastProvider } from '@shared/Toast';
 import { ToastContainer } from './components/ui/ToastContainer';
 
-function Header() {
-  const role = useAuthStore((s) => s.user?.role ?? null);
-  return (
-    <header className="flex items-center h-14 px-6 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 shrink-0">
-      <Link to="/" className="hover:opacity-80 transition-opacity">
-        <h1 className="text-xl font-bold tracking-tight text-white">
-          ArgentinaRadar
-        </h1>
-      </Link>
-      <span className="ml-3 text-xs text-slate-400 font-mono">
-        Monitoreo en vivo
-      </span>
-      <nav className="ml-auto flex items-center gap-3">
-        {role === 'ADMIN' && (
-          <Link
-            to="/admin"
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-          >
-            Admin
-          </Link>
-        )}
-        <UserMenu />
-      </nav>
-    </header>
-  );
-}
-
 function MainLayout() {
-  const sidebar = useMemo(() => (
-    <aside className="w-[320px] shrink-0 bg-slate-800/60 border-r border-slate-700/50 overflow-y-auto">
-      <Sidebar />
-    </aside>
-  ), []);
-
+  const sidebar = useMemo(() => <Sidebar />, []);
   const map = useMemo(() => <MapView />, []);
   const ticker = useMemo(() => <EconomicTicker />, []);
 
@@ -72,6 +40,7 @@ export function App() {
         <ToastProvider>
           <Routes>
             <Route path="/" element={<MainLayout />} />
+            <Route path="/markets" element={<Markets />} />
             <Route
               path="/admin"
               element={

@@ -18,6 +18,7 @@
 import os from 'os';
 import type { JobFn } from './index.js';
 import { BudgetTracker } from './budget.js';
+import { prisma } from '@argentinaradar/database';
 
 // ── Services to check ──────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ export const runHealth: JobFn = async (_data) => {
     console.log('[Health] No alerts — all systems nominal');
   }
 
-  // ── 7. Health report assembled (DB persistence skipped in local dev) ─
+  // ── 7. Health report assembled and persisted in Database ─────────────
   const report: HealthReportData = {
     score,
     services: serviceResults,
@@ -289,6 +290,20 @@ export const runHealth: JobFn = async (_data) => {
     alerts,
     checkedAt: new Date().toISOString(),
   };
+
+  try {
+    await prisma.healthReport.create({
+      data: {
+        score: report.score,
+        services: report.services as any,
+        queues: report.queues as any,
+        budget: report.budget as any,
+      },
+    });
+    console.log('[Health] Persisted health report in database.');
+  } catch (dbErr) {
+    console.error('[Health] Failed to persist health report to database:', dbErr);
+  }
 
   // ── 8. Complete ─────────────────────────────────────────────────────
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);

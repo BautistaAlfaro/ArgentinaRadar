@@ -24,15 +24,15 @@ interface ActivityFeedProps {
 // ─── Status config ───────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { color: string; icon: string }> = {
-  ingested:        { color: 'text-sky-400',   icon: '📥' },
-  geolocated:      { color: 'text-amber-400',  icon: '📍' },
-  filtered:        { color: 'text-blue-400',   icon: '🧠' },
-  pending_approval:{ color: 'text-violet-400', icon: '⏳' },
-  published:       { color: 'text-emerald-400',icon: '✅' },
-  discarded:       { color: 'text-red-400',    icon: '🗑️' },
+  ingested:        { color: 'text-sky-400',   icon: 'download' },
+  geolocated:      { color: 'text-amber-400',  icon: 'location_on' },
+  filtered:        { color: 'text-blue-400',   icon: 'psychology' },
+  pending_approval:{ color: 'text-violet-400', icon: 'pending_actions' },
+  published:       { color: 'text-emerald-400',icon: 'check_circle' },
+  discarded:       { color: 'text-red-400',    icon: 'delete' },
 };
 
-const DEFAULT_STATUS = { color: 'text-slate-400', icon: '📄' };
+const DEFAULT_STATUS = { color: 'text-slate-400', icon: 'description' };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -66,7 +66,7 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/30 transition-colors group"
     >
       {/* Status icon */}
-      <span className="text-base shrink-0" aria-hidden="true">{sc.icon}</span>
+      <span className="material-symbols-outlined text-base shrink-0" aria-hidden="true">{sc.icon}</span>
 
       {/* Title + meta */}
       <div className="flex-1 min-w-0">
@@ -102,7 +102,7 @@ function ActivityRow({ item, index }: { item: ActivityItem; index: number }) {
 export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
   if (isLoading) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <div className="h-5 w-32 bg-slate-700 rounded animate-pulse mb-4" />
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -110,7 +110,7 @@ export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
               <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
               <div className="flex-1">
                 <div className="h-4 bg-slate-700 rounded animate-pulse w-full mb-1" />
-                <div className="h-3 bg-slate-700/60 rounded animate-pulse w-2/3" />
+                <div className="h-3 bg-slate-700/30 rounded animate-pulse w-2/3" />
               </div>
             </div>
           ))}
@@ -121,7 +121,7 @@ export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
 
   if (!items || items.length === 0) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <h3 className="text-sm font-semibold text-slate-400 mb-3">Recent Activity</h3>
         <p className="text-xs text-slate-500">No recent articles found.</p>
       </section>
@@ -133,7 +133,7 @@ export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5"
+        className="glass-panel rounded-xl p-5"
       >
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-white tracking-tight">

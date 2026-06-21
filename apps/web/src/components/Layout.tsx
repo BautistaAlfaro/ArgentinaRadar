@@ -13,7 +13,7 @@ export function Layout({ header, sidebar, map, ticker }: LayoutProps) {
   const toggleSidebar = useRadarStore((s) => s.toggleSidebar);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-900 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-screen w-screen bg-background text-on-surface overflow-hidden">
       {header}
 
       <div className="flex flex-1 min-h-0">
@@ -21,7 +21,7 @@ export function Layout({ header, sidebar, map, ticker }: LayoutProps) {
         <div
           className={`${
             sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-[320px]'
-          } shrink-0 bg-slate-800/60 border-r border-slate-700/50 transition-[width] duration-200 relative`}
+          } shrink-0 bg-surface-container-lowest/80 border-r border-white/10 backdrop-blur-2xl transition-[width] duration-200 relative`}
         >
           <div className="w-[320px] h-full overflow-y-auto">
             {sidebar}

@@ -1,43 +1,23 @@
-<#
-.SYNOPSIS
-    ArgentinaRadar — Start all services via PM2 ecosystem
-.DESCRIPTION
-    Orchestrates the full service stack:
-      1. Verifies/Starts Ollama (prerequisite for ai-processor)
-      2. Checks Python venv for ai-processor
-      3. Launches all 6 services via PM2 ecosystem.config.cjs
-      4. Displays PM2 status table
-      5. Runs health checks with timeout
-
-    Services started (in ecosystem order):
-      news-ingestion (3001) — RSS/scraping ingestion pipeline
-      publisher      (3004) — Twitter/X publisher
-      notifier       (N/A)  — Telegram bot (polling, no HTTP)
-      ai-processor   (3013) — NER + embeddings via FastAPI
-      admin          (3012) — Admin dashboard API
-      web            (5173) — Vite frontend
-
-.EXAMPLE
-    .\scripts\start-all.ps1
-#>
+# ArgentinaRadar - Start all services via PM2 ecosystem
+# Orchestrates the full service stack
 
 param()
 
 $ErrorActionPreference = "Stop"
 $rootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
-# ─── Helpers ────────────────────────────────────────────────────────────
+# --- Helpers ---
 
 function Write-Step($msg) {
-    Write-Host "  → $msg" -ForegroundColor Yellow
+    Write-Host "  -> $msg" -ForegroundColor Yellow
 }
 
 function Write-OK($msg) {
-    Write-Host "  ✓ $msg" -ForegroundColor Green
+    Write-Host "  [OK] $msg" -ForegroundColor Green
 }
 
 function Write-Fail($msg) {
-    Write-Host "  ✗ $msg" -ForegroundColor Red
+    Write-Host "  [FAIL] $msg" -ForegroundColor Red
 }
 
 function Write-Info($msg) {
@@ -66,20 +46,16 @@ function Test-PortOpen($port) {
     }
 }
 
-# ─── Header ─────────────────────────────────────────────────────────────
+# --- Header ---
 Clear-Host
-Write-Host @"
-
-╔══════════════════════════════════════════════════════════════════════════╗
-║    ArgentinaRadar — PM2 Service Orchestrator                           ║
-╚══════════════════════════════════════════════════════════════════════════╝
-"@ -ForegroundColor Cyan
-
+Write-Host "==========================================================================" -ForegroundColor Cyan
+Write-Host "     ArgentinaRadar - PM2 Service Orchestrator" -ForegroundColor Cyan
+Write-Host "==========================================================================" -ForegroundColor Cyan
 Write-Host "  Root: $rootDir"
 Write-Host ""
 
-# ─── Step 1: Check Ollama ───────────────────────────────────────────────
-Write-Host "  ── Prerequisites ──────────────────────────────────────────" -ForegroundColor Cyan
+# --- Step 1: Check Ollama ---
+Write-Host "  -- Prerequisites --" -ForegroundColor Cyan
 Write-Step "Checking Ollama service..."
 
 if (Test-OllamaRunning) {
@@ -87,7 +63,7 @@ if (Test-OllamaRunning) {
 } else {
     Write-Step "Ollama not running. Starting Ollama serve..."
     try {
-        $ollamaProcess = Start-Process -FilePath "ollama.exe" -ArgumentList "serve" -NoNewWindow -PassThru -WindowStyle Hidden
+        $ollamaProcess = Start-Process -FilePath "ollama.exe" -ArgumentList "serve" -NoNewWindow -PassThru
         Write-OK "Ollama serve launched (PID: $($ollamaProcess.Id))"
 
         # Wait for the API to become available
@@ -101,16 +77,16 @@ if (Test-OllamaRunning) {
         if ($ready) {
             Write-OK "Ollama API ready at http://localhost:11434"
         } else {
-            Write-Fail "Ollama did not respond within ${maxWait}s — check manually"
+            Write-Fail "Ollama did not respond within $($maxWait)s - check manually"
             Write-Info "You can still start services, but ai-processor may fail if it needs Ollama."
         }
     } catch {
         Write-Fail "Failed to start Ollama: $_"
-        Write-Info "Proceeding anyway — ai-processor may fail if it depends on Ollama."
+        Write-Info "Proceeding anyway - ai-processor may fail if it depends on Ollama."
     }
 }
 
-# ─── Step 2: Check Python venv for ai-processor ─────────────────────────
+# --- Step 2: Check Python venv for ai-processor ---
 Write-Step "Checking Python venv for ai-processor..."
 
 $aiProcessorDir = Join-Path $rootDir "services/ai-processor"
@@ -136,25 +112,25 @@ if ($venvFound) {
     Write-Fail "No Python venv found at services/ai-processor/.venv or ./venv"
     Write-Info "Create one: cd services/ai-processor; python -m venv .venv"
     Write-Info "Then: .venv/Scripts/pip install -r requirements.txt"
-    Write-Info "Proceeding with system Python — may use wrong dependencies."
+    Write-Info "Proceeding with system Python - may use wrong dependencies."
 }
 
 # Check if uvicorn is available
 try {
-    $uvicornCheck = & python -c "import uvicorn; print('ok')" 2>&1
-    if ($uvicornCheck -eq "ok") {
+    $null = python -c "import uvicorn" 2>&1
+    if ($LASTEXITCODE -eq 0) {
         Write-OK "uvicorn is available in Python environment"
     } else {
-        Write-Fail "uvicorn not found — run: pip install -r services/ai-processor/requirements.txt"
+        Write-Fail "uvicorn not found - run: pip install -r services/ai-processor/requirements.txt"
     }
 } catch {
-    Write-Fail "Python not found in PATH — ai-processor will fail to start"
+    Write-Fail "Python not found in PATH - ai-processor will fail to start"
 }
 
 Write-Host ""
 
-# ─── Step 3: Start All PM2 Services ─────────────────────────────────────
-Write-Host "  ── Starting Services ──────────────────────────────────────" -ForegroundColor Cyan
+# --- Step 3: Start All PM2 Services ---
+Write-Host "  -- Starting Services --" -ForegroundColor Cyan
 Write-Step "Launching all services via PM2 ecosystem..."
 
 $ecosystemPath = Join-Path $rootDir "ecosystem.config.cjs"
@@ -164,7 +140,7 @@ if (-not (Test-Path $ecosystemPath)) {
 }
 
 try {
-    $pm2Output = pm2 start $ecosystemPath 2>&1
+    $pm2Output = pm2.cmd start $ecosystemPath 2>&1
     Write-OK "PM2 ecosystem started"
     if ($pm2Output) {
         Write-Info ($pm2Output -join "`n")
@@ -178,22 +154,22 @@ try {
 # Give services a moment to initialize
 Start-Sleep -Seconds 3
 
-# ─── Step 4: Show PM2 Status ────────────────────────────────────────────
+# --- Step 4: Show PM2 Status ---
 Write-Host ""
-Write-Host "  ── Service Status ─────────────────────────────────────────" -ForegroundColor Cyan
+Write-Host "  -- Service Status --" -ForegroundColor Cyan
 try {
-    pm2 status
+    pm2.cmd status
 } catch {
     Write-Fail "Could not retrieve PM2 status"
 }
 
 Write-Host ""
 
-# ─── Step 5: Health Checks ─────────────────────────────────────────────
-Write-Host "  ── Health Checks ──────────────────────────────────────────" -ForegroundColor Cyan
+# --- Step 5: Health Checks ---
+Write-Host "  -- Health Checks --" -ForegroundColor Cyan
 Write-Step "Waiting for services to pass health checks..."
 
-# Retry loop — up to 30s total
+# Retry loop - up to 30s total
 $healthChecks = @(
     @{ Name = "news-ingestion"; Port = 3001; HasHttp = $true }
     @{ Name = "publisher";      Port = 3004; HasHttp = $true }
@@ -213,7 +189,7 @@ for ($retry = 1; $retry -le $maxRetries; $retry++) {
     foreach ($svc in $healthChecks) {
         if (-not $svc.HasHttp) {
             $healthyCount++
-            continue  # Skip notifier — no HTTP endpoint, just assume PM2 handles it
+            continue  # Skip notifier
         }
         $totalHttp++
         if (Test-PortOpen $svc.Port) {
@@ -238,32 +214,30 @@ for ($retry = 1; $retry -le $maxRetries; $retry++) {
     }
 }
 
-# ─── Summary ────────────────────────────────────────────────────────────
+# --- Summary ---
 Write-Host ""
-Write-Host "  ═══════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "==========================================================================" -ForegroundColor Green
 Write-Host "  Services launched!" -ForegroundColor Green
-Write-Host "  ═══════════════════════════════════════════════════════════" -ForegroundColor Green
+Write-Host "==========================================================================" -ForegroundColor Green
 Write-Host ""
 
 if ($allHealthy) {
     Write-OK "All HTTP services passed health checks"
 } else {
-    Write-Fail "Some services did not respond to health checks — run .\scripts\health-check.ps1 to diagnose"
+    Write-Fail "Some services did not respond to health checks - run health-check script to diagnose"
 }
 
 Write-Host ""
-Write-Host "  📊 Admin health:     http://localhost:3012/api/admin/health"
-Write-Host "  📊 Health all:       http://localhost:3012/api/admin/health/all"
-Write-Host "  🧠 AI Processor:     http://localhost:3013"
-Write-Host "  🌐 Frontend:         http://localhost:5173"
-Write-Host "  📰 News service:     http://localhost:3001"
-Write-Host "  🐦 Publisher:        http://localhost:3004"
-Write-Host "  🤖 Notifier:         PM2 process (no HTTP)"
+Write-Host "  Admin health:     http://localhost:3012/api/admin/health"
+Write-Host "  Health all:       http://localhost:3012/api/admin/health/all"
+Write-Host "  AI Processor:     http://localhost:3013"
+Write-Host "  Frontend:         http://localhost:5173"
+Write-Host "  News service:     http://localhost:3001"
+Write-Host "  Publisher:        http://localhost:3004"
+Write-Host "  Notifier:         PM2 process (no HTTP)"
 Write-Host ""
 Write-Host "  Commands:" -ForegroundColor Gray
-Write-Host "    pm2 status                     — view all processes" -ForegroundColor Gray
-Write-Host "    pm2 logs <name>                — tail logs for a service" -ForegroundColor Gray
-Write-Host "    pm2 stop ecosystem.config.cjs  — stop all services" -ForegroundColor Gray
-Write-Host "    .\scripts\stop-all.ps1          — graceful stop" -ForegroundColor Gray
-Write-Host "    .\scripts\health-check.ps1       — check all services" -ForegroundColor Gray
+Write-Host "    pm2 status                     - view all processes" -ForegroundColor Gray
+Write-Host "    pm2 logs                       - view all logs" -ForegroundColor Gray
+Write-Host "    pm2 stop ecosystem.config.cjs  - stop all services" -ForegroundColor Gray
 Write-Host ""

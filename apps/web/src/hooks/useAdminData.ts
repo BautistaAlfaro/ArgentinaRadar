@@ -97,8 +97,8 @@ export function usePipelineStats() {
   });
 }
 
-// ─── Logs ─────────────────────────────────────────────────────────────
-
+// ─── Logs (Unused, commented out to avoid TS errors) ──────────────────
+/*
 const LOG_POLL_INTERVAL = 5_000; // 5 seconds
 
 function useLogs(filters: { service?: string; level?: string; search?: string; limit?: number; offset?: number }) {
@@ -110,8 +110,6 @@ function useLogs(filters: { service?: string; level?: string; search?: string; l
   });
 }
 
-// ─── Metrics ───────────────────────────────────────────────────────────
-
 function useMetrics() {
   return useQuery<MetricsResponse | null>({
     queryKey: ['admin', 'metrics'],
@@ -120,6 +118,7 @@ function useMetrics() {
     staleTime: 10_000,
   });
 }
+*/
 
 // ─── Service Health (port checks) ────────────────────────────────────
 

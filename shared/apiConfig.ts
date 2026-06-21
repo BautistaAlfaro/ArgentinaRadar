@@ -12,11 +12,13 @@
 // Vite replaces import.meta.env at build time. For Node ESM services
 // without Vite, fall back to process.env or the default localhost.
 function resolveBase(): string {
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL as string;
+  const meta = import.meta as any;
+  if (meta && meta.env?.VITE_API_BASE_URL) {
+    return meta.env.VITE_API_BASE_URL as string;
   }
-  if (typeof process !== 'undefined' && process.env?.VITE_API_BASE_URL) {
-    return process.env.VITE_API_BASE_URL;
+  const g = globalThis as any;
+  if (typeof g.process !== 'undefined' && g.process.env?.VITE_API_BASE_URL) {
+    return g.process.env.VITE_API_BASE_URL;
   }
   return 'http://localhost';
 }

@@ -1,0 +1,518 @@
+<!DOCTYPE html><html class="dark" lang="es"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>ARGENTINA RADAR | Admin Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        @keyframes pulse-cyan {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px rgba(76, 215, 246, 0.5); }
+            50% { opacity: 0.7; box-shadow: 0 0 15px rgba(76, 215, 246, 0.8); }
+        }
+        .animate-pulse-cyan { animation: pulse-cyan 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        
+        .glass-panel {
+            background: rgba(11, 17, 32, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .active-glow {
+            border-color: rgba(76, 215, 246, 0.4);
+            box-shadow: 0 0 20px rgba(76, 215, 246, 0.05);
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #4cd7f6, transparent);
+            position: absolute;
+            top: 0;
+            animation: scan 4s linear infinite;
+            opacity: 0.2;
+            pointer-events: none;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-high": "#242a3a",
+                      "surface-elevated": "#1E293B",
+                      "secondary-fixed-dim": "#4edea3",
+                      "tertiary": "#ffb95f",
+                      "primary": "#4cd7f6",
+                      "surface-bright": "#33394a",
+                      "inverse-on-surface": "#2a3040",
+                      "surface-container-lowest": "#080e1d",
+                      "surface-tint": "#4cd7f6",
+                      "surface-base": "#0B1120",
+                      "error-container": "#93000a",
+                      "on-secondary": "#003824",
+                      "on-tertiary-fixed": "#2a1700",
+                      "data-rose": "#FB7185",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#0d1322",
+                      "on-surface": "#dde2f8",
+                      "on-error": "#690005",
+                      "on-tertiary": "#472a00",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "surface": "#0d1322",
+                      "error": "#ffb4ab",
+                      "tertiary-container": "#e79400",
+                      "surface-container-highest": "#2f3445",
+                      "on-tertiary-container": "#563400",
+                      "surface-variant": "#2f3445",
+                      "secondary-fixed": "#6ffbbe",
+                      "background": "#0d1322",
+                      "surface-container": "#191f2f",
+                      "on-primary-fixed": "#001f26",
+                      "primary-container": "#06b6d4",
+                      "data-amber": "#FBBF24",
+                      "secondary-container": "#00a572",
+                      "on-primary": "#003640",
+                      "primary-fixed": "#acedff",
+                      "on-surface-variant": "#bcc9cd",
+                      "on-background": "#dde2f8",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-secondary-container": "#00311f",
+                      "outline": "#869397",
+                      "surface-container-low": "#151b2b",
+                      "outline-variant": "#3d494c",
+                      "border-muted": "rgba(148, 163, 184, 0.1)",
+                      "secondary": "#4edea3",
+                      "data-cyan": "#22D3EE",
+                      "on-primary-container": "#00424f",
+                      "inverse-surface": "#dde2f8",
+                      "on-primary-fixed-variant": "#004e5c",
+                      "on-secondary-fixed": "#002113",
+                      "on-secondary-fixed-variant": "#005236",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "inverse-primary": "#00687a",
+                      "data-emerald": "#34D399",
+                      "primary-fixed-dim": "#4cd7f6"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "sidebar-width": "320px",
+                      "unit": "4px",
+                      "gutter": "16px",
+                      "panel-gap": "12px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Space Grotesk"],
+                      "headline-md": ["Space Grotesk"],
+                      "headline-lg": ["Space Grotesk"],
+                      "body-md": ["Inter"],
+                      "label-data": ["JetBrains Mono"],
+                      "label-caps": ["Inter"],
+                      "headline-sm": ["Space Grotesk"],
+                      "body-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                      "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "label-data": ["13px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "label-caps": ["11px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                      "headline-sm": ["18px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-hidden h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface-container/70 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-primary/5 flex justify-between items-center px-margin-desktop h-16">
+<div class="flex items-center gap-6">
+<span class="font-headline-md text-headline-md font-bold text-primary tracking-tighter">ARGENTINA RADAR</span>
+<div class="h-6 w-px bg-white/10"></div>
+<a class="text-primary border-b-2 border-primary font-label-caps text-label-caps py-5 transition-colors duration-150" href="#">PANEL DE ADMINISTRACIÓN</a>
+</div>
+<div class="flex items-center gap-4"><button class="px-4 py-1.5 bg-primary/10 border border-primary/30 text-primary font-label-caps text-[10px] rounded hover:bg-primary hover:text-on-primary transition-all flex items-center gap-2"><span class="material-symbols-outlined text-sm">terminal</span>CONSOLA ADMIN</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">pulse_alert</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">settings</button>
+<div class="flex items-center gap-3 pl-4 border-l border-white/10">
+<div class="text-right">
+<p class="font-label-caps text-[10px] text-primary font-bold mb-0.5">ADMIN PRIVILEGES</p>
+<p class="font-label-data text-label-data text-on-surface leading-none">Cmdr. Rodriguez</p>
+</div>
+<div class="relative">
+<img class="w-10 h-10 rounded-full border border-primary/50 object-cover" data-alt="A professional headshot of a high-ranking system administrator in a dark, high-tech command center environment. He has a focused expression, subtle grey hair, and wears a dark tactical vest. The background is filled with softly blurred blue terminal screens and glowing data points, emphasizing a 'Spec Ops' tech aesthetic with primary cyan highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzg2uPtkBD1RGNgTKhEiljiClzRkH-WQDlD0jboAAfh_Eq6fTMDY-mq_7noTps9hlwBugaUuufQy_nFXOp6F7gMExnpKIgkjIleknAr59Kjl4nbZo7tOVGhPA-UFgYdW8haLbO8INPvEkHtznvZtcQ0YyfIv6Gt-rFyXiJffx91Jlf8foaekV3vyyyY_LAhSFc2kZespY8eRoAyfwAmRQs9v2UA49pBnw2V9Q-R7BTS8OJqZK3lTGzFTIdkhWlRPTFvSqm-n5tZsjX">
+<div class="absolute -bottom-1 -right-1 bg-primary text-on-primary text-[8px] font-bold px-1 rounded border border-background">ADMIN</div>
+</div>
+</div>
+</div>
+</nav>
+<div class="flex flex-1 mt-16 overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-sidebar-width bg-surface-container-lowest/80 backdrop-blur-2xl border-r border-white/10 flex flex-col py-6">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 mb-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">terminal</span>
+<h2 class="font-headline-sm text-headline-sm text-primary">CENTRO DE MANDO</h2>
+</div>
+<p class="font-label-data text-label-data text-secondary">Estado: Operativo</p>
+</div>
+<nav class="flex-1 space-y-1">
+<div class="bg-primary/10 border-l-4 border-primary text-primary font-bold px-6 py-3 flex items-center gap-3 transition-all translate-x-1">
+<span class="material-symbols-outlined">radar</span>
+<span class="font-label-data text-label-data">Monitoreo</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-variant/20 px-6 py-3 flex items-center gap-3 transition-all hover:text-primary hover:bg-primary/5">
+<span class="material-symbols-outlined">filter_list</span>
+<span class="font-label-data text-label-data">Filtros</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-variant/20 px-6 py-3 flex items-center gap-3 transition-all hover:text-primary hover:bg-primary/5">
+<span class="material-symbols-outlined">equalizer</span>
+<span class="font-label-data text-label-data">Analítica</span>
+</div>
+<div class="text-on-surface-variant hover:bg-surface-variant/20 px-6 py-3 flex items-center gap-3 transition-all hover:text-primary hover:bg-primary/5">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-data text-label-data">Historial</span>
+</div>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full py-3 bg-primary text-on-primary font-bold font-label-caps text-[12px] rounded hover:brightness-110 active:scale-95 transition-all mb-4">
+                    GENERAR REPORTE
+                </button>
+<div class="flex items-center gap-3 text-on-surface-variant hover:text-primary transition-colors py-2 cursor-pointer">
+<span class="material-symbols-outlined">support_agent</span>
+<span class="font-label-data text-label-data">Soporte</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-sidebar-width flex-1 overflow-y-auto p-gutter no-scrollbar bg-surface-base relative">
+<div class="scanline"></div>
+<!-- Admin Header Section -->
+<div class="mb-gutter flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-1">System Health &amp; Logistics</h1>
+<p class="text-on-surface-variant font-label-data">Node Cluster: AR-EAST-01 • Uptime: 142h 12m 04s</p>
+</div>
+<div class="flex gap-2"><button class="px-3 py-1 bg-white/5 border border-white/10 rounded flex items-center gap-2 hover:bg-white/10 transition-colors"><span class="material-symbols-outlined text-sm">dashboard</span><span class="font-label-caps text-on-surface-variant text-[10px]">VOLVER AL DASHBOARD</span></button>
+<div class="px-3 py-1 bg-primary/20 border border-primary/30 rounded flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="font-label-caps text-primary text-[10px]">LIVE FEED ACTIVE</span>
+</div>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-panel-gap">
+<!-- PM2 Health Logs -->
+<div class="col-span-12 lg:col-span-8 glass-panel rounded p-gutter active-glow">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-label-caps text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+                            PM2 PROCESS MONITORING
+                        </h3>
+<span class="font-label-data text-[10px] text-secondary">4 ONLINE / 0 ERROR</span>
+</div>
+<div class="space-y-2 font-label-data text-xs">
+<div class="flex items-center justify-between p-3 bg-white/5 rounded border border-white/5">
+<div class="flex items-center gap-3">
+<span class="text-secondary">●</span>
+<span class="w-24">Scraper-RSS</span>
+<span class="text-on-surface-variant">CPU: 12%</span>
+<span class="text-on-surface-variant">MEM: 124MB</span>
+</div>
+<div class="flex gap-4">
+<span class="text-primary">RESTARTS: 0</span>
+<span class="text-on-surface-variant">UPTIME: 42h</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 bg-white/5 rounded border border-white/5">
+<div class="flex items-center gap-3">
+<span class="text-secondary">●</span>
+<span class="w-24">AI-Analyzer</span>
+<span class="text-on-surface-variant">CPU: 45%</span>
+<span class="text-on-surface-variant">MEM: 890MB</span>
+</div>
+<div class="flex gap-4">
+<span class="text-primary">RESTARTS: 2</span>
+<span class="text-on-surface-variant">UPTIME: 14h</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-3 bg-white/5 rounded border border-white/5">
+<div class="flex items-center gap-3">
+<span class="text-secondary">●</span>
+<span class="w-24">Geo-Mapper</span>
+<span class="text-on-surface-variant">CPU: 05%</span>
+<span class="text-on-surface-variant">MEM: 64MB</span>
+</div>
+<div class="flex gap-4">
+<span class="text-primary">RESTARTS: 0</span>
+<span class="text-on-surface-variant">UPTIME: 142h</span>
+</div>
+</div>
+</div>
+</div>
+<!-- AI Budget Cap -->
+<div class="col-span-12 lg:col-span-4 glass-panel rounded p-gutter flex flex-col justify-between">
+<h3 class="font-label-caps text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">payments</span>
+                        AI BUDGET CAP
+                    </h3>
+<div class="flex-1 flex flex-col justify-center items-center py-4">
+<div class="relative w-32 h-32 flex items-center justify-center">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-white/10" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-primary" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-dasharray="364.4" stroke-dashoffset="109.3" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-label-data text-xl text-primary">$142</span>
+<span class="font-label-caps text-[8px] text-on-surface-variant">OF $200 CAP</span>
+</div>
+</div>
+<p class="font-label-data text-[10px] mt-4 text-on-surface-variant">Daily Reset in 04:22:18</p>
+</div>
+</div>
+<!-- Queue Depths (BullMQ) -->
+<div class="col-span-12 lg:col-span-4 glass-panel rounded p-gutter">
+<h3 class="font-label-caps text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">queue</span>
+                        BULLMQ QUEUE DEPTH
+                    </h3>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between font-label-data text-xs mb-1">
+<span class="">Ingestion_Buffer</span>
+<span class="text-secondary">842 req/s</span>
+</div>
+<div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+<div class="bg-secondary h-full" style="width: 65%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-label-data text-xs mb-1">
+<span class="">AI_Processing</span>
+<span class="text-primary">12 req/s</span>
+</div>
+<div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 25%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-label-data text-xs mb-1">
+<span class="">Notification_Dispatch</span>
+<span class="text-tertiary">0 req/s</span>
+</div>
+<div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full" style="width: 5%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- RSS Source Manager -->
+<div class="col-span-12 lg:col-span-8 glass-panel rounded p-gutter">
+<h3 class="font-label-caps text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">rss_feed</span>
+                        RSS SOURCE MANAGER
+                    </h3>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex items-center justify-between p-3 border border-white/5 bg-white/5 rounded">
+<div class="flex flex-col">
+<span class="font-label-data text-sm">La Nación - Policiales</span>
+<span class="text-[10px] text-on-surface-variant font-label-data">Last sync: 2m ago</span>
+</div>
+<button class="w-10 h-5 bg-secondary/20 border border-secondary/40 rounded-full relative p-0.5">
+<div class="w-3.5 h-3.5 bg-secondary rounded-full ml-auto"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 border border-white/5 bg-white/5 rounded">
+<div class="flex flex-col">
+<span class="font-label-data text-sm">Infobae - Última Hora</span>
+<span class="text-[10px] text-on-surface-variant font-label-data">Last sync: 1m ago</span>
+</div>
+<button class="w-10 h-5 bg-secondary/20 border border-secondary/40 rounded-full relative p-0.5">
+<div class="w-3.5 h-3.5 bg-secondary rounded-full ml-auto"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 border border-white/5 bg-white/5 rounded">
+<div class="flex flex-col">
+<span class="font-label-data text-sm">C5N - Alertas</span>
+<span class="text-[10px] text-on-surface-variant font-label-data">Status: Rate Limited</span>
+</div>
+<button class="w-10 h-5 bg-white/5 border border-white/10 rounded-full relative p-0.5">
+<div class="w-3.5 h-3.5 bg-on-surface-variant rounded-full mr-auto"></div>
+</button>
+</div>
+<div class="flex items-center justify-between p-3 border border-white/5 bg-white/5 rounded">
+<div class="flex flex-col">
+<span class="font-label-data text-sm">Twitter - #PiqueteBSAS</span>
+<span class="text-[10px] text-on-surface-variant font-label-data">Scraping interval: 30s</span>
+</div>
+<button class="w-10 h-5 bg-secondary/20 border border-secondary/40 rounded-full relative p-0.5">
+<div class="w-3.5 h-3.5 bg-secondary rounded-full ml-auto"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- Event Override Board -->
+<div class="col-span-12 glass-panel rounded p-gutter border-primary/20">
+<div class="flex justify-between items-center mb-4">
+<h3 class="font-label-caps text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-sm text-tertiary">priority_high</span>
+                            EVENT OVERRIDE BOARD (MANUAL RESOLUTION)
+                        </h3>
+<div class="flex gap-2">
+<span class="px-2 py-0.5 bg-tertiary/10 border border-tertiary/20 text-tertiary text-[10px] font-bold rounded">3 PENDING REVIEW</span>
+</div>
+</div>
+<table class="w-full text-left font-label-data text-xs">
+<thead>
+<tr class="text-on-surface-variant border-b border-white/5 uppercase text-[10px]">
+<th class="pb-2">Timestamp</th>
+<th class="pb-2">Source</th>
+<th class="pb-2">Detection Type</th>
+<th class="pb-2">Confidence</th>
+<th class="pb-2">Location</th>
+<th class="pb-2 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/5">
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="py-3">14:22:10</td>
+<td class="py-3">X (Twitter)</td>
+<td class="py-3"><span class="text-tertiary">Corte Total</span></td>
+<td class="py-3">82% (AI)</td>
+<td class="py-3">Av. 9 de Julio, CABA</td>
+<td class="py-3 text-right space-x-2">
+<button class="px-2 py-1 bg-secondary/10 text-secondary border border-secondary/30 rounded hover:bg-secondary hover:text-on-secondary transition-all">APPROVE</button>
+<button class="px-2 py-1 bg-data-rose/10 text-data-rose border border-data-rose/30 rounded hover:bg-data-rose hover:text-on-surface transition-all">DISMISS</button>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="py-3">14:19:45</td>
+<td class="py-3">RSS feed</td>
+<td class="py-3"><span class="text-primary">Incendio Estructural</span></td>
+<td class="py-3">94% (AI)</td>
+<td class="py-3">Avellaneda, GBA</td>
+<td class="py-3 text-right space-x-2">
+<button class="px-2 py-1 bg-secondary/10 text-secondary border border-secondary/30 rounded">APPROVE</button>
+<button class="px-2 py-1 bg-data-rose/10 text-data-rose border border-data-rose/30 rounded">DISMISS</button>
+</td>
+</tr>
+<tr class="hover:bg-white/5 transition-colors">
+<td class="py-3">14:15:20</td>
+<td class="py-3">Telegram Bot</td>
+<td class="py-3"><span class="text-on-surface-variant">Possible Bot Spam</span></td>
+<td class="py-3">34% (AI)</td>
+<td class="py-3">Unknown</td>
+<td class="py-3 text-right space-x-2">
+<button class="px-2 py-1 bg-secondary/10 text-secondary border border-secondary/30 rounded">APPROVE</button>
+<button class="px-2 py-1 bg-data-rose/10 text-data-rose border border-data-rose/30 rounded">DISMISS</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Spacer for bottom bar -->
+<div class="h-16"></div>
+</main>
+</div>
+<!-- BottomNavBar (Ticker) -->
+<footer class="fixed bottom-0 left-0 w-full z-50 h-10 bg-surface-dim/90 backdrop-blur-md border-t border-white/10 shadow-[0_-4px_20px_rgba(0,165,114,0.1)] flex items-center overflow-hidden whitespace-nowrap px-4">
+<div class="flex items-center gap-2 pr-8 border-r border-white/10">
+<span class="material-symbols-outlined text-secondary text-sm">wifi_tethering</span>
+<span class="font-label-caps text-secondary text-[10px] tracking-widest">LIVE DATASTREAM</span>
+</div>
+<div class="flex items-center gap-12 px-8 font-label-data text-[11px] text-on-surface-variant animate-marquee" style="transform: translateX(-375px);">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-error">error</span>
+<span class="">EVENTO ALPHA - BS AS</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-data-amber">warning</span>
+<span class="">ALERTA CLIMÁTICA - CORDOBA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
+<span class="">SISTEMA NORMAL - MENDOZA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-primary">speed</span>
+<span class="">TRÁFICO ALTO - ROSARIO</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">info</span>
+<span class="">REPORTE CIVIL - SALTA</span>
+</div>
+</div>
+<div class="flex items-center gap-12 px-8 font-label-data text-[11px] text-on-surface-variant animate-marquee" style="transform: translateX(-375px);">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-error">error</span>
+<span class="">EVENTO ALPHA - BS AS</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-data-amber">warning</span>
+<span class="">ALERTA CLIMÁTICA - CORDOBA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
+<span class="">SISTEMA NORMAL - MENDOZA</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-primary">speed</span>
+<span class="">TRÁFICO ALTO - ROSARIO</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">info</span>
+<span class="">REPORTE CIVIL - SALTA</span>
+</div>
+</div></footer>
+<script>
+        // Simple ticker animation clone for infinite effect
+        const ticker = document.querySelector('.animate-marquee');
+        if (ticker) {
+            const clone = ticker.cloneNode(true);
+            ticker.parentElement.appendChild(clone);
+            
+            let pos = 0;
+            function step() {
+                pos -= 0.5;
+                if (pos <= -ticker.offsetWidth) {
+                    pos = 0;
+                }
+                ticker.style.transform = `translateX(${pos}px)`;
+                clone.style.transform = `translateX(${pos}px)`;
+                requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
+        }
+
+        // Dashboard Interaction Micro-moments
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.add('scale-95', 'opacity-80');
+                setTimeout(() => btn.classList.remove('scale-95', 'opacity-80'), 150);
+            });
+        });
+    </script>
+
+
+</body></html>

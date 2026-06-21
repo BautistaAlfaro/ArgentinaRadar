@@ -424,7 +424,7 @@ function checkServiceHealth(svc: typeof SERVICE_HEALTH_DEFS[number]): Promise<Se
         return {
           name: 'telegram',
           port: tg?.port ?? 0,
-          status: tg?.status === 'running' ? 'up' : 'down',
+          status: (tg?.status === 'running' ? 'up' : 'down') as 'up' | 'down',
           label: 'Telegram Notifier',
         };
       })

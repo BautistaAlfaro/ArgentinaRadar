@@ -36,11 +36,11 @@ const TrendingTopics = lazy(() => import('../components/admin/TrendingTopics').t
 const EMPTY_ARRAY: [] = [];
 const ZERO = 0;
 function LoadingSkeleton({ className }: { className?: string }) {
-  return <div className={`bg-slate-800 rounded-xl animate-pulse ${className ?? ''}`} />;
+  return <div className={`bg-surface-container-high/40 rounded-lg animate-pulse ${className ?? ''}`} />;
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'control-center' | 'overview' | 'briefing' | 'services' | 'sources' | 'trending' | 'quality' | 'logs';
+type Tab = 'control-center' | 'overview' | 'briefing' | 'trending' | 'quality' | 'sources';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -49,14 +49,12 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
 ];
 
 const TABS: { value: Tab; label: string; icon: string }[] = [
-  { value: 'control-center', label: 'Panel de Control', icon: '🎛️' },
-  { value: 'overview', label: 'Overview', icon: '📊' },
-  { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
-  { value: 'trending', label: 'Trending', icon: '📈' },
-  { value: 'quality', label: 'Quality', icon: '⭐' },
-  { value: 'logs', label: 'Logs', icon: '📋' },
-  { value: 'services', label: 'Servicios', icon: '⚙️' },
-  { value: 'sources', label: 'Fuentes', icon: '📡' },
+  { value: 'control-center', label: 'Panel de Control', icon: 'terminal' },
+  { value: 'overview', label: 'Overview', icon: 'monitoring' },
+  { value: 'briefing', label: 'Morning Briefing', icon: 'sunny' },
+  { value: 'trending', label: 'Trending', icon: 'trending_up' },
+  { value: 'quality', label: 'Quality', icon: 'star' },
+  { value: 'sources', label: 'Fuentes', icon: 'rss_feed' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -101,16 +99,16 @@ export function AdminDashboard() {
   // ─── Loading skeleton ─────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 p-6 space-y-6">
-        <div className="h-8 w-48 bg-slate-800 rounded-lg animate-pulse" />
+      <div className="min-h-screen bg-background p-6 space-y-6">
+        <div className="h-8 w-48 bg-surface-container-high/40 rounded-lg animate-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-36 bg-slate-800 rounded-xl animate-pulse" />
+            <div key={i} className="h-36 bg-surface-container-high/40 rounded-lg animate-pulse" />
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="h-80 bg-slate-800 rounded-xl animate-pulse" />
+            <div key={i} className="h-80 bg-surface-container-high/40 rounded-lg animate-pulse" />
           ))}
         </div>
       </div>
@@ -118,62 +116,56 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen bg-surface-base text-on-surface relative">
+      <div className="scanline"></div>
       {/* ─── Header ─────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50">
+      <header className="sticky top-0 z-30 bg-surface-container/70 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-primary/5">
         <div className="flex items-center justify-between px-6 py-4">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">
+            <h1 className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight uppercase font-space-grotesk">
               Admin Dashboard
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="font-label-data text-label-data text-on-surface-variant mt-0.5 font-jetbrains-mono">
               {activeTab === 'control-center' && 'Control center con monitoreo en vivo, acciones y estadísticas'}
-              {activeTab === 'overview' && 'System overview &amp; performance metrics'}
-              {activeTab === 'briefing' && 'Nightly digest &amp; today\'s predictions'}
-              {activeTab === 'trending' && 'Trending topics &amp; article clusters'}
-              {activeTab === 'quality' && 'Article quality scoring &amp; source ranking'}
-              {activeTab === 'services' && 'Start, stop &amp; monitor all backend services'}
-              {activeTab === 'sources' && 'Manage RSS &amp; scrape news sources'}
-              {activeTab === 'logs' && 'Structured service logs with filtering and auto-refresh'}
+              {activeTab === 'overview' && 'System overview & performance metrics'}
+              {activeTab === 'quality' && 'Article quality scoring & source ranking'}
+              {activeTab === 'sources' && 'Manage RSS & scrape news sources'}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Tab navigation */}
-            <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
+            <div className="flex rounded border border-white/10 bg-surface-container-lowest/80 p-0.5">
               {TABS.map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
                   onClick={() => setActiveTab(tab.value)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1.5 font-inter ${
                     activeTab === tab.value
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-primary text-on-primary shadow-sm'
+                      : 'text-on-surface-variant hover:text-primary'
                   }`}
                   aria-label={`Tab: ${tab.label}`}
                 >
-                  {tab.icon} {tab.label}
+                  <span className="material-symbols-outlined text-sm">{tab.icon}</span>
+                  <span>{tab.label}</span>
                 </button>
               ))}
             </div>
 
             {/* Range selector (overview only) */}
-        {activeTab === 'control-center' && (
-          <ControlCenter />
-        )}
-
-        {activeTab === 'overview' && (
-              <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
+            {activeTab === 'overview' && (
+              <div className="flex rounded border border-white/10 bg-surface-container-lowest/80 p-0.5">
                 {RANGE_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setRange(opt.value)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all cursor-pointer font-inter ${
                       range === opt.value
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-primary text-on-primary shadow-sm'
+                        : 'text-on-surface-variant hover:text-primary'
                     }`}
                     aria-label={`Select range: ${opt.label}`}
                   >
@@ -187,7 +179,7 @@ export function AdminDashboard() {
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800/60 cursor-pointer"
+              className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-white/5 cursor-pointer"
               title="Refresh data"
               aria-label="Refresh dashboard data"
             >
@@ -201,6 +193,9 @@ export function AdminDashboard() {
 
       {/* ─── Main Content ───────────────────────────────────────────── */}
       <div className="p-6 space-y-6">
+        {activeTab === 'control-center' && (
+          <ControlCenter />
+        )}
         {activeTab === 'overview' && (
           <div>
               {/* ── KPI Cards ──────────────────────────────────────────── */}
@@ -307,7 +302,7 @@ export function AdminDashboard() {
 
             {/* ── Insecurity Radar ──────────────────────────────────── */}
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
-              <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+              <section className="glass-panel rounded-xl overflow-hidden active-glow">
                 <div className="max-h-[500px] overflow-y-auto">
                   <InsecurityPanel />
                 </div>
@@ -316,7 +311,7 @@ export function AdminDashboard() {
 
             {/* ── Protest Radar ──────────────────────────────────────── */}
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
-              <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+              <section className="glass-panel rounded-xl overflow-hidden active-glow">
                 <div className="max-h-[500px] overflow-y-auto">
                   <ProtestPanel />
                 </div>
@@ -338,22 +333,6 @@ export function AdminDashboard() {
             </div>
           )}
 
-          {activeTab === 'services' && (
-            <div>
-              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
-                <ServiceControlPanel />
-              </Suspense>
-            </div>
-          )}
-
-          {activeTab === 'sources' && (
-            <div>
-              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
-                <SourceManager />
-              </Suspense>
-            </div>
-          )}
-
           {activeTab === 'trending' && (
             <div>
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
@@ -368,11 +347,14 @@ export function AdminDashboard() {
             </div>
           )}
 
-          {activeTab === 'logs' && (
+          {activeTab === 'sources' && (
             <div>
-              <LogViewer />
+              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
+                <SourceManager />
+              </Suspense>
             </div>
           )}
+
       </div>
     </div>
   );

@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { useTrendingTopics } from '../../hooks/useAdminData';
+import { type TrendingTopic, type Cluster } from '../../services/adminApi';
 
 const CATEGORY_COLORS: Record<string, string> = {
   urgente: 'bg-red-900/30 text-red-300 border-red-700/30',

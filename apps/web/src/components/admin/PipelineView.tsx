@@ -27,35 +27,35 @@ const STAGES: StageDef[] = [
     key: 'ingested',
     label: 'Ingested',
     color: 'emerald',
-    icon: '📥',
+    icon: 'download',
     getCount: (p) => (p.ingested ?? 0) + (p.geolocated ?? 0),
   },
   {
     key: 'geolocated',
     label: 'Geolocated',
     color: 'amber',
-    icon: '📍',
+    icon: 'location_on',
     getCount: (p) => p.geolocated ?? 0,
   },
   {
     key: 'filtered',
     label: 'AI Processing',
     color: 'blue',
-    icon: '🧠',
+    icon: 'psychology',
     getCount: (p) => p.filtered ?? 0,
   },
   {
     key: 'pending_approval',
     label: 'Pending Approval',
     color: 'violet',
-    icon: '⏳',
+    icon: 'pending_actions',
     getCount: (p, aq) => (p.pending_approval ?? 0) + (aq.pending ?? 0),
   },
   {
     key: 'published',
     label: 'Published',
     color: 'emerald',
-    icon: '✅',
+    icon: 'check_circle',
     getCount: (p) => p.published ?? 0,
   },
 ];
@@ -105,11 +105,11 @@ export function PipelineView({ pipeline, approvalQueue, isLoading }: PipelineVie
 
   if (isLoading) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <div className="h-5 w-36 bg-slate-700 rounded animate-pulse mb-4" />
         <div className="flex gap-3 overflow-x-auto pb-2">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-24 w-32 bg-slate-700/60 rounded-xl animate-pulse shrink-0" />
+            <div key={i} className="h-24 w-32 bg-slate-700/30 rounded-xl animate-pulse shrink-0" />
           ))}
         </div>
       </section>
@@ -118,7 +118,7 @@ export function PipelineView({ pipeline, approvalQueue, isLoading }: PipelineVie
 
   if (!pipeline) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <h3 className="text-sm font-semibold text-slate-400 mb-3">Pipeline Status</h3>
         <p className="text-xs text-slate-500">Pipeline service unreachable. Showing mock estimates.</p>
       </section>
@@ -130,7 +130,7 @@ export function PipelineView({ pipeline, approvalQueue, isLoading }: PipelineVie
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5"
+        className="glass-panel rounded-xl p-5"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white tracking-tight">
@@ -155,7 +155,7 @@ export function PipelineView({ pipeline, approvalQueue, isLoading }: PipelineVie
                   transition={{ delay: idx * 0.08 }}
                   className={`flex flex-col items-center gap-2 p-3 rounded-xl border ${colors.border} ${colors.bg} min-w-[110px] ${colors.glow} shadow-sm`}
                 >
-                  <span className="text-lg" aria-hidden="true">{stage.icon}</span>
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">{stage.icon}</span>
                   <span className={`text-xs font-medium ${colors.text}`}>{stage.label}</span>
                   <span className={`text-lg font-bold tabular-nums ${colors.badge} px-2 py-0.5 rounded-md`}>
                     {count}

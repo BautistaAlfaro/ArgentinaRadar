@@ -26,6 +26,7 @@ from src.config import OLLAMA_EMBED_MODEL, OLLAMA_HOST, OLLAMA_MODEL
 # ---------------------------------------------------------------------------
 
 _OLLAMA_GENERATE_URL = f"http://{OLLAMA_HOST}/api/generate"
+_OLLAMA_EMBED_URL = f"http://{OLLAMA_HOST}/api/embeddings"
 _CLASSIFY_TIMEOUT = 10.0  # seconds — strict timeout for classification
 
 _SYSTEM_PROMPT = (
@@ -258,7 +259,7 @@ async def generate_embedding(
 
     try:
         async with httpx.AsyncClient(timeout=_CLASSIFY_TIMEOUT) as client:
-            response = await client.post(_OLLAMA_GENERATE_URL, json=payload)
+            response = await client.post(_OLLAMA_EMBED_URL, json=payload)
             response.raise_for_status()
             data = response.json()
     except httpx.TimeoutException:
@@ -266,7 +267,7 @@ async def generate_embedding(
     except httpx.ConnectError:
         raise RuntimeError(
             "Ollama not available — is 'ollama serve' running? "
-            f"(tried {_OLLAMA_GENERATE_URL})"
+            f"(tried {_OLLAMA_EMBED_URL})"
         )
     except httpx.HTTPStatusError as exc:
         raise RuntimeError(f"Ollama returned HTTP {exc.response.status_code}")

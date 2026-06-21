@@ -20,10 +20,10 @@ interface ServiceCardsProps {
 }
 
 const SERVICE_ICONS: Record<string, string> = {
-  rss:      '📰',
-  ai:       '🧠',
-  bluesky:  '🦋',
-  telegram: '🤖',
+  rss:      'rss_feed',
+  ai:       'psychology',
+  bluesky:  'flutter_dash',
+  telegram: 'send',
 };
 
 function capitalize(s: string): string {
@@ -32,7 +32,7 @@ function capitalize(s: string): string {
 
 function ServiceCard({ svc, index }: { svc: ServiceInfo; index: number }) {
   const isUp = svc.status === 'up';
-  const icon = SERVICE_ICONS[svc.name] ?? '⚙️';
+  const icon = SERVICE_ICONS[svc.name] ?? 'settings';
 
   return (
     <motion.div
@@ -64,7 +64,7 @@ function ServiceCard({ svc, index }: { svc: ServiceInfo; index: number }) {
         </div>
 
         {/* Icon */}
-        <span className="text-xl shrink-0" aria-hidden="true">{icon}</span>
+        <span className="material-symbols-outlined text-xl shrink-0 text-primary" aria-hidden="true">{icon}</span>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
@@ -94,11 +94,11 @@ function ServiceCard({ svc, index }: { svc: ServiceInfo; index: number }) {
 export function ServiceCards({ services, isLoading }: ServiceCardsProps) {
   if (isLoading) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <div className="h-5 w-32 bg-slate-700 rounded animate-pulse mb-4" />
         <div className="grid grid-cols-2 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-slate-700/60 rounded-xl animate-pulse" />
+            <div key={i} className="h-20 bg-slate-700/30 rounded-xl animate-pulse" />
           ))}
         </div>
       </section>
@@ -107,7 +107,7 @@ export function ServiceCards({ services, isLoading }: ServiceCardsProps) {
 
   if (!services || services.length === 0) {
     return (
-      <section className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5">
+      <section className="glass-panel rounded-xl p-5">
         <h3 className="text-sm font-semibold text-slate-400 mb-3">Service Health</h3>
         <p className="text-xs text-slate-500">No service data available.</p>
       </section>
@@ -121,7 +121,7 @@ export function ServiceCards({ services, isLoading }: ServiceCardsProps) {
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-5"
+        className="glass-panel rounded-xl p-5"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white tracking-tight">

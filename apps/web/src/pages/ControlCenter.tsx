@@ -1,398 +1,354 @@
-const EMPTY_CATEGORIES: { category: string; count: number }[] = [];
-
 /**
  * ControlCenter — Premium Admin Dashboard
  *
- * The NEW default admin page with 6 sections:
- *   1. Service Status Bar (horizontal service cards)
- *   2. Pipeline Live (animated pipeline visual)
- *   3. Quick Actions (action buttons + confirmation modals)
- *   4. Live Stats (CPU, RAM, uptime, pipeline counts)
- *   5. Charts Grid (reused from existing charts with real data)
- *   6. Activity Feed (reused with real-time updates)
+ * Fixed two-column layout that fits within the viewport at 100% zoom.
+ * Left:  Mini stats → Pipeline → Charts (compact) → Activity
+ * Right: Services (compact pill grid) → Approval Queue → Logs
  *
- * Layout:
- * ┌──────────────────────────────────────────────┐
- * │  🤖 ARGENTINA RADAR — Panel de Control       │
- * ├──────────┬──────────┬──────────┬─────────────┤
- * │INGESTIÓN │  AI      │APROBACIÓN│ PUBLICACIÓN │
- * │  🟢      │  🟢     │  🟡     │  🟢        │
- * │ 637 arts │ qwen2.5  │ 3 pend.  │ 5 hoy      │
- * │ 16 fuen. │ thresh:5 │ 12/15    │ Bluesky OK │
- * ├──────────┴──────────┴──────────┴─────────────┤
- * │  📊 PIPELINE EN VIVO                         │
- * │  RSS → [637] → AI → [612] → Pending → [3] → │
- * ├──────────────────────────────────────────────┤
- * │  📈 GRÁFICOS                     ⚙️ ACCIONES │
- * │  ┌─────────┐ ┌─────────┐                    │
- * │  │Arts/día │ │Categoría│  [🔄 Refresh]      │
- * │  │ ▂▅▇█▇▅▂│ │  ████ po│  [🧠 Ajustar]     │
- * │  └─────────┘ └─────────┘  [⚡ Auto-apr]     │
- * ├──────────────────────────────────────────────┤
- * │  📋 ACTIVIDAD RECIENTE                       │
- * │  hace 2m ✅ Aprobado...                      │
- * │  hace 5m 📥 Ingestado...                     │
- * └──────────────────────────────────────────────┘
+ * Both columns scroll independently; outer container is viewport-bound.
  */
 
-import { lazy, Suspense, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { LazyMotion, domAnimation, m as motion } from "framer-motion";
-import { PipelineView } from "../components/admin/PipelineView";
-import { ServiceCards } from "../components/admin/ServiceCards";
+import { lazy, Suspense, useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { LazyMotion, domAnimation, m as motion } from 'framer-motion';
+import { PipelineView } from '../components/admin/PipelineView';
 import { API } from '@shared/apiConfig';
+import { useServices } from '../hooks/useAdminData';
+import { startService, stopService, startAllServices, stopAllServices } from '../services/adminApi';
 
-// ─── Lazy-loaded existing charts ─────────────────────────────────────
+// ── Lazy chunks ─────────────────────────────────────────────────────
 
 const NewsProcessingChart = lazy(() =>
-  import("../components/admin/charts/NewsProcessingChart").then((m) => ({
-    default: m.NewsProcessingChart,
-  })),
+  import('../components/admin/charts/NewsProcessingChart').then((m) => ({ default: m.NewsProcessingChart })),
 );
-
-const RevenueChart = lazy(() =>
-  import("../components/admin/charts/RevenueChart").then((m) => ({
-    default: m.RevenueChart,
-  })),
-);
-
-const SystemHealthChart = lazy(() =>
-  import("../components/admin/charts/SystemHealthChart").then((m) => ({
-    default: m.SystemHealthChart,
-  })),
-);
-
 const EventDetectionChart = lazy(() =>
-  import("../components/admin/charts/EventDetectionChart").then((m) => ({
-    default: m.EventDetectionChart,
-  })),
+  import('../components/admin/charts/EventDetectionChart').then((m) => ({ default: m.EventDetectionChart })),
 );
-
-// ─── Lazy-loaded existing components ──────────────────────────────────
-
 const ActivityFeed = lazy(() =>
-  import("../components/admin/ActivityFeed").then((m) => ({
-    default: m.ActivityFeed,
-  })),
+  import('../components/admin/ActivityFeed').then((m) => ({ default: m.ActivityFeed })),
+);
+const ApprovalQueue = lazy(() =>
+  import('../components/admin/ApprovalQueue').then((m) => ({ default: m.ApprovalQueue })),
+);
+const LogViewer = lazy(() =>
+  import('../components/admin/LogViewer').then((m) => ({ default: m.LogViewer })),
 );
 
-const CategoryChart = lazy(() =>
-  import("../components/admin/CategoryChart").then((m) => ({
-    default: m.CategoryChart,
-  })),
-);
-
-// ─── Types ───────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────
 
 interface DailyStat {
   date: string;
-  ingested: number;
-  geolocated: number;
-  filtered: number;
-  published: number;
-  revenue: number;
-  activeUsers: number;
-  vipUsers: number;
-  adminUsers: number;
-  eventsDetected: number;
-  avgImpactScore: number;
-  aiCost: number;
-  budget: number;
+  ingested: number; geolocated: number; filtered: number; published: number;
+  revenue: number; activeUsers: number; vipUsers: number; adminUsers: number;
+  eventsDetected: number; avgImpactScore: number; aiCost: number; budget: number;
 }
 
 interface PipelineStats {
   pipeline: Record<string, number>;
   categories: Array<{ category: string; count: number }>;
   approvalQueue: Record<string, number>;
-  recent: Array<{
-    id: string;
-    title: string;
-    source: string;
-    category: string | null;
-    status: string;
-    publishedAt: string | null;
-    ingestedAt: string;
-  }>;
+  recent: Array<{ id: string; title: string; source: string; category: string | null; status: string; publishedAt: string | null; ingestedAt: string }>;
   timestamp: string;
 }
 
-// ─── API fetchers ────────────────────────────────────────────────────
+// ── API ──────────────────────────────────────────────────────────────
 
 const ADMIN_API = API.admin;
-const NEWS_API = API.news;
-
-function generateDateRange(days: number): string[] {
-  const dates: string[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-  return dates;
-}
+const NEWS_API  = API.news;
 
 function generateMockDailyStats(days: number): DailyStat[] {
-  const dates = generateDateRange(days);
+  const dates: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
   return dates.map((date, i) => ({
     date,
-    ingested: 500 + Math.round(Math.sin(i * 0.3) * 100 + Math.random() * 80),
-    geolocated: 420 + Math.round(Math.sin(i * 0.3 + 0.5) * 80 + Math.random() * 60),
-    filtered: 340 + Math.round(Math.sin(i * 0.3 + 1) * 70 + Math.random() * 50),
-    published: 280 + Math.round(Math.sin(i * 0.3 + 1.5) * 60 + Math.random() * 40),
-    revenue: 5500 + Math.round(Math.sin(i * 0.2) * 800 + Math.random() * 400),
-    activeUsers: 110 + Math.round(Math.sin(i * 0.15) * 20 + Math.random() * 15),
-    vipUsers: 90 + Math.round(Math.sin(i * 0.15 + 0.3) * 15 + Math.random() * 10),
-    adminUsers: 20 + Math.round(Math.sin(i * 0.15 + 0.6) * 5 + Math.random() * 4),
-    eventsDetected: 40 + Math.round(Math.sin(i * 0.4) * 10 + Math.random() * 8),
-    avgImpactScore: 45 + Math.round(Math.sin(i * 0.25) * 15 + Math.random() * 10),
-    aiCost: 1.2 + Math.sin(i * 0.2) * 0.5 + Math.random() * 0.3,
+    ingested:       500 + Math.round(Math.sin(i * 0.3) * 100 + Math.random() * 80),
+    geolocated:     420 + Math.round(Math.sin(i * 0.3 + 0.5) * 80 + Math.random() * 60),
+    filtered:       340 + Math.round(Math.sin(i * 0.3 + 1) * 70 + Math.random() * 50),
+    published:      280 + Math.round(Math.sin(i * 0.3 + 1.5) * 60 + Math.random() * 40),
+    revenue:       5500 + Math.round(Math.sin(i * 0.2) * 800 + Math.random() * 400),
+    activeUsers:    110 + Math.round(Math.sin(i * 0.15) * 20 + Math.random() * 15),
+    vipUsers:        90 + Math.round(Math.sin(i * 0.15 + 0.3) * 15 + Math.random() * 10),
+    adminUsers:      20 + Math.round(Math.sin(i * 0.15 + 0.6) * 5 + Math.random() * 4),
+    eventsDetected:  40 + Math.round(Math.sin(i * 0.4) * 10 + Math.random() * 8),
+    avgImpactScore:  45 + Math.round(Math.sin(i * 0.25) * 15 + Math.random() * 10),
+    aiCost:         1.2 + Math.sin(i * 0.2) * 0.5 + Math.random() * 0.3,
     budget: 2.0,
   }));
 }
 
 async function fetchDailyStats(): Promise<DailyStat[]> {
   try {
-    const resp = await fetch(`${ADMIN_API}/api/admin/daily-stats?range=7d`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (resp.ok) return resp.json();
-  } catch {
-    /* fall through to mock */
-  }
+    const r = await fetch(`${ADMIN_API}/api/admin/daily-stats?range=7d`, { signal: AbortSignal.timeout(5_000) });
+    if (r.ok) return r.json();
+  } catch { /* mock fallback */ }
   return generateMockDailyStats(7);
 }
 
 async function fetchPipelineStats(): Promise<PipelineStats | null> {
   try {
-    const resp = await fetch(`${NEWS_API}/api/pipeline/stats`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (resp.ok) return resp.json();
-  } catch {
-    /* fall through */
-  }
+    const r = await fetch(`${NEWS_API}/api/pipeline/stats`, { signal: AbortSignal.timeout(5_000) });
+    if (r.ok) return r.json();
+  } catch { /* offline */ }
   return null;
 }
 
-async function fetchSystemMetrics(): Promise<unknown[]> {
-  try {
-    const resp = await fetch(`${ADMIN_API}/api/admin/system-metrics`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (resp.ok) return resp.json();
-  } catch {
-    /* fall through */
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function Skel({ h }: { h: string }) {
+  return <div className={`bg-surface-container-high/40 rounded animate-pulse ${h}`} />;
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold text-primary tracking-widest uppercase font-label-caps mb-2">
+      {children}
+    </p>
+  );
+}
+
+// ── Compact Service Icons ─────────────────────────────────────────────
+
+const SVC_ICONS: Record<string, string> = {
+  'web-app': 'public', 'news-ingestion': 'rss_feed', 'geolocation': 'location_on',
+  'ai-processor': 'psychology', 'event-detector': 'bolt', 'trend-analyzer': 'trending_up',
+  'twitter-publisher': 'send', 'hermes-bridge': 'smart_toy', 'economic-data': 'payments',
+  'alerts': 'notifications', 'night-owl': 'bedtime', 'auth': 'lock',
+};
+
+function svcLabel(name: string) {
+  return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ── Compact Service Grid ──────────────────────────────────────────────
+
+function CompactServices() {
+  const { data, isLoading } = useServices();
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  const toggle = useCallback(async (name: string, status: string) => {
+    setBusy((b) => ({ ...b, [name]: true }));
+    try {
+      status === 'running' ? await stopService(name) : await startService(name);
+    } finally {
+      setBusy((b) => ({ ...b, [name]: false }));
+    }
+  }, []);
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const startAll = useCallback(async () => {
+    setBulkBusy(true);
+    try { await startAllServices(); } finally { setBulkBusy(false); }
+  }, []);
+
+  const stopAll = useCallback(async () => {
+    setBulkBusy(true);
+    try { await stopAllServices(); } finally { setBulkBusy(false); }
+  }, []);
+
+  const services = data?.services ?? [];
+  const running  = services.filter((s) => s.status === 'running').length;
+
+  if (isLoading && services.length === 0) {
+    return <div className="grid grid-cols-3 gap-1.5">{Array.from({ length: 9 }).map((_, i) => <Skel key={i} h="h-8" />)}</div>;
   }
-  return [];
-}
 
-// ─── Loading Skeleton ────────────────────────────────────────────────
-
-function LoadingSkeleton({ className }: { className?: string }) {
   return (
-    <div className={`bg-slate-800 rounded-xl animate-pulse ${className ?? ""}`} />
+    <div className="space-y-2">
+      {/* Bulk bar */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-on-surface-variant font-jetbrains-mono">
+          {running}/{services.length} running
+        </span>
+        <div className="flex gap-1.5">
+          <button
+            type="button" disabled={bulkBusy} onClick={stopAll}
+            className="px-2 py-0.5 text-[10px] font-medium rounded bg-red-800/60 text-red-300 hover:bg-red-700/70 disabled:opacity-40 transition-colors cursor-pointer"
+          >
+            Stop All
+          </button>
+          <button
+            type="button" disabled={bulkBusy} onClick={startAll}
+            className="px-2 py-0.5 text-[10px] font-medium rounded bg-emerald-800/60 text-emerald-300 hover:bg-emerald-700/70 disabled:opacity-40 transition-colors cursor-pointer"
+          >
+            Start All
+          </button>
+        </div>
+      </div>
+
+      {/* Service pill grid — 3 columns */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {services.map((svc) => {
+          const isRunning = svc.status === 'running';
+          const isBusy    = busy[svc.name] ?? false;
+          return (
+            <button
+              key={svc.name}
+              type="button"
+              disabled={isBusy}
+              onClick={() => toggle(svc.name, svc.status)}
+              title={svc.name}
+              className={`
+                flex items-center gap-1.5 px-2 py-1.5 rounded border text-left
+                transition-all duration-150 cursor-pointer
+                ${isRunning
+                  ? 'border-emerald-500/30 bg-emerald-900/15 hover:bg-emerald-900/25'
+                  : 'border-slate-700/40 bg-slate-800/40 hover:bg-slate-700/40'
+                }
+                ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}
+              `}
+              aria-label={`${isRunning ? 'Stop' : 'Start'} ${svc.name}`}
+            >
+              {/* LED */}
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                isRunning ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'bg-red-500'
+              }`} />
+              {/* Icon */}
+              <span className="material-symbols-outlined text-[13px] text-on-surface-variant shrink-0">
+                {SVC_ICONS[svc.name] ?? 'settings'}
+              </span>
+              {/* Name */}
+              <span className="text-[10px] font-medium text-on-surface truncate font-jetbrains-mono">
+                {svcLabel(svc.name)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-// ─── Section Header ──────────────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 className="text-sm font-semibold text-white tracking-tight mb-4">
-      {title}
-    </h2>
-  );
-}
-
-// ─── Mini Pipeline Quick Stats ───────────────────────────────────────
+// ── Mini Pipeline Stats ───────────────────────────────────────────────
 
 function MiniPipeStats({ pipeline, sources }: { pipeline: Record<string, number>; sources?: number }) {
-  const ingested = pipeline.ingested ?? 0;
-  const aiProcessed = pipeline.filtered ?? 0;
-  const pending = pipeline.pending_approval ?? 0;
-  const published = pipeline.published ?? 0;
-
   const cards = [
-    { label: "Ingestión", icon: "📥", value: `${ingested} arts`, sub: `${sources ?? 16} fuen.`, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-    { label: "AI", icon: "🧠", value: "qwen2.5", sub: `thresh:5 · ${aiProcessed} proc.`, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
-    { label: "Aprobación", icon: "⏳", value: `${pending} pend.`, sub: "12/15 revisores", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-    { label: "Publicación", icon: "✅", value: `${published} hoy`, sub: "Bluesky OK", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+    { label: 'Ingestión', icon: 'download',       value: `${pipeline.ingested ?? 0}`,        sub: `${sources ?? 16} fuentes`,   color: 'text-secondary' },
+    { label: 'AI',        icon: 'psychology',      value: 'qwen2.5',                          sub: `${pipeline.filtered ?? 0} proc.`, color: 'text-primary' },
+    { label: 'Pendientes',icon: 'pending_actions', value: `${pipeline.pending_approval ?? 0}`,sub: 'en cola',                    color: 'text-tertiary' },
+    { label: 'Publicados',icon: 'check_circle',    value: `${pipeline.published ?? 0}`,       sub: 'hoy',                        color: 'text-secondary' },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      {cards.map((card, idx) => (
+    <div className="grid grid-cols-4 gap-2">
+      {cards.map((c, i) => (
         <motion.div
-          key={card.label}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: idx * 0.06 }}
-          className={`rounded-xl border p-4 ${card.bg}`}
+          key={c.label}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.05 }}
+          className="glass-panel active-glow rounded border px-2.5 py-2"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm" aria-hidden="true">{card.icon}</span>
-            <span className="text-[11px] font-medium text-slate-400">{card.label}</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`material-symbols-outlined text-[15px] ${c.color}`}>{c.icon}</span>
+            <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">{c.label}</span>
           </div>
-          <p className={`text-lg font-bold tabular-nums ${card.color}`}>{card.value}</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">{card.sub}</p>
+          <p className={`text-sm font-bold tabular-nums font-label-data ${c.color}`}>{c.value}</p>
+          <p className="text-[9px] text-on-surface-variant/60 font-label-data">{c.sub}</p>
         </motion.div>
       ))}
     </div>
   );
 }
 
-// ─── Main ControlCenter ──────────────────────────────────────────────
+// ── Main ─────────────────────────────────────────────────────────────
 
 export function ControlCenter() {
-  const [systemDimension, setSystemDimension] = useState<"cpu" | "memory">("cpu");
-
-  // Data fetching
   const { data: dailyStats, isLoading: statsLoading } = useQuery<DailyStat[]>({
-    queryKey: ["control-center", "daily-stats"],
+    queryKey: ['control-center', 'daily-stats'],
     queryFn: fetchDailyStats,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
+    refetchInterval: 30_000, staleTime: 10_000,
   });
 
   const { data: pipelineStats } = useQuery<PipelineStats | null>({
-    queryKey: ["control-center", "pipeline-stats"],
+    queryKey: ['control-center', 'pipeline-stats'],
     queryFn: fetchPipelineStats,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchInterval: 10_000, staleTime: 5_000,
   });
 
-  const { data: systemMetrics } = useQuery<unknown[]>({
-    queryKey: ["control-center", "system-metrics"],
-    queryFn: fetchSystemMetrics,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
-  });
-
-  const dailyData = dailyStats ?? [];
-  const pipeData = pipelineStats?.pipeline ?? {};
-  const categories = pipelineStats?.categories ?? null;
-  const recentActivity = pipelineStats?.recent ?? null;
-  const isLoading = statsLoading;
-
-  if (isLoading && dailyData.length === 0) {
-    return (
-      <div className="min-h-screen bg-slate-900 p-6 space-y-6">
-        <div className="h-8 w-64 bg-slate-800 rounded-lg animate-pulse" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 bg-slate-800 rounded-xl animate-pulse" />
-          ))}
-        </div>
-        <div className="h-32 bg-slate-800 rounded-xl animate-pulse" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="h-72 bg-slate-800 rounded-xl animate-pulse" />
-          <div className="h-72 bg-slate-800 rounded-xl animate-pulse" />
-        </div>
-      </div>
-    );
-  }
+  const dailyData     = dailyStats ?? [];
+  const pipeData      = pipelineStats?.pipeline ?? {};
+  const recentActivity= pipelineStats?.recent ?? null;
 
   return (
     <LazyMotion features={domAnimation}>
-      <div className="min-h-screen bg-slate-900">
-        {/* ─── Header ──────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                🤖 ARGENTINA RADAR — Panel de Control
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Monitoreo en vivo · Control center · Administración del pipeline
-              </p>
-            </div>
+      {/* Viewport-bound container — both columns scroll independently */}
+      <div className="relative text-on-surface" style={{ height: 'calc(100vh - 8rem)' }}>
+        {/* Scanline overlay — outside the grid so it doesn't consume a column */}
+        <div className="scanline pointer-events-none absolute inset-0 z-0" />
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-700/50 bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:border-slate-600/50 transition-all cursor-pointer"
-                aria-label="Refresh dashboard"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                  <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
-                </svg>
-                Refresh
-              </button>
-            </div>
-          </div>
-        </header>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 h-full relative z-10">
 
-        {/* ─── Main Content ────────────────────────────────────────── */}
-        <div className="p-6 space-y-5">
-          {/* Section 1: Mini Pipeline Stats */}
+        {/* ── LEFT COLUMN ─────────────────────────────────── */}
+        <div className="overflow-y-auto pr-4 lg:border-r lg:border-white/10 space-y-3 pb-4">
+
+          {/* Mini stats bar */}
           <MiniPipeStats pipeline={pipeData} />
 
-          {/* Section 2: Service Status */}
-          <ServiceCards services={null} isLoading={false} />
+          {/* Pipeline flow */}
+          <PipelineView
+            pipeline={pipeData}
+            approvalQueue={pipelineStats?.approvalQueue ?? {}}
+            isLoading={statsLoading}
+          />
 
-          {/* Section 3: Pipeline */}
-          <PipelineView pipeline={pipeData} approvalQueue={pipelineStats?.approvalQueue ?? {}} isLoading={statsLoading} />
-
-          {/* Section 4: System Info */}
-          <div className="grid grid-cols-3 gap-3 text-xs text-slate-400">
-            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
-              <span className="text-slate-500">CPU</span>
-              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.cpu ?? '—'}%</p>
+          {/* Charts — compact, h-40 */}
+          <Suspense fallback={
+            <div className="grid grid-cols-2 gap-3">
+              <Skel h="h-40" /><Skel h="h-40" />
             </div>
-            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
-              <span className="text-slate-500">RAM</span>
-              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.memory ?? '—'} MB</p>
+          }>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="h-40"><NewsProcessingChart data={dailyData} /></div>
+              <div className="h-40"><EventDetectionChart data={dailyData} /></div>
             </div>
-            <div className="bg-slate-800/60 rounded-lg p-3 border border-slate-700/30">
-              <span className="text-slate-500">Uptime</span>
-              <p className="text-white font-mono text-sm">{systemMetrics?.[0]?.uptime ?? '—'}</p>
-            </div>
-          </div>
-
-          {/* Section 5: Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-
-            <Suspense
-              fallback={
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <LoadingSkeleton className="h-72" />
-                  <LoadingSkeleton className="h-72" />
-                </div>
-              }
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <NewsProcessingChart data={dailyData} />
-                <EventDetectionChart data={dailyData} />
-              </div>
-            </Suspense>
-
-            <Suspense
-              fallback={
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <LoadingSkeleton className="h-72" />
-                  <LoadingSkeleton className="h-72" />
-                </div>
-              }
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <SystemHealthChart
-                  metrics={systemMetrics as any[]}
-                  dimension={systemDimension}
-                />
-                <CategoryChart
-                  categories={categories ?? EMPTY_CATEGORIES}
-                  isLoading={false}
-                />
-              </div>
-            </Suspense>
-          </div>
-
-          {/* Section 6: Activity Feed */}
-          <Suspense fallback={<LoadingSkeleton className="h-64" />}>
-            <ActivityFeed items={recentActivity as any} isLoading={false} />
           </Suspense>
+
+          {/* Recent Activity — capped height */}
+          <div>
+            <SectionLabel>Recent Activity</SectionLabel>
+            <div className="max-h-48 overflow-y-auto">
+              <Suspense fallback={<Skel h="h-32" />}>
+                <ActivityFeed items={recentActivity as any} isLoading={false} />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN ────────────────────────────────── */}
+        <div className="overflow-y-auto pl-4 space-y-4 pb-4">
+
+          {/* Services — compact pill grid */}
+          <div>
+            <SectionLabel>Services</SectionLabel>
+            <CompactServices />
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-white/10" />
+
+          {/* Approval Queue */}
+          <div>
+            <SectionLabel>Approval Queue</SectionLabel>
+            <Suspense fallback={<Skel h="h-64" />}>
+              <ApprovalQueue />
+            </Suspense>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-white/10" />
+
+          {/* Logs */}
+          <div>
+            <SectionLabel>Service Logs</SectionLabel>
+            <Suspense fallback={<Skel h="h-48" />}>
+              <LogViewer />
+            </Suspense>
+          </div>
+
+        </div>
         </div>
       </div>
     </LazyMotion>

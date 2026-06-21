@@ -60,6 +60,7 @@ import { servicesRouter } from "./routes/services.js";
 import { sourcesRouter } from "./routes/sources.js";
 import { actionsRouter } from "./routes/actions.js";
 import { systemRouter } from "./routes/system.js";
+import { pipelineRouter } from "./routes/pipeline.js";
 import { startCollector } from "./collector.js";
 
 const app = express();
@@ -493,6 +494,7 @@ app.use("/api/admin", servicesRouter);
 app.use("/api/admin", sourcesRouter);
 app.use("/api/admin", actionsRouter);
 app.use("/api/admin", systemRouter);
+app.use("/api/pipeline", pipelineRouter);
 
 // ─── Health ─────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -522,7 +524,11 @@ app.listen(config.port, () => {
   console.log(`[admin]   POST /api/admin/services/start-all`);
   console.log(`[admin]   POST /api/admin/services/stop-all`);
   console.log(`[admin]   GET  /api/admin/pipeline-status`);
-  console.log(`[admin]   GET  /api/pipeline/status     — Rich pipeline monitoring`);
+  console.log(`[admin]   GET  /api/pipeline/status              — Rich pipeline monitoring`);
+  console.log(`[admin]   GET  /api/pipeline/approval-queue      — List queue items`);
+  console.log(`[admin]   POST /api/pipeline/approve-batch       — Approve or reject items`);
+  console.log(`[admin]   POST /api/pipeline/publish-batch       — Mark approved items published`);
+  console.log(`[admin]   GET  /api/pipeline/batches             — Batch summary list`);
   console.log(`[admin]   GET  /api/admin/health        — Comprehensive health dashboard`);
   console.log(`[admin]   GET  /api/admin/health/all    — Ecosystem health (all services + Ollama)`);
   console.log(`[admin]   ├── Control Center Actions (ADMIN):`);

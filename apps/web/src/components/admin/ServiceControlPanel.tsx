@@ -44,18 +44,18 @@ const STATUS_LED: Record<string, { className: string; label: string }> = {
 };
 
 const SERVICE_ICONS: Record<string, string> = {
-  'web-app':         '🌐',
-  'news-ingestion':  '📰',
-  'geolocation':     '📍',
-  'ai-processor':    '🧠',
-  'event-detector':  '⚡',
-  'trend-analyzer':  '📈',
-  'twitter-publisher': '🐦',
-  'hermes-bridge':   '🤖',
-  'economic-data':   '💰',
-  'alerts':          '🔔',
-  'night-owl':       '🦉',
-  'auth':            '🔐',
+  'web-app':           'public',
+  'news-ingestion':    'rss_feed',
+  'geolocation':       'location_on',
+  'ai-processor':      'psychology',
+  'event-detector':    'bolt',
+  'trend-analyzer':    'trending_up',
+  'twitter-publisher': 'send',
+  'hermes-bridge':     'smart_toy',
+  'economic-data':     'payments',
+  'alerts':            'notifications',
+  'night-owl':         'bedtime',
+  'auth':              'lock',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -121,8 +121,8 @@ function ServiceCard({ service, action, onToggle }: ServiceCardProps) {
           />
 
           {/* Icon */}
-          <span className="text-xl shrink-0" aria-hidden="true">
-            {SERVICE_ICONS[service.name] ?? '⚙️'}
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0" aria-hidden="true">
+            {SERVICE_ICONS[service.name] ?? 'settings'}
           </span>
 
           {/* Details */}
@@ -202,7 +202,7 @@ function TelegramStatus({ services }: { services: ServiceStatus[] }) {
     <div className="rounded-xl border border-blue-500/30 bg-blue-900/10 p-5 mb-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <span className="text-3xl" aria-hidden="true">🤖</span>
+          <span className="material-symbols-outlined text-[28px] text-blue-400" aria-hidden="true">smart_toy</span>
           <div>
             <h3 className="text-base font-bold text-blue-300">
               Telegram Bot
