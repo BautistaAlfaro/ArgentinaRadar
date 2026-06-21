@@ -2,6 +2,7 @@ import { useRadarStore, type LayerId } from '../../stores/radarStore';
 
 const LAYER_DEFINITIONS: { id: LayerId; label: string; description: string }[] = [
   { id: 'provinces', label: 'Provincias', description: 'Límites provinciales' },
+  { id: 'borders', label: 'Países', description: 'Fronteras de Sudamérica y Antártida Argentina' },
   { id: 'news', label: 'Noticias', description: 'Marcadores de noticias' },
   { id: 'weather', label: 'Clima', description: 'Alertas meteorológicas' },
   { id: 'earthquakes', label: 'Sismos', description: 'Terremotos activos (USGS)' },
@@ -59,6 +60,18 @@ export function LayerToggle() {
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="inline-block w-4 h-2 rounded bg-blue-500/30 border border-blue-400/50" />
             <span>Provincias</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-6 h-0 border-t border-dashed border-slate-400" />
+            <span>Fronteras internacionales</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-4 h-4 rounded-sm bg-blue-400/20 border border-blue-400/50" />
+            <span>Antártida Argentina (reclamo)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-2 h-2 rounded-sm bg-amber-400/40 border border-amber-400/60" />
+            <span>Islas Malvinas</span>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="inline-block w-3 h-3 rounded-full bg-yellow-400/40 border border-yellow-400/60" />

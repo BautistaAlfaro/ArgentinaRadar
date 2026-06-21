@@ -9,7 +9,8 @@ export type LayerId =
   | 'infrastructure'
   | 'flights'
   | 'earthquakes'
-  | 'fires';
+  | 'fires'
+  | 'borders';
 
 export type PanelId = 'news' | 'economic' | 'alerts';
 
