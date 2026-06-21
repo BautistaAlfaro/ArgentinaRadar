@@ -97,18 +97,31 @@ async function checkPendingApprovals() {
 }
 
 // Process incoming callbacks from Telegram
+let lastUpdateId = -1;
+
 async function checkCallbacks() {
   try {
-    const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=-1&timeout=5`);
+    const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&timeout=15`);
     const data = await resp.json();
     
-    if (!data.ok || !data.result) return;
+    if (!data.ok || !data.result || data.result.length === 0) return;
     
     for (const update of data.result) {
+      lastUpdateId = update.update_id;
       const cb = update.callback_query;
       if (!cb) continue;
       
       const [action, articleId] = cb.data.split(':');
+      
+      // ⚡ Answer IMMEDIATELY — before any DB or Bluesky work
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          callback_query_id: cb.id,
+          text: action === 'approve' ? '✅ Aprobado — publicando en Bluesky' : '❌ Descartado',
+        }),
+      });
       
       if (action === 'approve') {
         // Get article info
@@ -120,47 +133,30 @@ async function checkCallbacks() {
         db.prepare('UPDATE news_items SET status = ? WHERE id = ?').run('published', articleId);
         
         // Publish to Bluesky
-        const tweetText = `${article.title.slice(0, 250)} | ${article.source} #ArgentinaRadar`;
-        try {
-          const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ article_id: articleId, text: tweetText }),
-          });
-          const bskyResult = await bskyResp.json();
-          console.log('Bluesky:', bskyResult.success ? 'OK' : 'FAIL');
-        } catch(e) {
-          console.log('Bluesky publish failed:', e.message);
+        if (article) {
+          const tweetText = article.title ? `${article.title.slice(0, 250)}\n\n📌 ${article.source} #ArgentinaRadar` : 'Novedad #ArgentinaRadar';
+          try {
+            const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ article_id: articleId, text: tweetText }),
+            });
+            const bskyResult = await bskyResp.json();
+            console.log(`Bluesky: ${bskyResult.success ? 'OK' : 'FAIL'} — ${articleId.slice(0,8)}`);
+          } catch(e) {
+            console.log(`Bluesky publish failed: ${e.message}`);
+          }
         }
-        
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            callback_query_id: cb.id,
-            text: '✅ Aprobado — se publicará en Bluesky',
-          }),
-        });
         
         console.log(`Approved: ${articleId}`);
       } else if (action === 'reject') {
         db.prepare('UPDATE approval_queue SET status = ?, reviewed_at = datetime("now") WHERE article_id = ?')
           .run('rejected', articleId);
-        
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            callback_query_id: cb.id,
-            text: '❌ Descartado',
-          }),
-        });
-        
         console.log(`Rejected: ${articleId}`);
       }
     }
   } catch (e) {
-    // Timeout is expected
+    console.error('Callback error:', e.message);
   }
 }
 
