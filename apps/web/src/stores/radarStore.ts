@@ -7,7 +7,9 @@ export type LayerId =
   | 'economic'
   | 'alerts'
   | 'infrastructure'
-  | 'flights';
+  | 'flights'
+  | 'earthquakes'
+  | 'fires';
 
 export type PanelId = 'news' | 'economic' | 'alerts';
 

@@ -4,6 +4,8 @@ const LAYER_DEFINITIONS: { id: LayerId; label: string; description: string }[] =
   { id: 'provinces', label: 'Provincias', description: 'Límites provinciales' },
   { id: 'news', label: 'Noticias', description: 'Marcadores de noticias' },
   { id: 'weather', label: 'Clima', description: 'Alertas meteorológicas' },
+  { id: 'earthquakes', label: 'Sismos', description: 'Terremotos activos (USGS)' },
+  { id: 'fires', label: 'Incendios', description: 'Focos de calor (NASA FIRMS)' },
   { id: 'economic', label: 'Económico', description: 'Indicadores económicos' },
   { id: 'alerts', label: 'Alertas', description: 'Alertas de emergencia' },
   { id: 'infrastructure', label: 'Infraestructura', description: 'Gasoductos, puertos, represas' },
@@ -48,14 +50,40 @@ export function LayerToggle() {
         })}
       </div>
 
-      {/* Legend for provinces layer */}
+      {/* Legend */}
       <div className="mt-6 pt-4 border-t border-slate-700/50">
         <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
           Leyenda
         </h3>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span className="inline-block w-4 h-2 rounded bg-blue-500/30 border border-blue-400/50" />
-          <span>Provincias (al hacer clic selecciona)</span>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-4 h-2 rounded bg-blue-500/30 border border-blue-400/50" />
+            <span>Provincias</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-yellow-400/40 border border-yellow-400/60" />
+            <span>Alerta amarilla</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-orange-500/40 border border-orange-500/60" />
+            <span>Alerta naranja</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-red-500/40 border border-red-500/60" />
+            <span>Alerta roja</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-green-400" />
+            <span>Sismo M3–4.9</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-amber-400" />
+            <span>Sismo M5–6.9</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full bg-red-400" />
+            <span>Sismo M7+</span>
+          </div>
         </div>
       </div>
     </div>

@@ -156,5 +156,25 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       merge_logs: true,
     },
+
+    // ─── Alerts Service (Node.js / Express) — PR 7 ──────────────
+    {
+      name: 'alerts',
+      cwd: ROOT,
+      script: 'cmd.exe',
+      args: '/c node --loader ts-node/esm services/alerts/src/server.ts',
+      interpreter: 'none',
+      windowsHide: true,
+      env: {
+        NODE_ENV: 'development',
+        PORT: '3007',
+      },
+      watch: ['services/alerts/src', 'shared/types'],
+      max_memory_restart: '500M',
+      error_file: path.join(LOG_DIR, 'alerts-error.log'),
+      out_file: path.join(LOG_DIR, 'alerts-out.log'),
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      merge_logs: true,
+    },
   ],
 };

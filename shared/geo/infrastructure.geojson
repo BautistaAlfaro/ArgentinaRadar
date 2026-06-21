@@ -1,0 +1,292 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gasoducto Neuquén - Buenos Aires",
+        "type": "gasoducto",
+        "description": "Gasoducto troncal que transporta gas desde Vaca Muerta (Neuquén) hasta el área metropolitana de Buenos Aires. Inaugurado en 2023."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-68.5, -38.5],
+          [-68.0, -38.2],
+          [-67.5, -37.5],
+          [-66.8, -37.0],
+          [-66.0, -36.5],
+          [-65.0, -36.0],
+          [-64.0, -35.5],
+          [-63.0, -35.0],
+          [-62.0, -34.5],
+          [-61.0, -34.0],
+          [-60.0, -34.0],
+          [-59.0, -34.5],
+          [-58.5, -34.8]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gasoducto Norte",
+        "type": "gasoducto",
+        "description": "Gasoducto que abastece las provincias del norte argentino desde Salta hasta Córdoba."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-65.5, -24.5],
+          [-65.0, -25.0],
+          [-65.0, -26.0],
+          [-65.0, -27.0],
+          [-64.5, -28.0],
+          [-64.0, -29.0],
+          [-63.5, -30.0],
+          [-63.5, -31.0],
+          [-63.5, -32.0],
+          [-64.0, -32.5],
+          [-64.2, -33.0],
+          [-64.3, -33.5],
+          [-64.3, -34.0],
+          [-64.2, -34.5]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gasoducto San Martín",
+        "type": "gasoducto",
+        "description": "Gasoducto que conecta Tierra del Fuego con Buenos Aires, transportando gas desde la Cuenca Austral."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-68.3, -54.8],
+          [-68.0, -54.0],
+          [-67.5, -53.0],
+          [-67.0, -52.0],
+          [-66.5, -51.0],
+          [-66.0, -50.0],
+          [-65.5, -49.0],
+          [-65.0, -48.0],
+          [-64.5, -47.0],
+          [-64.0, -46.0],
+          [-63.5, -45.0],
+          [-63.0, -44.0],
+          [-62.5, -43.0],
+          [-62.0, -42.0],
+          [-61.5, -41.0],
+          [-61.0, -40.0],
+          [-60.5, -39.0],
+          [-60.0, -38.0],
+          [-59.5, -37.0],
+          [-59.0, -36.0],
+          [-58.5, -35.5],
+          [-58.5, -34.8]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gasoducto Patagónico",
+        "type": "gasoducto",
+        "description": "Gasoducto que recorre la Patagonia desde Santa Cruz hasta la provincia de Buenos Aires."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-69.0, -51.5],
+          [-68.5, -51.0],
+          [-68.0, -50.0],
+          [-67.5, -49.0],
+          [-67.0, -48.0],
+          [-66.5, -47.0],
+          [-66.0, -46.0],
+          [-65.5, -45.0],
+          [-65.0, -44.0],
+          [-64.5, -43.0],
+          [-64.0, -42.0],
+          [-63.5, -41.0],
+          [-63.0, -40.0],
+          [-62.5, -39.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Gasoducto Centro-Oeste",
+        "type": "gasoducto",
+        "description": "Gasoducto que conecta Mendoza con el centro del país."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-68.8, -32.9],
+          [-68.5, -33.0],
+          [-68.0, -33.0],
+          [-67.0, -33.0],
+          [-66.0, -33.0],
+          [-65.0, -33.0],
+          [-64.5, -33.0],
+          [-64.2, -33.5],
+          [-64.0, -34.0],
+          [-63.5, -34.5],
+          [-63.0, -35.0],
+          [-62.5, -35.0],
+          [-62.0, -34.5],
+          [-61.0, -34.0],
+          [-60.0, -34.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto Buenos Aires",
+        "type": "puerto",
+        "description": "Principal puerto de Argentina, ubicado en la Ciudad de Buenos Aires. Maneja el 80% del comercio exterior del país."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-58.36, -34.6]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto Bahía Blanca",
+        "type": "puerto",
+        "description": "Complejo portuario industrial y agroexportador del sur bonaerense. Puerto de aguas profundas."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-62.27, -38.73]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto Rosario",
+        "type": "puerto",
+        "description": "Puerto fluvial sobre el Río Paraná, principal centro agroexportador del país."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-60.64, -32.95]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto Mar del Plata",
+        "type": "puerto",
+        "description": "Principal puerto pesquero de Argentina y base naval."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-57.54, -38.03]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto Quequén",
+        "type": "puerto",
+        "description": "Puerto cerealero del sudeste bonaerense, uno de los más importantes del país."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-58.7, -38.55]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Puerto La Plata",
+        "type": "puerto",
+        "description": "Puerto industrial y comercial del Gran La Plata, especializado en contenedores."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-57.89, -34.87]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa Yacyretá",
+        "type": "represa",
+        "description": "Represa hidroeléctrica binacional Argentina-Paraguay sobre el Río Paraná, una de las más productivas del mundo."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-56.5, -27.48]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa Salto Grande",
+        "type": "represa",
+        "description": "Represa hidroeléctrica binacional Argentina-Uruguay sobre el Río Uruguay."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-57.95, -31.27]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa El Chocón",
+        "type": "represa",
+        "description": "Represa hidroeléctrica sobre el Río Limay en Neuquén. Parte del Complejo Cerros Colorados."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-68.93, -39.27]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa Piedra del Águila",
+        "type": "represa",
+        "description": "Represa hidroeléctrica sobre el Río Limay, en la provincia de Neuquén."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-70.3, -40.2]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa Alicurá",
+        "type": "represa",
+        "description": "Represa hidroeléctrica sobre el Río Limay, en Neuquén-Río Negro."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-70.75, -40.58]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Represa Cerro Pelado",
+        "type": "represa",
+        "description": "Presa de tierra y enrocamiento sobre el Río Neuquén, parte del sistema de riego y generación."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-68.65, -37.55]
+      }
+    }
+  ]
+}

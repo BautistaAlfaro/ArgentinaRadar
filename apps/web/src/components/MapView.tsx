@@ -6,6 +6,11 @@ import { useRadarStore } from '../stores/radarStore';
 import { MapLibreFallback } from './MapLibreFallback';
 import { ProvinceBoundaries } from './layers/ProvinceBoundaries';
 import { NewsMarkers } from './layers/NewsMarkers';
+import { WeatherLayer } from './layers/WeatherLayer';
+import { EarthquakeLayer } from './layers/EarthquakeLayer';
+import { FireLayer } from './layers/FireLayer';
+import { InfrastructureLayer } from './layers/InfrastructureLayer';
+import { FlightLayer } from './layers/FlightLayer';
 
 type GlobeInstance = InstanceType<typeof Globe>;
 
@@ -94,6 +99,11 @@ export function MapView() {
         <>
           <ProvinceBoundaries globe={globeRef.current} />
           <NewsMarkers globe={globeRef.current} articles={articles} />
+          <WeatherLayer globe={globeRef.current} />
+          <EarthquakeLayer globe={globeRef.current} />
+          <FireLayer globe={globeRef.current} />
+          <InfrastructureLayer globe={globeRef.current} />
+          <FlightLayer globe={globeRef.current} />
         </>
       )}
     </div>

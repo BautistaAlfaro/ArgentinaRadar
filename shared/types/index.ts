@@ -63,3 +63,54 @@ export interface ServiceHealth {
   lastRun: string | null;
   uptime: number;
 }
+
+// ─── Alert types for map layers (PR 7) ─────────────────────────────
+
+export type AlertSeverity = 'yellow' | 'orange' | 'red';
+
+export interface WeatherAlert {
+  province: string;
+  severity: AlertSeverity;
+  event: string;
+  description: string;
+  coordinates: number[][][]; // polygon rings
+  updatedAt: string;
+}
+
+export interface Earthquake {
+  id: string;
+  magnitude: number;
+  location: string;
+  depth: number;
+  time: string;
+  url: string;
+  lat: number;
+  lng: number;
+}
+
+export interface FireHotspot {
+  lat: number;
+  lng: number;
+  brightness: number;
+  confidence: string;
+  updatedAt: string;
+}
+
+export interface FlightData {
+  callsign: string;
+  lat: number;
+  lng: number;
+  altitude: number;
+  velocity: number;
+  onGround: boolean;
+  updatedAt: string;
+}
+
+export interface InfrastructureFeature {
+  type: FeatureType;
+  name: string;
+  description: string;
+  coordinates: number[] | number[][];
+}
+
+export type FeatureType = 'gasoducto' | 'puerto' | 'represa';

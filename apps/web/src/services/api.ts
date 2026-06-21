@@ -7,11 +7,12 @@
  *   - Economic data (economic service on :3006)
  */
 
-import type { NewsItem, EconomicIndicator } from '@shared/types';
+import type { NewsItem, EconomicIndicator, WeatherAlert, Earthquake, FireHotspot, FlightData } from '@shared/types';
 
 const NEWS_API = 'http://localhost:3001';
 const GEO_API = 'http://localhost:3002';
 const ECON_API = 'http://localhost:3006';
+const ALERTS_API = 'http://localhost:3007';
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -102,5 +103,55 @@ export async function fetchServiceHealth(serviceUrl: string): Promise<{
   if (!resp.ok) {
     throw new Error(`Health check failed: ${resp.status}`);
   }
+  return resp.json();
+}
+
+// ─── Alert data fetch functions ───────────────────────────────────
+
+export interface WeatherAlertResponse {
+  alerts: WeatherAlert[];
+  count: number;
+  updatedAt: string | null;
+}
+
+export interface EarthquakeResponse {
+  earthquakes: Earthquake[];
+  count: number;
+  updatedAt: string | null;
+}
+
+export interface FireResponse {
+  fires: FireHotspot[];
+  count: number;
+  updatedAt: string | null;
+}
+
+export interface FlightResponse {
+  flights: FlightData[];
+  count: number;
+  updatedAt: string | null;
+}
+
+export async function fetchWeatherAlerts(): Promise<WeatherAlertResponse> {
+  const resp = await fetch(`${ALERTS_API}/api/alerts/weather`);
+  if (!resp.ok) throw new Error(`Weather alerts fetch failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchEarthquakes(): Promise<EarthquakeResponse> {
+  const resp = await fetch(`${ALERTS_API}/api/alerts/earthquakes`);
+  if (!resp.ok) throw new Error(`Earthquakes fetch failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchFires(): Promise<FireResponse> {
+  const resp = await fetch(`${ALERTS_API}/api/alerts/fires`);
+  if (!resp.ok) throw new Error(`Fires fetch failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function fetchFlights(): Promise<FlightResponse> {
+  const resp = await fetch(`${ALERTS_API}/api/alerts/flights`);
+  if (!resp.ok) throw new Error(`Flights fetch failed: ${resp.status}`);
   return resp.json();
 }
