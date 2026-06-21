@@ -50,6 +50,11 @@ async function checkPendingApprovals() {
     console.log(`Found ${pending.length} pending approvals`);
 
     for (const entry of pending) {
+      // 🔒 DEDUP: delete any other pending entries for the same article
+      db.prepare(
+        `DELETE FROM approval_queue WHERE article_id = ? AND id != ? AND status = 'pending'`
+      ).run(entry.article_id, entry.id);
+
       const text = [
         `📰 *${entry.title}*`,
         ``,
