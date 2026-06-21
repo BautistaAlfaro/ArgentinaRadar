@@ -15,6 +15,14 @@ export function startServer(
   const app = express();
   app.use(express.json());
 
+  // ─── CORS (allow web frontend) ─────────────────────────────────────
+  app.use((_req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    next();
+  });
+
   // ─── GET /api/news — paginated list of all news items ─────────
   app.get('/api/news', (req, res) => {
     try {
