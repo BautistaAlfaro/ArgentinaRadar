@@ -162,40 +162,24 @@ async function fetchWithFallback<T>(
 // ─── Public API ──────────────────────────────────────────────────────
 
 export async function fetchKPIs(range: string): Promise<KPIData> {
-  return fetchWithFallback(
-    `${ADMIN_API}/api/admin/kpis?range=${range}`,
-    MOCK_KPIS[range] ?? MOCK_KPIS['7d'],
-  );
+  // Always use mock data — real API format differs
+  return MOCK_KPIS[range] ?? MOCK_KPIS['7d'];
 }
 
 export async function fetchDailyStats(range: string): Promise<DailyStat[]> {
-  const fallback = generateDailyStats(range === '90d' ? 90 : range === '30d' ? 30 : 7);
-  return fetchWithFallback(
-    `${ADMIN_API}/api/admin/stats?range=${range}`,
-    fallback,
-  );
+  // Always use mock — real API format differs
+  return generateDailyStats(range === '90d' ? 90 : range === '30d' ? 30 : 7);
 }
 
 export async function fetchSystemMetrics(
-  service?: string,
-  range?: string,
+  _service?: string,
+  _range?: string,
 ): Promise<SystemMetric[]> {
-  const params = new URLSearchParams();
-  if (service) params.set('service', service);
-  if (range) params.set('range', range);
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  return fetchWithFallback(
-    `${ADMIN_API}/api/admin/system${qs}`,
-    MOCK_SYSTEM_METRICS,
-  );
+  return MOCK_SYSTEM_METRICS;
 }
 
 export async function fetchRevenueData(): Promise<RevenuePoint[]> {
-  const fallback = generateRevenue(90);
-  return fetchWithFallback(
-    `${ADMIN_API}/api/admin/revenue`,
-    fallback,
-  );
+  return generateRevenue(90);
 }
 
 // ═════════════════════════════════════════════════════════════════════
