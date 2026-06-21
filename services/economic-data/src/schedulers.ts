@@ -70,15 +70,18 @@ export function scheduleFetch(options: SchedulerOptions): { stop: () => void } {
 
   console.log(`[scheduler] ${name} — starting with interval ${intervalMs}ms`);
 
-  // Run immediately on start if market is open
+  // Always run immediately on start (regardless of market hours)
+  // This ensures we have data even outside market hours
   if (!dailyAtClose) {
-    if (!marketHoursOnly || isMarketHours()) {
+    fetchFn().catch((err) => console.error(`[scheduler] ${name} initial fetch error:`, err));
+  } else {
+    // For daily fetchers, run immediately if in close window, otherwise run once at next opportunity
+    if (isMarketCloseWindow()) {
+      const today = new Date().toISOString().slice(0, 10);
+      lastDailyRunDate = today;
       fetchFn().catch((err) => console.error(`[scheduler] ${name} initial fetch error:`, err));
     } else {
-      console.log(`[scheduler] ${name} — outside market hours, waiting for next interval`);
-    }
-  } else {
-    if (isMarketCloseWindow()) {
+      // Run once immediately even outside close window
       const today = new Date().toISOString().slice(0, 10);
       lastDailyRunDate = today;
       fetchFn().catch((err) => console.error(`[scheduler] ${name} initial fetch error:`, err));
