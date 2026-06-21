@@ -121,30 +121,54 @@
 
 ---
 
+## 🟣 Sprint 6: AI local + herramientas avanzadas ✅ COMPLETADO
+
+### 16. Ollama local AI integration ✅
+- qwen2.5:7b para clasificación (reemplaza OpenAI)
+- nomic-embed-text para embeddings (768d)
+- Búsqueda semántica con coseno-similitud
+- Fallback automático a LIKE si no hay embeddings
+- Endpoint `/api/ollama-status` para health check
+
+### 17. Headline rewriter + article summarizer ✅
+- Reescritura automática de titulares para Bluesky
+- Resúmenes de 2-3 oraciones (~200 chars)
+- Integrado en el flujo de aprobación
+- Config: `REWRITE_HEADLINES=true`, `AUTO_SUMMARIZE=true`
+
+### 18. Post scheduler + retry queue ✅
+- `/schedule HH:MM <article_id>` — programar publicación
+- `/schedule list` — ver programaciones
+- `/schedule cancel <id>` — cancelar
+- Retry con backoff exponencial (30s → 2min → 5min, máx 3 intentos)
+- Tabla `scheduled_posts` en SQLite
+
+---
+
 ## ⚪ Backlog
 
 - Twitter/X integration (cuando haya API key paga)
-- Ollama local AI (qwen2.5:7b descargando, nomic-embed-text pendiente)
-- Web scraping de fuentes sin RSS (Clarín, La Nación, Infobae sin RSS)
+- Web scraping de fuentes sin RSS (Puppeteer — pesado, necesita browser)
 - Analytics dashboard público (sitears.dev/radar)
 
 ---
 
-## 📊 Métricas actuales
+## 📊 Métricas finales
 
 | Métrica | Valor |
 |---------|-------|
+| Features implementadas | 18 |
+| Sub-agentes paralelos | 14 |
+| Modelos Ollama | qwen2.5:7b, nomic-embed-text, llama3, llama3.2, llama3.2-vision |
 | Fuentes RSS activas | 16 |
 | Artículos en DB | 637 |
 | Publicados en Bluesky | ~10 |
 | Pipeline uptime | Manual |
 | Tiempo RSS→Bluesky | ~45s |
 | Costo mensual | $0 |
-| Features implementadas | 15 |
-| Sub-agentes paralelos | 11 |
-| Modelos Ollama | llama3, llama3.2, llama3.2-vision |
+| AI provider | Ollama local (qwen2.5:7b) |
 | Calidad mínima | 40/100 |
 
 ---
 
-*Última actualización: 21 Jun 2026 — Sprint 1-5 completados*
+*Última actualización: 21 Jun 2026 — Sprint 1-6 completados*
