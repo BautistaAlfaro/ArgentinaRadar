@@ -11,6 +11,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const { addAlert, removeAlert, listAlerts, PROVINCES } = require('./alerts');
 const { sendMorningBriefing, checkAndSendBriefing } = require('./morning-briefing.js');
+const scheduleManager = require('../../shared/scheduleManager');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 const BOT_TOKEN = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
@@ -95,6 +96,34 @@ function generateHashtags(title) {
   return ['#ArgentinaRadar', ...found.filter(t => t !== '#ArgentinaRadar')].slice(0, 3);
 }
 
+// ─── Rewrite API ─────────────────────────────────────────────────────────
+
+const AI_API = process.env.AI_API || 'http://127.0.0.1:3013';
+const REWRITE_HEADLINES = process.env.REWRITE_HEADLINES === 'true';
+
+/**
+ * Optionally rewrite a headline via the AI Processor /api/rewrite endpoint.
+ * Falls back to the original title if the API is unavailable or rewriting
+ * is disabled via the REWRITE_HEADLINES env var.
+ */
+async function maybeRewriteHeadline(title, source, category) {
+  if (!REWRITE_HEADLINES) return title;
+  try {
+    const resp = await fetch(`${AI_API}/api/rewrite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, source, category }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return title;
+    const data = await resp.json();
+    return data.rewritten_title || title;
+  } catch (e) {
+    console.warn(`[rewrite] API unavailable — using original title: ${e.message}`);
+    return title;
+  }
+}
+
 /**
  * Format article text for Bluesky (300 char limit).
  * 
@@ -102,13 +131,15 @@ function generateHashtags(title) {
  *         #Hashtags
  * 
  * Auto-generates 2-3 hashtags from the article title.
+ * Accepts an optional rewrittenTitle to use instead of the original.
  */
-function formatBlueskyTweet(title, source, category) {
+function formatBlueskyTweet(title, source, category, rewrittenTitle) {
+  const useTitle = rewrittenTitle || title;
   const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
     category === 'economia' ? '💰' : category === 'deportes' ? '⚽' :
     category === 'policial' ? '🚔' : category === 'sociedad' ? '🌎' : '📰';
   
-  // Generate hashtags from title
+  // Generate hashtags from original title (keywords are better for matching)
   const hashtags = generateHashtags(title);
   const tagsStr = hashtags.join(' ');
   
@@ -122,7 +153,7 @@ function formatBlueskyTweet(title, source, category) {
   const maxHeadline = 300 - overhead;
   
   // Smart truncation: cut at last space before limit
-  let headline = title.trim();
+  let headline = useTitle.trim();
   if (headline.length > maxHeadline) {
     headline = headline.substring(0, Math.max(maxHeadline - 3, 0));
     const lastSpace = headline.lastIndexOf(' ');
@@ -131,6 +162,41 @@ function formatBlueskyTweet(title, source, category) {
   }
   
   return `${header}${headline}${suffix}${tagLine}`;
+}
+
+// ─── Bluesky Publish Helper ───────────────────────────────────────────
+
+/**
+ * Publish a post to Bluesky via the twitter-publisher service.
+ * @param {string} articleId
+ * @param {string} text
+ * @param {string|null} imageUrl
+ * @param {string|null} url
+ * @returns {Promise<{success: boolean, error: string|null}>}
+ */
+async function publishToBluesky(articleId, text, imageUrl, url) {
+  try {
+    const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        article_id: articleId,
+        text: text,
+        image_url: imageUrl || null,
+        url: url || null,
+      }),
+    });
+    const result = await bskyResp.json();
+    if (result.success) {
+      console.log(`[bluesky] ✅ Published ${articleId.slice(0, 8)}`);
+      return { success: true, error: null };
+    }
+    console.log(`[bluesky] ❌ Failed ${articleId.slice(0, 8)}: ${result.error || 'unknown'}`);
+    return { success: false, error: result.error || 'Unknown error' };
+  } catch (e) {
+    console.log(`[bluesky] Network error ${articleId.slice(0, 8)}: ${e.message}`);
+    return { success: false, error: e.message };
+  }
 }
 
 // ─── Telegram API helpers ───────────────────────────────────────────────
@@ -226,7 +292,9 @@ async function checkPendingApprovals() {
       const keyboard = {
         inline_keyboard: [[
           { text: '✅ Aprobar', callback_data: `approve:${entry.article_id}` },
+          { text: '⏰ Programar', callback_data: `schedule:${entry.article_id}` },
           { text: '❌ Descartar', callback_data: `reject:${entry.article_id}` },
+        ], [
           { text: '🔍 Ver fuente', url: entry.url },
         ]]
       };
@@ -444,7 +512,8 @@ async function handleBreakingCommand(title, source, chatId) {
 
   // 2. Insert into approval_queue as auto-approved
   const queueId = `q_${articleId.slice(0, 12)}`;
-  const draftTweet = formatBlueskyTweet(title, source, category);
+  const rewrittenTitle = await maybeRewriteHeadline(title, source, category);
+  const draftTweet = formatBlueskyTweet(title, source, category, rewrittenTitle);
   db.prepare(`
     INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status, reviewed_at)
     VALUES (?, ?, ?, 'approved', datetime('now'))
@@ -454,25 +523,9 @@ async function handleBreakingCommand(title, source, chatId) {
   const nanoPrompt = buildNanoBananaPrompt(title, source, category);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
-  // 4. Publish to Bluesky
-  let publishSuccess = false;
-  try {
-    const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        article_id: articleId,
-        text: draftTweet,
-        image_url: imageUrl,
-        url: `https://breaking/${articleId}`,
-      }),
-    });
-    const bskyResult = await bskyResp.json();
-    publishSuccess = bskyResult.success;
-    console.log(`[breaking] Bluesky: ${bskyResult.success ? 'OK' : 'FAIL'} — ${articleId.slice(0, 8)}`);
-  } catch (e) {
-    console.log(`[breaking] Bluesky publish failed: ${e.message}`);
-  }
+  // 4. Publish to Bluesky (reuse the common helper)
+  const result = await publishToBluesky(articleId, draftTweet, imageUrl, `https://breaking/${articleId}`);
+  const publishSuccess = result.success;
 
   // 5. Send confirmation
   const confirmText = publishSuccess
@@ -531,10 +584,32 @@ async function handleMenuAction(action, chatId, messageId) {
     buttons.push([{ text: '🔙 Volver', callback_data: 'menu:main' }]);
     await editMsg('📋 *Últimas 24hs — Mejor puntuadas*\n\nSeleccioná un artículo:', { inline_keyboard: buttons });
   } else if (action === 'scheduler') {
+    const posts = scheduleManager.getScheduledPosts();
+    const pendingCount = posts.filter(p => p.status === 'scheduled').length;
+    const publishedCount = posts.filter(p => p.status === 'published').length;
+    const failedCount = posts.filter(p => p.status === 'failed').length;
+    const nextPosts = posts
+      .filter(p => p.status === 'scheduled')
+      .slice(0, 3)
+      .map(p => {
+        const time = new Date(p.scheduled_for).toLocaleString('es-AR', {
+          hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short'
+        });
+        return `  ⏳ #${p.id} — ${time}`;
+      });
+
     await editMsg(
-      '⏰ *Programar*\n\n' +
-      'La programación de publicaciones está en desarrollo.\n\n' +
-      '📌 Próximamente: agenda de horarios para publicación automática.',
+      '⏰ *Programación de Publicaciones*\n\n' +
+      `📊 *Resumen*\n` +
+      `⏳ Pendientes: ${pendingCount}\n` +
+      `✅ Publicados: ${publishedCount}\n` +
+      `❌ Fallidos: ${failedCount}\n\n` +
+      (nextPosts.length ? `📅 *Próximos*\n${nextPosts.join('\n')}\n\n` : '') +
+      '📌 *Comandos*\n' +
+      '• `/schedule HH:MM <id>` — programar\n' +
+      '• `/schedule list` — ver todas\n' +
+      '• `/schedule cancel <id>` — cancelar\n' +
+      '• `/schedule now <id>` — publicar ya',
       { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
     );
   } else if (action === 'services') {
@@ -583,7 +658,7 @@ async function handleMenuAction(action, chatId, messageId) {
         { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
       );
     }
-  } else if (action === 'help') {
+    } else if (action === 'help') {
     await editMsg(
       '❓ *Ayuda*\n\n' +
       '• Las noticias llegan automáticamente para revisión\n' +
@@ -594,6 +669,7 @@ async function handleMenuAction(action, chatId, messageId) {
       '• 🔔 `/alert` → gestionar alertas de palabras clave/provincias\n' +
       '• Usá /menu para ver este menú\n' +
       '• /search <término> → buscar noticias\n' +
+      '• /similar <término> → búsqueda semántica con IA\n' +
       '• /today → últimas 24hs\n' +
       '• /fuentes → fuentes RSS activas',
       { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
@@ -698,6 +774,141 @@ async function checkCallbacks() {
           if (!ok) {
             // sendMorningBriefing already sent a "no articles" message
           }
+        } else if (txt.startsWith('/schedule')) {
+          const args = txt.replace('/schedule', '').trim();
+
+          if (!args || args === 'help') {
+            await sendMsg(
+              '⏰ *Programar Publicaciones*\n\n' +
+              '• `/schedule HH:MM <article_id>` — programar un artículo para hoy\n' +
+              '  Ej: `/schedule 14:30 abc123def`\n' +
+              '• `/schedule list` — ver publicaciones programadas\n' +
+              '• `/schedule cancel <id>` — cancelar una publicación\n' +
+              '• `/schedule now <article_id>` — publicar inmediatamente\n' +
+              '• También podés usar el botón "⏰ Programar" en cualquier aprobación.',
+              { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+            );
+          } else if (args === 'list') {
+            const posts = scheduleManager.getScheduledPosts();
+            if (posts.length === 0) {
+              await sendMsg('📭 *No hay publicaciones programadas.*', {
+                inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              });
+            } else {
+              const lines = posts.map((p, i) => {
+                const id = p.id;
+                const statusEmoji = p.status === 'scheduled' ? '⏳' :
+                  p.status === 'published' ? '✅' :
+                  p.status === 'failed' ? '❌' : '🚫';
+                const time = new Date(p.scheduled_for).toLocaleString('es-AR', {
+                  hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short'
+                });
+                return `${i + 1}. #${id} ${statusEmoji} ${time} — ${(p.text || '').substring(0, 40)}`;
+              });
+              await sendMsg(`⏰ *Publicaciones Programadas (${posts.length})*\n\n${lines.join('\n')}`, {
+                inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+              });
+            }
+          } else if (args.startsWith('cancel ')) {
+            const id = parseInt(args.slice('cancel '.length).trim(), 10);
+            if (isNaN(id)) {
+              await sendMsg('❌ Usá: `/schedule cancel <id>` — Ej: `/schedule cancel 1`');
+            } else if (scheduleManager.cancelSchedule(id)) {
+              await sendMsg(`✅ *Publicación #${id} cancelada.*`);
+            } else {
+              await sendMsg(`❌ No se encontró la publicación #${id} o ya fue procesada.`);
+            }
+          } else if (args.startsWith('now ')) {
+            const articleIdDirect = args.slice('now '.length).trim();
+            if (!articleIdDirect) {
+              await sendMsg('❌ Usá: `/schedule now <article_id>`');
+            } else {
+              // Publish immediately — same flow as approve
+              const aq = db.prepare('SELECT image_url FROM approval_queue WHERE article_id = ? AND status = ? ORDER BY rowid DESC LIMIT 1').get(articleIdDirect, 'pending');
+              const article = db.prepare('SELECT title, source, category, url FROM news_items WHERE id = ?').get(articleIdDirect);
+              if (!article) {
+                await sendMsg(`❌ *Artículo no encontrado:* \`${articleIdDirect}\``);
+              } else {
+                await sendMsg(`⏰ Publicando *${(article.title || '').substring(0, 60)}* en Bluesky...`);
+                // Mark as approved
+                db.prepare('UPDATE approval_queue SET status = ?, reviewed_at = datetime("now") WHERE article_id = ?')
+                  .run('approved', articleIdDirect);
+                db.prepare('UPDATE news_items SET status = ? WHERE id = ?').run('published', articleIdDirect);
+                // Publish
+                const rewrittenTitle = typeof maybeRewriteHeadline === 'function'
+                  ? await maybeRewriteHeadline(article.title, article.source, article.category)
+                  : article.title;
+                const tweetText = formatBlueskyTweet(article.title, article.source, article.category, rewrittenTitle);
+                const pubResult = await publishToBluesky(articleIdDirect, tweetText, aq?.image_url, article.url);
+                if (pubResult.success) {
+                  await sendMsg(`✅ *Publicado en Bluesky!*\n\n📰 ${article.title}\n📌 ${article.source}`);
+                } else {
+                  await sendMsg(`❌ *Error al publicar:* ${pubResult.error}`);
+                }
+              }
+            }
+          } else if (/^\d{1,2}:\d{2}\s+\S+/.test(args)) {
+            // Format: HH:MM article_id [image_url] [url]
+            const parts = args.split(/\s+/);
+            const timeStr = parts[0];
+            const articleIdDirect = parts[1];
+            const extraUrl = parts[2] || null;
+
+            // Validate time format
+            const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+            if (!timeMatch) {
+              await sendMsg('❌ Formato de hora inválido. Usá HH:MM (ej: 14:30)');
+            } else {
+              const hours = parseInt(timeMatch[1], 10);
+              const minutes = parseInt(timeMatch[2], 10);
+              if (hours > 23 || minutes > 59) {
+                await sendMsg('❌ Hora inválida. Usá formato 24h (ej: 14:30)');
+              } else {
+                const articleInfo = db.prepare('SELECT title, source, category, url FROM news_items WHERE id = ?').get(articleIdDirect);
+                if (!articleInfo) {
+                  // Allow scheduling without existing article (e.g. for manual posts)
+                  const scheduledFor = new Date();
+                  scheduledFor.setHours(hours, minutes, 0, 0);
+                  if (scheduledFor <= new Date()) {
+                    scheduledFor.setDate(scheduledFor.getDate() + 1); // next day if time passed
+                  }
+                  const id = scheduleManager.schedulePost(
+                    articleIdDirect,
+                    articleIdDirect, // text = articleId as fallback
+                    scheduledFor,
+                    null,
+                    extraUrl
+                  );
+                  await sendMsg(`⏰ *Programado* para las ${timeStr} (ID: #${id})`);
+                } else {
+                  // Use the article info to schedule
+                  const rewrittenTitle = typeof maybeRewriteHeadline === 'function'
+                    ? await maybeRewriteHeadline(articleInfo.title, articleInfo.source, articleInfo.category)
+                    : articleInfo.title;
+                  const tweetText = formatBlueskyTweet(articleInfo.title, articleInfo.source, articleInfo.category, rewrittenTitle);
+                  const aqImg = db.prepare('SELECT image_url FROM approval_queue WHERE article_id = ? ORDER BY rowid DESC LIMIT 1').get(articleIdDirect);
+                  const scheduledFor = new Date();
+                  scheduledFor.setHours(hours, minutes, 0, 0);
+                  if (scheduledFor <= new Date()) {
+                    scheduledFor.setDate(scheduledFor.getDate() + 1);
+                  }
+                  const id = scheduleManager.schedulePost(
+                    articleIdDirect,
+                    tweetText,
+                    scheduledFor,
+                    aqImg?.image_url || null,
+                    articleInfo.url
+                  );
+                  await sendMsg(
+                    `⏰ *Programado* para las ${timeStr}\n\n📰 ${articleInfo.title}\n📌 ${articleInfo.source}\n🆔 Programación: #${id}`,
+                    { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]] }
+                  );
+                }
+              }
+            }
+          } else {
+            await sendMsg('❌ Comando no reconocido. Usá `/schedule` para ver las opciones.');
+          }
         } else if (txt === '/trending') {
           const trending = await fetchTrending();
           if (!trending || !trending.topics || trending.topics.length === 0) {
@@ -713,6 +924,39 @@ async function checkCallbacks() {
               inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
             });
           }
+        } else if (txt.startsWith('/similar ')) {
+          const term = txt.slice(9).trim();
+          if (!term) {
+            await sendMsg('🔍 *Búsqueda Semántica*\n\nUsá: `/similar <término>`\nEj: `/similar dólar blue`\n\n_Busca artículos semánticamente similares usando embeddings._');
+          } else {
+            try {
+              const resp = await fetch(`${NEWS_SERVICE_URL}/api/search?q=${encodeURIComponent(term)}&limit=5`, {
+                signal: AbortSignal.timeout(10000),
+              });
+              if (!resp.ok) {
+                await sendMsg(`⚠️ Error en búsqueda semántica: HTTP ${resp.status}`);
+              } else {
+                const data = await resp.json();
+                if (!data.results || data.results.length === 0) {
+                  await sendMsg(`🔍 *Sin resultados semánticos*\n\nNo se encontraron artículos similares para "${term}".`, {
+                    inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                  });
+                } else {
+                  const lines = data.results.map((r, i) => {
+                    const simPct = Math.round(r.similarity * 100);
+                    return `${i + 1}. [${r.title.substring(0, 50)}](${r.url}) — *${r.source}*\n   🔗 Similitud: ${simPct}%`;
+                  });
+                  await sendMsg(`🔍 *Búsqueda semántica:* "${term}"\n\n${lines.join('\n\n')}`, {
+                    inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'menu:main' }]]
+                  });
+                }
+              }
+            } catch (e) {
+              await sendMsg(`⚠️ Error en búsqueda semántica: ${e.message}`);
+            }
+          }
+        } else if (txt === '/similar') {
+          await sendMsg('🔍 *Búsqueda Semántica*\n\nUsá: `/similar <término>`\nEj: `/similar dólar blue`\n\n_Busca artículos semánticamente similares usando embeddings._');
         } else if (txt.startsWith('/alert')) {
           const args = txt.replace('/alert', '').trim();
           const chatId = msg.chat.id;
@@ -827,6 +1071,20 @@ async function checkCallbacks() {
         continue;
       }
 
+      // Schedule callback — show instructions when "⏰ Programar" is clicked
+      if (cbData.startsWith('schedule:')) {
+        const scheduleArticleId = cbData.split(':')[1];
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callback_query_id: cb.id,
+            text: 'Usá /schedule HH:MM article_id para programar. Ej: /schedule 14:30 ' + scheduleArticleId.slice(0, 8),
+            show_alert: false,
+          }),
+        });
+        continue;
+      }
+
       // Article approve/reject callbacks
       const [action, articleId] = cb.data.split(':');
       
@@ -858,25 +1116,11 @@ async function checkCallbacks() {
           );
         }
 
-        // Publish to Bluesky
+        // Publish to Bluesky (reuse the common helper)
         if (article) {
-          const tweetText = formatBlueskyTweet(article.title, article.source, article.category);
-          try {
-            const bskyResp = await fetch('http://127.0.0.1:3004/api/publish-text', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                article_id: articleId,
-                text: tweetText,
-                image_url: aq?.image_url,
-                url: article.url,
-              }),
-            });
-            const bskyResult = await bskyResp.json();
-            console.log(`Bluesky: ${bskyResult.success ? 'OK' : 'FAIL'} — ${articleId.slice(0,8)}`);
-          } catch(e) {
-            console.log(`Bluesky publish failed: ${e.message}`);
-          }
+          const rewrittenTitle = await maybeRewriteHeadline(article.title, article.source, article.category);
+          const tweetText = formatBlueskyTweet(article.title, article.source, article.category, rewrittenTitle);
+          await publishToBluesky(articleId, tweetText, aq?.image_url, article.url);
         }
         
         console.log(`Approved: ${articleId}`);
@@ -926,6 +1170,65 @@ async function checkScheduledBriefing() {
   }
 }
 
+// ─── Schedule Processor ────────────────────────────────────────────────
+
+/**
+ * Poll every cycle for due scheduled posts and publish them.
+ * Failed publishes are auto-retried with exponential backoff
+ * (30s, 2min, 5min, max 3 retries) via the schedule manager.
+ */
+let lastSchedulerLog = 0;
+
+async function processScheduledPosts() {
+  try {
+    const due = scheduleManager.getDuePosts();
+    if (due.length === 0) {
+      // Log once every 5 minutes to avoid noise
+      const now = Date.now();
+      if (now - lastSchedulerLog > 300000) {
+        console.log('[schedule-processor] No due posts — waiting...');
+        lastSchedulerLog = now;
+      }
+      return;
+    }
+
+    console.log(`[schedule-processor] Found ${due.length} due post(s)`);
+
+    for (const post of due) {
+      // Get article info for context
+      const article = db.prepare('SELECT title, source, category FROM news_items WHERE id = ?').get(post.article_id);
+
+      // Publish to Bluesky
+      const pubResult = await publishToBluesky(
+        post.article_id,
+        post.text,
+        post.image_url,
+        post.url
+      );
+
+      if (pubResult.success) {
+        scheduleManager.markPublished(post.id);
+
+        // Also update approval_queue and news_items if they exist
+        db.prepare('UPDATE approval_queue SET status = ?, reviewed_at = datetime("now") WHERE article_id = ? AND status = ?')
+          .run('approved', post.article_id, 'pending');
+        db.prepare('UPDATE news_items SET status = ? WHERE id = ? AND status != ?')
+          .run('published', post.article_id, 'published');
+
+        console.log(`[schedule-processor] ✅ Published scheduled post #${post.id}`);
+      } else {
+        scheduleManager.markFailedAndRetry(post.id, pubResult.error || 'Unknown error');
+        console.log(`[schedule-processor] ❌ Failed scheduled post #${post.id}: ${pubResult.error}`);
+      }
+
+      // Small delay between posts to avoid rate limits
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  } catch (e) {
+    console.error('[schedule-processor] Error:', e.message);
+  }
+}
+
 // Main loop
 async function main() {
   console.log('Telegram Approval Notifier started');
@@ -936,6 +1239,7 @@ async function main() {
     await checkPendingApprovals();
     await checkCallbacks();
     await checkScheduledBriefing();
+    await processScheduledPosts();
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 }

@@ -4,14 +4,20 @@
  * Runs continuously, polling for new articles and pushing them through:
  *   0. Language detection + Auto-translation → detects non-Spanish articles, translates them
  *   1. Categorization → assigns category
- *   2. Keyword alert check → notifies users on keyword matches
- *   3. Geolocation → adds location data
- *   4. Province alert check → notifies users on location matches
- *   5. AI Filter → classifies PUBLISH/DISCARD
- *   6. Approval Queue → creates entries for Telegram approval / auto-publish
- *   7. Periodic Clustering → groups similar articles every 30 minutes
+ *   2. Quality scoring + engagement prediction → scores and auto-discards low quality
+ *   3. Keyword alert check → notifies users on keyword matches
+ *   4. Geolocation → adds location data
+ *   5. Province alert check → notifies users on location matches
+ *   6. AI Filter → classifies PUBLISH/DISCARD (Ollama or OpenAI/OpenRouter)
+ *   6b. Embedding generation → stores vector embedding for semantic search (Ollama mode)
+ *   7. Approval Queue → creates entries for Telegram approval / auto-publish
+ *   8. Periodic Clustering → groups similar articles every 30 minutes
  *
  * Uses createLoop() for graceful shutdown handling.
+ *
+ * AI modes:
+ *   - AI_PROVIDER=ollama: calls /api/ollama-classify directly + generates embeddings
+ *   - AI_PROVIDER=openai|openrouter: calls /api/filter via ai-processor (existing behavior)
  */
 
 import Database from 'better-sqlite3';
@@ -31,11 +37,15 @@ const alerts = cRequire('../../hermes-bridge/alerts.js');
 const DB_PATH = process.env.DB_PATH ?? path.resolve(process.cwd(), '..', '..', 'data', 'argentina-radar.db');
 const GEO_API = process.env.GEO_API ?? 'http://127.0.0.1:3002';
 const AI_API = process.env.AI_API ?? 'http://127.0.0.1:3013';
+const AI_PROVIDER = process.env.AI_PROVIDER ?? 'openai'; // ollama | openai | openrouter
 const POLL_INTERVAL = parseInt(process.env.PROCESS_INTERVAL ?? '30000', 10); // 30 seconds
 
 // ─── Translation Settings ──────────────────────────────────────────────
 const AUTO_TRANSLATE = process.env.AUTO_TRANSLATE === 'true';
 const TRANSLATION_PROVIDER = process.env.TRANSLATION_PROVIDER ?? 'google';
+
+// ─── AI Summarizer ─────────────────────────────────────────────────────
+const AUTO_SUMMARIZE = process.env.AUTO_SUMMARIZE === 'true';
 
 // ─── Periodic Clustering ────────────────────────────────────────────────
 const CLUSTER_INTERVAL = parseInt(process.env.CLUSTER_INTERVAL ?? '1800000', 10); // 30 min
@@ -379,24 +389,61 @@ async function processBatch(): Promise<void> {
           console.warn(`  ⚠️ Province alert check failed:`, (e as Error).message);
         }
 
-        // 4. AI Filter
+        // 4. AI Filter — supports both direct Ollama and OpenAI/OpenRouter
         try {
-          const aiResp = await fetch(`${AI_API}/api/filter`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: article.title,
-              summary: article.summary || '',
-              source: article.source,
-              category: article.category || 'general',
-            }),
-          });
+          let aiResult: Record<string, unknown> = {};
+          let aiSuccess = false;
 
-          if (aiResp.ok) {
-            const aiResult = await aiResp.json();
-            const verdict = aiResult.verdict; // PUBLISH or DISCARD
+          if (AI_PROVIDER === 'ollama') {
+            // ── Direct Ollama classification ──────────────────────────
+            const resp = await fetch(`${AI_API}/api/ollama-classify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: article.title,
+                summary: article.summary || '',
+                source: article.source,
+              }),
+              signal: AbortSignal.timeout(15_000),
+            });
+            if (resp.ok) {
+              const data = await resp.json() as Record<string, unknown>;
+              // Normalise to match the /api/filter response shape
+              aiResult = {
+                verdict: data.verdict,
+                scores: {
+                  political: data.political ?? 0,
+                  economic: data.economic ?? 0,
+                  social: data.social ?? 0,
+                  urgency: data.urgency ?? 0,
+                  quality: data.quality ?? 0,
+                  relevance: data.relevance ?? 0,
+                },
+                combined: data.combined ?? 0,
+                reason: data.reason ?? '',
+              };
+              aiSuccess = true;
+            }
+          } else {
+            // ── Standard OpenAI / OpenRouter filter ─────────────────
+            const resp = await fetch(`${AI_API}/api/filter`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: article.title,
+                summary: article.summary || '',
+                source: article.source,
+                category: article.category || 'general',
+              }),
+            });
+            if (resp.ok) {
+              aiResult = await resp.json() as Record<string, unknown>;
+              aiSuccess = true;
+            }
+          }
 
-            // Extract relevance_score from AI result (v2 format: 0-10 scale)
+          if (aiSuccess) {
+            const verdict = aiResult.verdict as string; // PUBLISH or DISCARD
             const scores: Record<string, number> = (aiResult.scores as Record<string, number>) ?? {};
             const relevanceScore = scores.relevance ?? 0;
             const combined = (aiResult.combined as number) ?? 0;
@@ -407,11 +454,60 @@ async function processBatch(): Promise<void> {
                 .run(relevanceScore, article.id);
             }
 
+            // ── 4b. Generate embedding (Ollama mode only) ──────────
+            if (AI_PROVIDER === 'ollama') {
+              try {
+                const embedText = `${article.title} ${article.summary || ''}`.trim();
+                if (embedText.length > 0) {
+                  const embedResp = await fetch(`${AI_API}/api/embeddings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: embedText }),
+                    signal: AbortSignal.timeout(10_000),
+                  });
+                  if (embedResp.ok) {
+                    const embedData = await embedResp.json() as { embedding: number[] };
+                    d.prepare('UPDATE news_items SET embedding = ? WHERE id = ?')
+                      .run(JSON.stringify(embedData.embedding), article.id);
+                    console.log(`  🧬 ${article.id.slice(0, 8)} → embedding stored (${embedData.embedding.length}d)`);
+                  }
+                }
+              } catch (e) {
+                console.warn(`  ⚠️ ${article.id.slice(0, 8)} → embedding failed: ${(e as Error).message}`);
+              }
+            }
+
             if (verdict === 'PUBLISH') {
+              // ── AI Summarizer (optional) ─────────────────────────
+              let aiSummary: string | null = null;
+              if (AUTO_SUMMARIZE) {
+                try {
+                  const smrResp = await fetch(`${AI_API}/api/summarize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      title: article.title,
+                      summary: article.summary || '',
+                      max_chars: 200,
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                  });
+                  if (smrResp.ok) {
+                    const smrResult = await smrResp.json();
+                    aiSummary = smrResult.generated_summary || null;
+                    if (aiSummary) {
+                      d.prepare('UPDATE news_items SET ai_summary = ? WHERE id = ?')
+                        .run(aiSummary, article.id);
+                      console.log(`  📝 ${article.id.slice(0, 8)} → AI summary generated`);
+                    }
+                  }
+                } catch (e) {
+                  console.warn(`  ⚠️ ${article.id.slice(0, 8)} → AI summarize failed: ${(e as Error).message}`);
+                }
+              }
+
               // ── Check for high-impact auto-publish ──────────────
-              // combined is now 0-10 (v2 avg), convert to 0-100 impact scale
               const impact = Math.round((combined / 10) * 100);
-              // Proxy for PUBLISH_URGENT: all individual scores >= 8/10
               const isUrgent =
                 (scores.political ?? 0) >= 8 &&
                 (scores.economic ?? 0) >= 8 &&
@@ -419,10 +515,9 @@ async function processBatch(): Promise<void> {
                 (scores.urgency ?? 0) >= 8;
 
               if (impact >= AUTO_PUBLISH_THRESHOLD || isUrgent) {
-                await autoPublishArticle(article, aiResult as Record<string, unknown>);
+                await autoPublishArticle(article, aiResult);
                 processedCount++;
               } else {
-                // Create approval queue entry for manual review
                 const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
                 const queueId = `q_${article.id.slice(0, 12)}`;
 
@@ -446,7 +541,7 @@ async function processBatch(): Promise<void> {
             // AI not available — set all to pending_approval for manual review
             const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
             const queueId = `q_${article.id.slice(0, 12)}`;
-            
+
             d.prepare(
               `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status)
                VALUES (?, ?, ?, 'pending')`
@@ -454,7 +549,7 @@ async function processBatch(): Promise<void> {
 
             d.prepare('UPDATE news_items SET status = ? WHERE id = ?')
               .run('pending_approval', article.id);
-            
+
             console.log(`  ⚠️ ${article.id.slice(0, 8)} → AI unavailable → pending approval`);
             processedCount++;
           }
@@ -596,6 +691,7 @@ export function startProcessingLoop(): void {
   console.log(`[processing] Starting processing loop (every ${POLL_INTERVAL / 1000}s)`);
   console.log(`[processing] Geo API: ${GEO_API}`);
   console.log(`[processing] AI API: ${AI_API}`);
+  console.log(`[processing] AI Provider: ${AI_PROVIDER}`);
   console.log(`[processing] Clustering every ${Math.round(CLUSTER_INTERVAL / 1000)}s (${CLUSTER_WINDOW}h window)`);
   
   processBatch(); // Run immediately

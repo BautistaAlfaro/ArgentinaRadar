@@ -23,9 +23,25 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.config import AI_MODE, LOCAL_MODELS, PORT, OPENAI_API_KEY, OPENROUTER_API_KEY
+from pydantic import BaseModel, Field
+
+from src.config import (
+    AI_MODE,
+    LOCAL_MODELS,
+    OLLAMA_EMBED_MODEL,
+    OLLAMA_HOST,
+    OLLAMA_MODEL,
+    PORT,
+    OPENAI_API_KEY,
+    OPENROUTER_API_KEY,
+)
 from src.cost_tracker import CostTracker
 from src.embeddings import EmbeddingRequest, EmbeddingResponse, run_embedding
+from src.ollama_client import (
+    check_ollama_health,
+    classify_article as ollama_classify_article,
+    generate_embedding as ollama_generate_embedding,
+)
 from src.filter import FilterRequest, FilterResponse, run_filter
 from src.images import ImageRequest, ImageResponse, run_image_generation
 from src.ner import NERRequest, NERResponse, run_ner
@@ -38,11 +54,58 @@ from src.political import (
 from src.process import ProcessRequest, ProcessResponse, run_process
 from src.security import SecurityClassifyRequest, SecurityClassifyResponse, run_security_classify
 from src.protest import ProtestClassifyRequest, ProtestClassifyResponse, run_protest_classify
+from src.rewriter import (
+    RewriteRequest,
+    RewriteResponse,
+    REWRITE_MODEL,
+    rewrite_headline,
+)
+from src.summarizer import (
+    SummarizeRequest,
+    SummarizeResponse,
+    SUMMARIZE_MODEL,
+    summarize_article,
+)
 from src.translate import (
     TranslateRequest,
     TranslateResponse,
     translate_to_spanish,
 )
+
+# ---------------------------------------------------------------------------
+# Ollama classify request / response models
+# ---------------------------------------------------------------------------
+
+
+class OllamaClassifyRequest(BaseModel):
+    title: str = Field(..., min_length=1, description="Article title")
+    summary: str = Field(default="", description="Article summary")
+    source: str = Field(default="", description="Source identifier (e.g. Clarín)")
+    model: str | None = Field(default=None, description="Override Ollama model")
+
+
+class OllamaClassifyResponse(BaseModel):
+    verdict: str
+    political: int
+    economic: int
+    social: int
+    urgency: int
+    quality: int
+    relevance: int
+    combined: float
+    reason: str
+
+
+class EmbeddingGenerateRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Text to generate embedding for")
+    model: str | None = Field(default=None, description="Override embedding model")
+
+
+class EmbeddingGenerateResponse(BaseModel):
+    embedding: list[float]
+    model: str
+    dimensions: int
+
 
 # ---------------------------------------------------------------------------
 # Globals — initialised once at startup
@@ -150,18 +213,9 @@ async def ner_endpoint(req: NERRequest):
 
 @app.post("/api/embed", response_model=EmbeddingResponse)
 async def embed_endpoint(req: EmbeddingRequest):
-    """Generate vector embeddings for article texts."""
+    """Generate vector embeddings for article texts using local Ollama or OpenAI."""
     try:
-        result = await run_embedding(openai_client, req.texts)
-    except BudgetExceededError:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": "budget_exceeded",
-                "message": "Daily cost cap exceeded — try again tomorrow",
-                "usage": cost_tracker.get_stats(),
-            },
-        )
+        result = await run_embedding(texts=req.texts)
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -173,6 +227,70 @@ async def embed_endpoint(req: EmbeddingRequest):
         tokens_used=result["tokens_used"],
         cost=result["cost"],
     )
+
+
+@app.post("/api/ollama-classify", response_model=OllamaClassifyResponse)
+async def ollama_classify_endpoint(req: OllamaClassifyRequest):
+    """Classify an article using local Ollama (qwen2.5:7b)."""
+    try:
+        result = await ollama_classify_article(
+            title=req.title,
+            summary=req.summary,
+            source=req.source,
+            model=req.model,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "ollama_classify_failed", "message": str(exc)},
+        )
+
+    return OllamaClassifyResponse(
+        verdict=result["verdict"],
+        political=result["political"],
+        economic=result["economic"],
+        social=result["social"],
+        urgency=result["urgency"],
+        quality=result["quality"],
+        relevance=result["relevance"],
+        combined=result["combined"],
+        reason=result["reason"],
+    )
+
+
+@app.post("/api/embeddings", response_model=EmbeddingGenerateResponse)
+async def embeddings_generate_endpoint(req: EmbeddingGenerateRequest):
+    """Generate a single embedding vector using local Ollama (nomic-embed-text)."""
+    try:
+        embedding = await ollama_generate_embedding(
+            text=req.text,
+            model=req.model,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "embedding_generation_failed", "message": str(exc)},
+        )
+
+    model = req.model or OLLAMA_EMBED_MODEL
+    return EmbeddingGenerateResponse(
+        embedding=embedding,
+        model=model,
+        dimensions=len(embedding),
+    )
+
+
+@app.get("/api/ollama-status")
+async def ollama_status_endpoint():
+    """Check if Ollama is running and list available models."""
+    try:
+        status = await check_ollama_health()
+        return status
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "ollama_status_failed", "message": str(exc)},
+        )
 
 
 @app.post("/api/process", response_model=ProcessResponse)
@@ -429,6 +547,63 @@ async def translate_endpoint(req: TranslateRequest):
     )
 
 
+# ---------------------------------------------------------------------------
+# /api/rewrite — Bluesky headline rewriter
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/rewrite", response_model=RewriteResponse)
+async def rewrite_endpoint(req: RewriteRequest):
+    """Rewrite an article headline for Bluesky publishing using local Ollama."""
+    try:
+        rewritten = await rewrite_headline(
+            title=req.title,
+            source=req.source,
+            category=req.category,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "rewrite_failed", "message": str(exc)},
+        )
+
+    return RewriteResponse(
+        original_title=req.title,
+        rewritten_title=rewritten,
+        source=req.source,
+        model_used=REWRITE_MODEL,
+    )
+
+
+# ---------------------------------------------------------------------------
+# /api/summarize — Article summarizer
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/summarize", response_model=SummarizeResponse)
+async def summarize_endpoint(req: SummarizeRequest):
+    """Generate a concise summary for Bluesky publishing using local Ollama."""
+    try:
+        generated = await summarize_article(
+            title=req.title,
+            summary=req.summary,
+            max_chars=req.max_chars,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "summarize_failed", "message": str(exc)},
+        )
+
+    return SummarizeResponse(
+        title=req.title,
+        original_summary=req.summary,
+        generated_summary=generated,
+        max_chars=req.max_chars,
+        model_used=SUMMARIZE_MODEL,
+    )
+
+
 @app.get("/api/costs")
 async def get_costs():
     """Return today's cost and usage statistics."""
@@ -443,6 +618,7 @@ async def get_cost_logs(limit: int = 100):
 
 @app.get("/health")
 async def health():
+    ollama = await check_ollama_health()
     return {
         "status": "ok",
         "port": PORT,
@@ -452,6 +628,7 @@ async def health():
             "openrouter": bool(OPENROUTER_API_KEY),
         },
         "ollama_models": list(LOCAL_MODELS.values()),
+        "ollama": ollama,
         "budget_cap_exceeded": cost_tracker.is_cap_exceeded(),
     }
 

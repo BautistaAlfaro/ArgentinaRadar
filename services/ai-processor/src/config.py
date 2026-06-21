@@ -31,6 +31,12 @@ AI_MODE: str = os.environ.get("AI_MODE", "local")
 OLLAMA_BASE_URL: str = os.environ.get(
     "OLLAMA_BASE_URL", "http://localhost:11434/v1"
 )
+# Direct Ollama API host (without /v1 path) for /api/generate endpoint
+OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "localhost:11434")
+# Classification model (used by ollama_client.classify_article)
+OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+# Embedding model (used by ollama_client.generate_embedding)
+OLLAMA_EMBED_MODEL: str = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 LOCAL_MODELS: dict[str, str] = {
     "fast": os.environ.get("LOCAL_MODEL_FAST", "gemma3:4b"),
     "smart": os.environ.get("LOCAL_MODEL_SMART", "qwen2.5:7b"),

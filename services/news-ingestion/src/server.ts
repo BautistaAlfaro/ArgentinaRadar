@@ -2,6 +2,7 @@ import express from 'express';
 import { getDb } from './db.js';
 import { getTrendingTopics } from '../../../shared/trending.js';
 import { clusterArticles } from '../../../shared/clustering.js';
+import { semanticSearch } from '../../../shared/semanticSearch.js';
 import type { NewsItem } from '../../../shared/types/index.js';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
@@ -274,6 +275,32 @@ export function startServer(
       });
     } catch (err) {
       res.status(500).json({ error: 'Failed to compute trending topics', details: String(err) });
+    }
+  });
+
+  // ─── GET /api/search — semantic search ──────────────────────────
+  app.get('/api/search', async (req, res) => {
+    try {
+      const q = (req.query.q as string) || '';
+      const limit = Math.min(parseInt(String(req.query.limit ?? '5'), 10), 20);
+
+      if (!q.trim()) {
+        res.status(400).json({ error: 'Query parameter "q" is required' });
+        return;
+      }
+
+      const db = getDb();
+      const results = await semanticSearch(db, q, { limit });
+
+      res.json({
+        query: q,
+        results,
+        total: results.length,
+        mode: results.length > 0 && results[0].similarity > 0 ? 'semantic' : 'like',
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Search failed', details: String(err) });
     }
   });
 

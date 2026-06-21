@@ -114,5 +114,19 @@ export function runMigrations(db: Database.Database): void {
     }
   }
 
+  // ─── AI summary column (headline rewriter / summarizer) ──────────
+  const aiSummaryColumns = [
+    "ALTER TABLE news_items ADD COLUMN ai_summary TEXT",
+  ];
+
+  for (const sql of aiSummaryColumns) {
+    try {
+      db.exec(sql);
+      console.log(`[migrations] Executed: ${sql}`);
+    } catch {
+      // Column already exists
+    }
+  }
+
   console.log('[migrations] Schema up to date');
 }
