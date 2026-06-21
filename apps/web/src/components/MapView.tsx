@@ -15,6 +15,7 @@ import { FireLayer } from './layers/FireLayer';
 import { InfrastructureLayer } from './layers/InfrastructureLayer';
 import { FlightLayer } from './layers/FlightLayer';
 import { BordersLayer } from './layers/BordersLayer';
+import { ProtestLayer } from './layers/ProtestLayer';
 
 type GlobeInstance = InstanceType<typeof Globe>;
 
@@ -232,6 +233,7 @@ export function MapView() {
           <FireLayer globe={globeRef.current} />
           <InfrastructureLayer globe={globeRef.current} />
           <BordersLayer globe={globeRef.current} />
+          <ProtestLayer globe={globeRef.current} />
           <FlightLayer globe={globeRef.current} />
         </>
       )}

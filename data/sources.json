@@ -1,10 +1,10 @@
 {
-  "_comment": "Argentine news sources for the ingestion pipeline",
+  "_comment": "Argentine news sources for the ingestion pipeline (updated with real RSS feeds)",
   "sources": [
     {
       "name": "clarin",
       "type": "rss",
-      "url": "https://www.clarin.com/rss/",
+      "url": "https://www.clarin.com/rss/lo-ultimo/",
       "category": "sociedad",
       "rateLimitMs": 5000
     },
@@ -45,45 +45,24 @@
     },
     {
       "name": "tn",
-      "type": "scrape",
-      "url": "https://tn.com.ar/",
+      "type": "rss",
+      "url": "https://tn.com.ar/feed/",
       "category": "sociedad",
-      "rateLimitMs": 10000,
-      "cssSelectors": {
-        "article": "article",
-        "title": "h2 a, h3 a",
-        "summary": "p",
-        "link": "h2 a, h3 a",
-        "timestamp": "time"
-      }
+      "rateLimitMs": 5000
     },
     {
       "name": "c5n",
-      "type": "scrape",
-      "url": "https://c5n.com/",
+      "type": "rss",
+      "url": "https://www.c5n.com/rss/",
       "category": "sociedad",
-      "rateLimitMs": 10000,
-      "cssSelectors": {
-        "article": "article",
-        "title": "h2 a, h3 a",
-        "summary": "p",
-        "link": "h2 a, h3 a",
-        "timestamp": "time"
-      }
+      "rateLimitMs": 5000
     },
     {
       "name": "a24",
-      "type": "scrape",
-      "url": "https://www.a24.com/",
+      "type": "rss",
+      "url": "https://www.a24.com/rss/",
       "category": "sociedad",
-      "rateLimitMs": 10000,
-      "cssSelectors": {
-        "article": "article",
-        "title": "h2 a, h3 a",
-        "summary": "p",
-        "link": "h2 a, h3 a",
-        "timestamp": "time"
-      }
+      "rateLimitMs": 5000
     },
     {
       "name": "america",
@@ -101,17 +80,17 @@
     },
     {
       "name": "canal26",
-      "type": "scrape",
-      "url": "https://www.canal26.com/",
+      "type": "rss",
+      "url": "https://www.canal26.com/rss/",
       "category": "sociedad",
-      "rateLimitMs": 10000,
-      "cssSelectors": {
-        "article": "article",
-        "title": "h2 a, h3 a",
-        "summary": "p",
-        "link": "h2 a, h3 a",
-        "timestamp": "time"
-      }
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "perfil",
+      "type": "rss",
+      "url": "https://www.perfil.com/feed/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
     }
   ]
 }

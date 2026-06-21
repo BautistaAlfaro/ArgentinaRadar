@@ -12,6 +12,8 @@ const LAYER_DEFINITIONS: { id: LayerId; label: string; description: string }[] =
   { id: 'alerts', label: 'Alertas', description: 'Alertas de emergencia' },
   { id: 'infrastructure', label: 'Infraestructura', description: 'Gasoductos, puertos, represas' },
   { id: 'flights', label: 'Vuelos', description: 'Tráfico aéreo en vivo' },
+  { id: 'security', label: 'Inseguridad', description: 'Estadísticas de seguridad por provincia' },
+  { id: 'protests', label: 'Protestas 🚧', description: 'Cortes y manifestaciones activos' },
 ];
 
 export function LayerToggle() {
@@ -97,6 +99,26 @@ export function LayerToggle() {
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="inline-block w-3 h-3 rounded-full bg-red-400" />
             <span>Sismo M7+</span>
+          </div>
+          {/* Protest legend */}
+          <div className="mt-3 pt-2 border-t border-slate-700/30">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">Protestas</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ background: '#ef4444' }} />
+            <span>Corte total</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ background: '#f97316' }} />
+            <span>Corte parcial</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ background: '#eab308' }} />
+            <span>Marcha</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="inline-block w-3 h-3 rounded-full" style={{ background: '#3b82f6' }} />
+            <span>Piquete</span>
           </div>
         </div>
       </div>

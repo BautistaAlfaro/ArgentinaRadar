@@ -20,13 +20,22 @@ import { EventDetectionChart } from '../components/admin/charts/EventDetectionCh
 import { UserActivityChart } from '../components/admin/charts/UserActivityChart';
 import { AICostChart } from '../components/admin/charts/AICostChart';
 import { SystemMetrics } from '../components/admin/SystemMetrics';
+import { InsecurityPanel } from '../components/admin/InsecurityPanel';
+import { ProtestPanel } from '../components/admin/ProtestPanel';
+import { MorningBriefing } from '../components/admin/MorningBriefing';
 
 type Range = '7d' | '30d' | '90d';
+type Tab = 'overview' | 'briefing';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
   { value: '30d', label: '30 days' },
   { value: '90d', label: '90 days' },
+];
+
+const TABS: { value: Tab; label: string; icon: string }[] = [
+  { value: 'overview', label: 'Overview', icon: '📊' },
+  { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -56,6 +65,7 @@ const Icons = {
 export function AdminDashboard() {
   const [range, setRange] = useState<Range>('30d');
   const [systemDimension, setSystemDimension] = useState<'cpu' | 'memory'>('cpu');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   // Data fetching
   const { data: kpis, isLoading: kpisLoading } = useKPIs(range);
@@ -87,58 +97,82 @@ export function AdminDashboard() {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* ─── Header ─────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">
-            Admin Dashboard
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            System overview &amp; performance metrics
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Range selector */}
-          <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setRange(opt.value)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                  range === opt.value
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+      <header className="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-md border-b border-slate-800/50">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              Admin Dashboard
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {activeTab === 'overview'
+                ? 'System overview &amp; performance metrics'
+                : 'Nightly digest &amp; today\'s predictions'}
+            </p>
           </div>
 
-          {/* Refresh indicator */}
-          <button
-            onClick={() => window.location.reload()}
-            className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800/60 cursor-pointer"
-            title="Refresh data"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Tab navigation */}
+            <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    activeTab === tab.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Range selector (overview only) */}
+            {activeTab === 'overview' && (
+              <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5">
+                {RANGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setRange(opt.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                      range === opt.value
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Refresh indicator */}
+            <button
+              onClick={() => window.location.reload()}
+              className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800/60 cursor-pointer"
+              title="Refresh data"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* ─── Main Content ───────────────────────────────────────────── */}
       <div className="p-6 space-y-6">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={range}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            {/* ── KPI Cards ──────────────────────────────────────────── */}
+          {activeTab === 'overview' ? (
+            <motion.div
+              key={range}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              {/* ── KPI Cards ──────────────────────────────────────────── */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
                 icon={Icons.tweets}
@@ -196,9 +230,37 @@ export function AdminDashboard() {
               <AICostChart data={dailyStats ?? []} />
             </div>
 
+            {/* ── Political Radar ──────────────────────────────────── */}
+            <PoliticalRadar />
+
+            {/* ── Insecurity Radar ──────────────────────────────────── */}
+            <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+              <div className="max-h-[500px] overflow-y-auto">
+                <InsecurityPanel />
+              </div>
+            </section>
+
+            {/* ── Protest Radar ──────────────────────────────────────── */}
+            <section className="bg-slate-800/40 rounded-xl border border-slate-700/50 overflow-hidden">
+              <div className="max-h-[500px] overflow-y-auto">
+                <ProtestPanel />
+              </div>
+            </section>
+
             {/* ── System Metrics ─────────────────────────────────────── */}
             <SystemMetrics metrics={systemMetrics ?? []} />
           </motion.div>
+          ) : (
+            <motion.div
+              key="briefing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <MorningBriefing />
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>

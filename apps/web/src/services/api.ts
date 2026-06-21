@@ -244,6 +244,74 @@ export async function fetchTrends(): Promise<TrendingEntity[]> {
   }));
 }
 
+// ─── Political trends ────────────────────────────────────────────
+
+export interface PoliticalFigureTrend {
+  name: string;
+  party: string;
+  mentions24h: number;
+  growthRate: number;
+  avgSentiment: number;
+  trendChart: number[]; // 7-day daily mention counts
+}
+
+export async function fetchPoliticalTrends(): Promise<PoliticalFigureTrend[]> {
+  const resp = await fetch(`${TRENDS_API}/api/trends/political`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch political trends: ${resp.status} ${resp.statusText}`);
+  }
+  // The API returns { figures: PoliticalFigureTrend[], count: number }
+  const body = (await resp.json()) as {
+    figures: PoliticalFigureTrend[];
+    count: number;
+  };
+  return body.figures ?? [];
+}
+
+// ─── Political Events ────────────────────────────────────────────
+
+export interface PoliticalEventEntry {
+  id: string;
+  title: string;
+  summary: string;
+  articleCount: number;
+  sources: string[];
+  consensus: ConsensusLevel;
+  impactScore: number;
+  entities: Array<{
+    name: string;
+    type: string;
+    tier: number;
+    sentiment: number;
+  }>;
+  province: string | null;
+  publishedAt: string;
+}
+
+export async function fetchPoliticalEvents(params?: {
+  figure?: string;
+  sentiment_min?: number;
+  limit?: number;
+}): Promise<PoliticalEventEntry[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.figure) searchParams.set('figure', params.figure);
+  if (params?.sentiment_min !== undefined) {
+    searchParams.set('sentiment_min', String(params.sentiment_min));
+  }
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+
+  const url = `${EVENT_API}/api/events/political${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch political events: ${resp.status} ${resp.statusText}`);
+  }
+  const body = (await resp.json()) as {
+    events: PoliticalEventEntry[];
+    count: number;
+  };
+  return body.events ?? [];
+}
+
 // ─── Event detail ─────────────────────────────────────────────────
 
 export interface EventDetail extends EventItem {
@@ -303,5 +371,89 @@ export async function fetchFires(): Promise<FireResponse> {
 export async function fetchFlights(): Promise<FlightResponse> {
   const resp = await fetch(`${ALERTS_API}/api/alerts/flights`);
   if (!resp.ok) throw new Error(`Flights fetch failed: ${resp.status}`);
+  return resp.json();
+}
+
+// ─── Insecurity Radar API ───────────────────────────────────────────
+
+export interface ProvinceSecurityStats {
+  province: string;
+  total_events_7d: number;
+  total_events_30d: number;
+  crime_density: number;
+  trend_direction: 'up' | 'down' | 'stable';
+  top_categories: Array<{ category: string; count: number }>;
+}
+
+export interface SecurityStatsResponse {
+  stats: ProvinceSecurityStats[];
+  count: number;
+}
+
+export async function fetchSecurityStats(params?: {
+  province?: string;
+  category?: string;
+  period?: string;
+}): Promise<SecurityStatsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.province) searchParams.set('province', params.province);
+  if (params?.category) searchParams.set('category', params.category);
+  if (params?.period) searchParams.set('period', params.period);
+
+  const url = `${EVENT_API}/api/events/security${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch security stats: ${resp.status} ${resp.statusText}`);
+  }
+  return resp.json();
+}
+
+// ─── Protest Radar API ─────────────────────────────────────────────
+
+export type ProtestStatus = 'active' | 'dispersed' | 'resolved';
+export type ProtestType =
+  | 'corte_total'
+  | 'corte_parcial'
+  | 'marcha'
+  | 'piquete'
+  | 'paro'
+  | 'movilizacion';
+
+export interface ProtestItem {
+  id: string;
+  event_id: string;
+  province: string;
+  city: string | null;
+  route_name: string | null;
+  km: number | null;
+  protest_type: ProtestType;
+  status: ProtestStatus;
+  lat: number;
+  lng: number;
+  started_at: string;
+  resolved_at: string | null;
+  estimated_duration_minutes: number | null;
+  last_article_at: string;
+  article_count: number;
+}
+
+export interface ProtestsResponse {
+  protests: ProtestItem[];
+  count: number;
+}
+
+export async function fetchProtests(params?: {
+  status?: ProtestStatus;
+  province?: string;
+}): Promise<ProtestsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.status) searchParams.set('status', params.status);
+  if (params?.province) searchParams.set('province', params.province);
+
+  const url = `${EVENT_API}/api/events/protests${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch protests: ${resp.status} ${resp.statusText}`);
+  }
   return resp.json();
 }

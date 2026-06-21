@@ -7,7 +7,9 @@
     "start": "node --loader ts-node/esm src/index.ts",
     "dev": "node --loader ts-node/esm --watch src/index.ts",
     "build": "tsc",
-    "server": "node --loader ts-node/esm src/server.ts"
+    "server": "node --loader ts-node/esm src/server.ts",
+    "seed": "node --loader ts-node/esm src/seed.ts",
+    "seed:clear": "node --loader ts-node/esm src/seed.ts --clear"
   },
   "dependencies": {
     "axios": "^1.18.0",

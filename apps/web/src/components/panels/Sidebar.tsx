@@ -1,10 +1,11 @@
 /**
  * Sidebar with tabbed panels.
  *
- * Three tabs:
+ * Four tabs:
  *   1. Eventos (EventFeed — default)
- *   2. Tendencias (placeholder)
- *   3. Noticias (NewsFeed)
+ *   2. Tendencias (TrendingTopics)
+ *   3. Política (PoliticalPanel)
+ *   4. Noticias (NewsFeed)
  *
  * Uses a simple tab UI built with Tailwind.
  */
@@ -13,11 +14,12 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EventFeed } from './EventFeed';
 import { NewsFeed } from './NewsFeed';
+import { PoliticalPanel } from './PoliticalPanel';
 import { TrendingTopics } from './TrendingTopics';
 import { EventTimeline } from '../EventTimeline';
 import { useAuthStore } from '../../stores/authStore';
 
-type TabId = 'events' | 'trending' | 'news';
+type TabId = 'events' | 'trending' | 'political' | 'news';
 
 interface TabDefinition {
   id: TabId;
@@ -27,6 +29,7 @@ interface TabDefinition {
 const TABS: TabDefinition[] = [
   { id: 'events', label: 'Eventos' },
   { id: 'trending', label: 'Tendencias' },
+  { id: 'political', label: 'Política' },
   { id: 'news', label: 'Noticias' },
 ];
 
@@ -70,6 +73,7 @@ export function Sidebar() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'events' && <EventFeed />}
         {activeTab === 'trending' && <TrendingTopics />}
+        {activeTab === 'political' && <PoliticalPanel />}
         {activeTab === 'news' && <NewsFeed />}
       </div>
 

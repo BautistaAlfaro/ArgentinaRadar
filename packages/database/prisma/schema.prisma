@@ -36,7 +36,8 @@ model News {
   status      String   @default("ingested") // pipeline: ingested → geolocated → filtered → published | discarded
   embedding   Unsupported("vector(1536)")?
 
-  newsEvents NewsEvent[]
+  newsEvents     NewsEvent[]
+  politicians    ArticlePolitician[]
 
   @@index([publishedAt])
   @@index([ingestedAt])
@@ -184,6 +185,32 @@ model AiCost {
   @@index([date])
 }
 
+// ── PoliticalFigure / ArticlePolitician ───────────────────
+model PoliticalFigure {
+  id           String @id @default(uuid())
+  name         String @unique
+  aliases      Json   // ["Javier Milei", "Milei", "el Presidente"]
+  party        String // "LLA", "PRO", "UCR", "FdT", etc.
+  position     String // "presidente", "ministro", "gobernador", "diputado"
+  tier         Int    @default(2) // 1=top, 2=mid, 3=low
+  mentionCount Int    @default(0)
+  createdAt    DateTime @default(now())
+
+  articles ArticlePolitician[]
+}
+
+model ArticlePolitician {
+  articleId  String
+  figureId   String
+  sentiment  Float  // -1.0 hostil to 1.0 favorable
+  confidence Float
+
+  figure PoliticalFigure @relation(fields: [figureId], references: [id], onDelete: Cascade)
+  news   News           @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, figureId])
+}
+
 // ── Role ─────────────────────────────────────────────────
 enum Role {
   VISITOR
@@ -258,6 +285,43 @@ model DailyStats {
   @@index([date])
 }
 
+// ── Insecurity Radar ─────────────────────────────────────────
+model ProvinceSecurityStats {
+  province        String @id
+  total_events_7d  Int
+  total_events_30d Int
+  crime_density   Float
+  trend_direction String // "up", "down", "stable"
+  top_categories  Json
+  updatedAt       DateTime
+}
+
+model ProvincePopulation {
+  province   String @id
+  population Int
+}
+
+// ── Protest/Cortes Radar ─────────────────────────────────────
+model ActiveProtest {
+  id                         String   @id @default(uuid())
+  event_id                   String
+  province                   String
+  city                       String?
+  route_name                 String?
+  km                         Int?
+  protest_type               String
+  status                     String   @default("active") // active, dispersed, resolved
+  lat                        Float
+  lng                        Float
+  started_at                 DateTime
+  resolved_at                DateTime?
+  estimated_duration_minutes Int?
+  updatedAt                  DateTime @updatedAt
+
+  @@index([status])
+  @@index([province])
+}
+
 model Subscription {
   id        String   @id @default(uuid())
   userId    String
@@ -271,4 +335,41 @@ model Subscription {
 
   @@index([userId])
   @@index([isActive, endDate])
+}
+
+// ── Night Owl — Phase 4 Models ──────────────────────────────
+// Unified daily briefing combining digest + predictions + patterns + health.
+model DailyDigest {
+  id          String   @id @default(uuid())
+  date        DateTime @unique
+  summary     String
+  topEvents   Json
+  predictions Json?
+  patterns    Json?
+  healthScore Float
+  stats       Json
+  createdAt   DateTime @default(now())
+
+  @@map("daily_briefings")
+}
+
+model Prediction {
+  id          String   @id @default(uuid())
+  entityName  String
+  confidence  Float
+  reason      String
+  predictedAt DateTime @default(now())
+
+  @@map("predictions")
+}
+
+model HealthReport {
+  id        String   @id @default(uuid())
+  score     Float
+  services  Json
+  queues    Json
+  budget    Json
+  createdAt DateTime @default(now())
+
+  @@map("health_reports")
 }

@@ -19,6 +19,8 @@ export type {
   DailyStats,
   Subscription,
   Pattern,
+  PoliticalFigure,
+  ArticlePolitician,
 } from "@prisma/client";
 
 // ── Dual-Write Adapter ────────────────────────────────────

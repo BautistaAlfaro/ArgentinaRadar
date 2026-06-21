@@ -11,14 +11,18 @@ export type LayerId =
   | 'flights'
   | 'earthquakes'
   | 'fires'
-  | 'borders';
+  | 'borders'
+  | 'security'
+  | 'protests';
 
-export type PanelId = 'news' | 'economic' | 'alerts';
+export type PanelId = 'news' | 'economic' | 'alerts' | 'security' | 'protests';
 
 export interface PanelVisibility {
   news: boolean;
   economic: boolean;
   alerts: boolean;
+  security: boolean;
+  protests: boolean;
 }
 
 export interface SelectedNewsLocation {
@@ -73,6 +77,8 @@ export const useRadarStore = create<RadarStore>((set) => ({
     news: true,
     economic: true,
     alerts: true,
+    security: false,
+    protests: false,
   },
   sidebarCollapsed: false,
 

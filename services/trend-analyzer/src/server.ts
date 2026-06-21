@@ -85,6 +85,85 @@ app.get('/api/trends', (_req, res) => {
   }
 });
 
+// ─── GET /api/trends/political — Political figure trends ────────
+app.get('/api/trends/political', (_req, res) => {
+  try {
+    const allMentions = tracker.getAllMentions();
+    const typeByEntity = new Map<string, string>();
+    for (let i = allMentions.length - 1; i >= 0; i--) {
+      const m = allMentions[i];
+      if (!typeByEntity.has(m.name)) typeByEntity.set(m.name, m.type);
+    }
+
+    // Get all trends and filter to person types
+    const trends = trendStore.getCurrent();
+
+    // Build per-figure detail from the tracker
+    const figures = trends
+      .filter((t) => (typeByEntity.get(t.name) ?? t.type) === 'person')
+      .map((t) => {
+        const detail = tracker.getEntityDetail(t.name);
+        const curCount = t.mentions;
+        const prevCount = t.previousMentions;
+        const growthRate =
+          prevCount > 0 ? ((curCount - prevCount) / prevCount) * 100 : 100;
+
+        // Compute 7-day daily mention counts from history snapshots
+        const history = trendStore.getHistory();
+        const days: number[] = [];
+        // Walk backwards through snapshots to find daily counts
+        const seen = new Set<string>();
+        for (let i = history.length - 1; i >= 0; i--) {
+          const snapshot = history[i];
+          const entry = snapshot.trends.find(
+            (x) => x.name.toLowerCase() === t.name.toLowerCase(),
+          );
+          if (entry) {
+            const dayKey = new Date(snapshot.timestamp).toISOString().slice(0, 10);
+            if (!seen.has(dayKey)) {
+              days.unshift(entry.mentions);
+              seen.add(dayKey);
+            }
+          }
+        }
+        // Pad to 7 days if we have fewer
+        while (days.length < 7) days.unshift(0);
+        // Trim to last 7
+        const trendChart = days.slice(-7);
+
+        return {
+          name: t.name,
+          party: _guessParty(t.name),
+          mentions24h: curCount,
+          growthRate: Math.round(growthRate * 10) / 10,
+          avgSentiment: 0, // placeholder — will come from ArticlePolitician
+          trendChart,
+        };
+      });
+
+    res.json({ figures, count: figures.length });
+  } catch (err) {
+    res.status(500).json({
+      error: 'Failed to fetch political trends',
+      details: String(err),
+    });
+  }
+});
+
+/**
+ * Rough party guesser based on known political figures.
+ * In a full implementation this would come from the PoliticalFigure DB table.
+ */
+function _guessParty(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.includes('milei') || lower.includes('villarruel')) return 'LLA';
+  if (lower.includes('macri') || lower.includes('bullrich') || lower.includes('larreta')) return 'PRO';
+  if (lower.includes('kirchner') || lower.includes('massa') || lower.includes('kicillof') || lower.includes('fernández')) return 'FdT';
+  if (lower.includes('bregman') || lower.includes('del caño')) return 'PTS';
+  if (lower.includes('ritondo') || lower.includes('santilli')) return 'PRO';
+  return 'IND';
+}
+
 // ─── GET /api/entities/trending — Alias for /api/trends ─────────
 app.get('/api/entities/trending', (_req, res) => {
   res.redirect('/api/trends');
@@ -163,6 +242,7 @@ const server = app.listen(PORT, () => {
   console.log(`[trend-analyzer] REST API listening on http://localhost:${PORT}`);
   console.log(`[trend-analyzer]   POST /api/analyze          — Receive entity mentions`);
   console.log(`[trend-analyzer]   GET  /api/trends            — Top 10 trending entities`);
+  console.log(`[trend-analyzer]   GET  /api/trends/political  — Political figure trends`);
   console.log(`[trend-analyzer]   GET  /api/entities/trending — Alias for /api/trends`);
   console.log(`[trend-analyzer]   GET  /api/entities/:name    — Entity detail`);
   console.log(`[trend-analyzer]   GET  /health                — Service health`);
