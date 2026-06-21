@@ -1,8 +1,10 @@
 """
 Image generation endpoint for ArgentinaRadar.
 
-Generates news-themed images using DALL-E 3 (OpenAI) or
-returns a placeholder in local/disabled mode.
+Generates news-themed images using:
+  - Pollinations.ai (FREE, no API key, default)
+  - DALL-E 3 (OpenAI, requires API key)
+  - Placeholder in local/disabled mode.
 
 The default style ("nanobanana") uses a rich prompt template
 that produces dramatic, high-contrast news thumbnails in the
@@ -11,6 +13,7 @@ NanoBanana visual style (dark blue #003087 + gold #FFD700).
 Endpoint: POST /api/image/generate
 """
 
+import urllib.parse
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -18,8 +21,11 @@ from pydantic import BaseModel, Field
 from src.config import (
     BRAND_GOLD,
     BRAND_PRIMARY,
+    IMAGE_GEN_MODEL,
     IMAGE_GEN_STYLE,
+    IMAGE_GEN_SIZE,
     IMAGE_PROMPT_TEMPLATE,
+    IMAGE_GEN_PROVIDER,
 )
 from src.openai_client import BudgetExceededError, OpenAIClient
 
@@ -131,6 +137,26 @@ def build_local_fallback_prompt(title: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Pollinations.ai (FREE, no API key)
+# ---------------------------------------------------------------------------
+
+POLLINATIONS_URL = "https://image.pollinations.ai/prompt"
+
+
+async def generate_pollinations_image(prompt: str, width: int = 1024, height: int = 1024) -> dict[str, Any]:
+    """Generate image via Pollinations.ai (free, no API key needed)."""
+    clean_prompt = (
+        f"Professional news thumbnail. {prompt}. "
+        f"Dark blue (#003087) and gold (#FFD700) colors. "
+        f"Argentine flag theme. Dramatic lighting, photorealistic. "
+        f"No text overlay."
+    )
+    encoded = urllib.parse.quote(clean_prompt[:500])
+    image_url = f"{POLLINATIONS_URL}/{encoded}?width={width}&height={height}&nologo=true"
+    return {"image_url": image_url, "prompt_used": clean_prompt[:500], "model": "pollinations.ai", "cost": 0.0}
+
+
+# ---------------------------------------------------------------------------
 # Run handler
 # ---------------------------------------------------------------------------
 
@@ -140,35 +166,17 @@ async def run_image_generation(
     title: str,
     style: str = "",
 ) -> dict[str, Any]:
-    """
-    Generate a news-themed image for a tweet.
-
-    Builds the prompt via ``build_nanobanana_prompt`` and forwards it to the
-    OpenAIClient (or returns a local fallback in offline mode).
-
-    Args:
-        client: The shared OpenAIClient instance.
-        title: News headline to illustrate.
-        style: Visual style (defaults to ``IMAGE_GEN_STYLE`` from config).
-
-    Returns:
-        Dict with keys: image_url, prompt_used, model, cost.
-
-    Raises:
-        BudgetExceededError: If the daily cost cap has been hit.
-        RuntimeError: If the API call fails.
-    """
+    """Generate news-themed image. Uses Pollinations.ai (FREE) by default."""
     effective_style = style or IMAGE_GEN_STYLE
     prompt = build_nanobanana_prompt(title, style=effective_style)
 
-    # If this is a legacy style, also build the old-style prompt inline
-    # so the client doesn't need to duplicate the logic.
+    # Use Pollinations.ai (free, no API key, works always)
+    if IMAGE_GEN_PROVIDER == "pollinations" or not IMAGE_GEN_PROVIDER:
+        return await generate_pollinations_image(prompt)
+
+    # Fallback: try DALL-E via OpenAI client
     try:
-        result = await client.generate_image(
-            title=title,
-            style=effective_style,
-            prompt=prompt,
-        )
+        result = await client.generate_image(title=title, style=effective_style, prompt=prompt)
     except BudgetExceededError:
         raise
     except Exception as exc:

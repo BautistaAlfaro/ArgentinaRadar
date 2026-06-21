@@ -147,6 +147,9 @@ IMAGE_PROMPT_TEMPLATE: str = os.environ.get(
 template; legacy values 'news', 'minimal', and 'flag' are still supported."""
 IMAGE_GEN_STYLE: str = os.environ.get("IMAGE_GEN_STYLE", "nanobanana")
 
+"""Image generation provider. 'pollinations' (free, no key), 'dall-e' (OpenAI)."""
+IMAGE_GEN_PROVIDER: str = os.environ.get("IMAGE_GEN_PROVIDER", "pollinations")
+
 # --- Brand Colors ---
 BRAND_PRIMARY: str = os.environ.get("BRAND_PRIMARY", "#003087")
 BRAND_GOLD: str = os.environ.get("BRAND_GOLD", "#FFD700")
