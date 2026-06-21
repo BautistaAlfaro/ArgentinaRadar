@@ -2,8 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "../../",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "paths": {
+      "@shared/*": ["../../shared/*"]
+    }
   },
-  "include": ["src"],
+  "include": ["src/**/*.ts", "../../shared/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

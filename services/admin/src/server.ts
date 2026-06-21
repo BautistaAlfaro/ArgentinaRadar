@@ -51,6 +51,7 @@ import { revenueRouter } from "./routes/revenue.js";
 import { usersRouter } from "./routes/users.js";
 import { subscriptionRouter } from "./routes/subscription.js";
 import { servicesRouter } from "./routes/services.js";
+import { sourcesRouter } from "./routes/sources.js";
 import { startCollector } from "./collector.js";
 
 const app = express();
@@ -318,6 +319,7 @@ app.use("/api/admin", revenueRouter);
 app.use("/api/admin", usersRouter);
 app.use("/api/admin", subscriptionRouter);
 app.use("/api/admin", servicesRouter);
+app.use("/api/admin", sourcesRouter);
 
 // ─── Health ─────────────────────────────────────────────────────────
 app.get("/health", (_req, res) => {
@@ -350,6 +352,11 @@ app.listen(config.port, () => {
   console.log(`[admin]   GET  /api/pipeline/status     — Rich pipeline monitoring`);
   console.log(`[admin]   GET  /api/admin/health        — Comprehensive health dashboard`);
   console.log(`[admin]   GET  /health                  — Service health`);
+  console.log(`[admin]   ├── Source Management (ADMIN):`);
+  console.log(`[admin]   GET    /api/admin/sources     — List sources with stats`);
+  console.log(`[admin]   POST   /api/admin/sources     — Add a new source`);
+  console.log(`[admin]   DELETE /api/admin/sources/:name  — Remove a source`);
+  console.log(`[admin]   PATCH  /api/admin/sources/:name  — Toggle source enable/disable`);
 
   // Start the KPI collector
   startCollector();

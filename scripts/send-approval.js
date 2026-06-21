@@ -18,8 +18,17 @@ const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
 const headline = article.title.substring(0, 100).replace(/[*_`[\]()#+-.!]/g, '');
 const source = (article.source || 'ARGENTINA').toUpperCase();
 const category = article.category || 'general';
-const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
-  category === 'economia' ? '💰' : category === 'deportes' ? '⚽' : '📰';
+const catMeta = {
+  urgente:   { emoji: '🚨', label: 'URGENTE' },
+  politica:  { emoji: '🗳️', label: 'Política' },
+  economia:  { emoji: '💰', label: 'Economía' },
+  deportes:  { emoji: '⚽', label: 'Deportes' },
+  policial:  { emoji: '🚔', label: 'Policial' },
+  sociedad:  { emoji: '🌎', label: 'Sociedad' },
+};
+const m = catMeta[category] || { emoji: '📰', label: 'General' };
+const catEmoji = m.emoji;
+const catLabel = category === 'urgente' ? `*${m.label}*` : m.label;
 const nanoPrompt = [
   `Professional Argentine news thumbnail, horizontal 16:9 layout.`,
   `Headline: "${headline}".`,
@@ -49,9 +58,9 @@ db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_u
   };
 
   const caption = [
-    `${catEmoji} *${article.title}*`,
+    `${catEmoji} ${catLabel} | *${article.title}*`,
     '',
-    `📌 ${article.source}${category !== 'general' ? ' · ' + category : ''} | #ArgentinaRadar`
+    `📌 ${article.source} | #ArgentinaRadar`
   ].join('\n');
 
   // Send photo + caption + buttons

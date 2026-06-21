@@ -182,6 +182,113 @@ export async function fetchRevenueData(): Promise<RevenuePoint[]> {
   return generateRevenue(90);
 }
 
+// ─── Pipeline Stats API (calls news-ingestion service directly) ──────
+
+const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
+
+export interface PipelineStats {
+  pipeline: Record<string, number>;
+  categories: Array<{ category: string; count: number }>;
+  approvalQueue: Record<string, number>;
+  recent: Array<{
+    id: string;
+    title: string;
+    source: string;
+    category: string | null;
+    status: string;
+    publishedAt: string | null;
+    ingestedAt: string;
+  }>;
+  timestamp: string;
+}
+
+/**
+ * Fetch pipeline dashboard stats from the news-ingestion service.
+ * Returns null if the service is unreachable.
+ */
+export async function fetchPipelineStats(): Promise<PipelineStats | null> {
+  try {
+    const resp = await fetch(`${NEWS_SERVICE_API}/api/pipeline/stats`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!resp.ok) return null;
+    return resp.json();
+  } catch {
+    return null;
+  }
+}
+
+// ─── Service Health (frontend port checks) ───────────────────────────
+
+export interface ServiceHealth {
+  name: string;
+  port: number;
+  status: 'up' | 'down';
+  label: string;
+}
+
+const SERVICE_HEALTH_DEFS: Array<{ name: string; port: number; label: string }> = [
+  { name: 'rss', port: 3001, label: 'RSS Ingestion' },
+  { name: 'ai', port: 3013, label: 'AI Processor' },
+  { name: 'bluesky', port: 3004, label: 'Bluesky Publisher' },
+  { name: 'telegram', port: 0, label: 'Telegram Notifier' },
+];
+
+/**
+ * Check service health by hitting each service's /health endpoint.
+ * Telegram uses a best-effort check via the admin service.
+ */
+export async function fetchServiceHealth(): Promise<ServiceHealth[]> {
+  const results: ServiceHealth[] = [];
+
+  for (const svc of SERVICE_HEALTH_DEFS) {
+    if (svc.name === 'telegram') {
+      // Telegram doesn't have a direct port — try admin service proxy
+      try {
+        const resp = await fetch(`${ADMIN_API}/api/admin/services`, {
+          signal: AbortSignal.timeout(3_000),
+        });
+        if (resp.ok) {
+          const body = await resp.json() as ServicesResponse;
+          const tg = body.services.find((s: ServiceStatus) => s.name === 'hermes-bridge');
+          results.push({
+            name: 'telegram',
+            port: tg?.port ?? 0,
+            status: tg?.status === 'running' ? 'up' : 'down',
+            label: 'Telegram Notifier',
+          });
+        } else {
+          results.push({ name: 'telegram', port: 0, status: 'down', label: 'Telegram Notifier' });
+        }
+      } catch {
+        results.push({ name: 'telegram', port: 0, status: 'down', label: 'Telegram Notifier' });
+      }
+      continue;
+    }
+
+    try {
+      const resp = await fetch(`http://127.0.0.1:${svc.port}/health`, {
+        signal: AbortSignal.timeout(3_000),
+      });
+      results.push({
+        name: svc.name,
+        port: svc.port,
+        status: resp.ok ? 'up' : 'down',
+        label: svc.label,
+      });
+    } catch {
+      results.push({
+        name: svc.name,
+        port: svc.port,
+        status: 'down',
+        label: svc.label,
+      });
+    }
+  }
+
+  return results;
+}
+
 // ═════════════════════════════════════════════════════════════════════
 //  Service Control (ADMIN only — requires JWT token)
 // ═════════════════════════════════════════════════════════════════════

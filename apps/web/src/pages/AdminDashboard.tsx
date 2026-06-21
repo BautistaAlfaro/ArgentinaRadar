@@ -10,7 +10,11 @@
  */
 
 import { lazy, Suspense, useState } from 'react';
-import { useKPIs, useDailyStats, useSystemMetrics, useRevenue } from '../hooks/useAdminData';
+import { useKPIs, useDailyStats, useSystemMetrics, useRevenue, usePipelineStats, useServiceHealth } from '../hooks/useAdminData';
+import { PipelineView } from '../components/admin/PipelineView';
+import { CategoryChart } from '../components/admin/CategoryChart';
+import { ActivityFeed } from '../components/admin/ActivityFeed';
+import { ServiceCards } from '../components/admin/ServiceCards';
 
 // Lazy-load admin components to code-split heavy chart libraries (recharts)
 const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
@@ -26,6 +30,7 @@ const ProtestPanel = lazy(() => import('../components/admin/ProtestPanel').then(
 const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').then(m => ({ default: m.PoliticalRadar })));
 const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
 const ServiceControlPanel = lazy(() => import('../components/admin/ServiceControlPanel').then(m => ({ default: m.ServiceControlPanel })));
+const SourceManager = lazy(() => import('../components/admin/SourceManager').then(m => ({ default: m.SourceManager })));
 
 // ─── Suspense fallbacks ──────────────────────────────────────────
 const EMPTY_ARRAY: [] = [];
@@ -35,7 +40,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'overview' | 'briefing' | 'services';
+type Tab = 'overview' | 'briefing' | 'services' | 'sources';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -47,6 +52,7 @@ const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'overview', label: 'Overview', icon: '📊' },
   { value: 'briefing', label: 'Morning Briefing', icon: '☀️' },
   { value: 'services', label: 'Servicios', icon: '⚙️' },
+  { value: 'sources', label: 'Fuentes', icon: '📡' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -83,6 +89,8 @@ export function AdminDashboard() {
   const { data: dailyStats, isLoading: statsLoading } = useDailyStats(range);
   const { data: systemMetrics } = useSystemMetrics();
   const { data: revenue } = useRevenue();
+  const { data: pipelineStats, isLoading: pipelineLoading } = usePipelineStats();
+  const { data: serviceHealth, isLoading: healthLoading } = useServiceHealth();
 
   const isLoading = kpisLoading || statsLoading;
 
@@ -118,6 +126,7 @@ export function AdminDashboard() {
               {activeTab === 'overview' && 'System overview &amp; performance metrics'}
               {activeTab === 'briefing' && 'Nightly digest &amp; today\'s predictions'}
               {activeTab === 'services' && 'Start, stop &amp; monitor all backend services'}
+              {activeTab === 'sources' && 'Manage RSS &amp; scrape news sources'}
             </p>
           </div>
 
@@ -229,6 +238,31 @@ export function AdminDashboard() {
               </div>
             </Suspense>
 
+            {/* ── Pipeline Status ────────────────────────────────────── */}
+            <PipelineView
+              pipeline={pipelineStats?.pipeline ?? null}
+              approvalQueue={pipelineStats?.approvalQueue ?? null}
+              isLoading={pipelineLoading}
+            />
+
+            {/* ── Pipeline Grid: Category Breakdown + Service Health ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <CategoryChart
+                categories={pipelineStats?.categories ?? null}
+                isLoading={pipelineLoading}
+              />
+              <ServiceCards
+                services={serviceHealth ?? null}
+                isLoading={healthLoading}
+              />
+            </div>
+
+            {/* ── Recent Activity ────────────────────────────────────── */}
+            <ActivityFeed
+              items={pipelineStats?.recent ?? null}
+              isLoading={pipelineLoading}
+            />
+
             {/* ── Charts Grid ────────────────────────────────────────── */}
             <Suspense fallback={<LoadingSkeleton className="h-80" />}>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -296,6 +330,14 @@ export function AdminDashboard() {
             <div>
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <ServiceControlPanel />
+              </Suspense>
+            </div>
+          )}
+
+          {activeTab === 'sources' && (
+            <div>
+              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
+                <SourceManager />
               </Suspense>
             </div>
           )}

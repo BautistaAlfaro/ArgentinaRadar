@@ -116,7 +116,7 @@ export async function publishArticle(
       // Also post to Bluesky (non-critical — never fail the pipeline)
       if (config.bluesky.enabled && config.bluesky.password) {
         try {
-          const bsky = await postToBluesky(tweetText, config);
+          const bsky = await postToBluesky(tweetText, config, { articleUrl: url });
           console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
           await sleep(1000); // rate limit courtesy delay
         } catch (err) {
@@ -190,12 +190,13 @@ export async function publishText(
   articleId: string,
   text: string,
   imageUrl?: string,
+  url?: string,
 ): Promise<PublishResult> {
   // ── 0. If Twitter not configured, post to Bluesky directly ───────
   const twitterConfigured = !!(config.twitter.apiKey && config.twitter.accessToken);
   if (!twitterConfigured && config.bluesky.enabled && config.bluesky.password) {
     try {
-      const bsky = await postToBluesky(text, config, imageUrl);
+      const bsky = await postToBluesky(text, config, { imageUrl, articleUrl: url });
       console.log(`[publisher] ✅ Bluesky (no Twitter): ${bsky.uri}`);
       return { success: true, tweetId: 'bsky' };
     } catch (err) {
@@ -269,7 +270,7 @@ export async function publishText(
       // Also post to Bluesky (non-critical — never fail the pipeline)
       if (config.bluesky.enabled && config.bluesky.password) {
         try {
-          const bsky = await postToBluesky(text, config);
+          const bsky = await postToBluesky(text, config, { imageUrl, articleUrl: url });
           console.log(`[publisher] ✅ Bluesky: ${bsky.uri}`);
           await sleep(1000); // rate limit courtesy delay
         } catch (err) {

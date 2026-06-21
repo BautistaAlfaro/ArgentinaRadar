@@ -112,6 +112,27 @@
       "url": "https://feeds.feedburner.com/eldestape",
       "category": "sociedad",
       "rateLimitMs": 5000
+    },
+    {
+      "name": "minutouno",
+      "type": "rss",
+      "url": "https://www.minutouno.com/arc/outboundfeeds/rss/",
+      "category": "sociedad",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "iprofesional",
+      "type": "rss",
+      "url": "https://www.iprofesional.com/arc/outboundfeeds/rss/",
+      "category": "economia",
+      "rateLimitMs": 5000
+    },
+    {
+      "name": "baenegocios",
+      "type": "rss",
+      "url": "https://www.baenegocios.com/arc/outboundfeeds/rss/",
+      "category": "economia",
+      "rateLimitMs": 5000
     }
   ]
 }

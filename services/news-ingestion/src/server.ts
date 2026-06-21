@@ -80,6 +80,65 @@ export function startServer(
     }
   });
 
+  // ─── GET /api/pipeline/stats — pipeline dashboard stats ──────
+  app.get('/api/pipeline/stats', (_req, res) => {
+    try {
+      const db = getDb();
+
+      // Pipeline status counts
+      const pipelineStatuses = db.prepare(
+        "SELECT status, COUNT(*) as count FROM news_items GROUP BY status"
+      ).all() as Array<{ status: string; count: number }>;
+
+      const pipeline: Record<string, number> = {};
+      for (const row of pipelineStatuses) {
+        pipeline[row.status] = row.count;
+      }
+
+      // Category distribution
+      const categories = db.prepare(
+        "SELECT category, COUNT(*) as count FROM news_items WHERE category IS NOT NULL AND category != '' GROUP BY category ORDER BY count DESC"
+      ).all() as Array<{ category: string; count: number }>;
+
+      // Approval queue status
+      const approvalStatuses = db.prepare(
+        "SELECT status, COUNT(*) as count FROM approval_queue GROUP BY status"
+      ).all() as Array<{ status: string; count: number }>;
+
+      const approvalQueue: Record<string, number> = {};
+      for (const row of approvalStatuses) {
+        approvalQueue[row.status] = row.count;
+      }
+
+      // Recent 20 articles
+      const recent = db.prepare(
+        "SELECT id, title, source, category, status, published_at, ingested_at FROM news_items ORDER BY ingested_at DESC LIMIT 20"
+      ).all() as Array<{
+        id: string; title: string; source: string;
+        category: string | null; status: string;
+        published_at: string | null; ingested_at: string;
+      }>;
+
+      res.json({
+        pipeline,
+        categories,
+        approvalQueue,
+        recent: recent.map((r) => ({
+          id: r.id,
+          title: r.title,
+          source: r.source,
+          category: r.category,
+          status: r.status,
+          publishedAt: r.published_at,
+          ingestedAt: r.ingested_at,
+        })),
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch pipeline stats', details: String(err) });
+    }
+  });
+
   // ─── GET /health — service health ─────────────────────────────
   app.get('/health', (_req, res) => {
     try {
@@ -108,9 +167,10 @@ export function startServer(
 
   const server = app.listen(PORT, () => {
     console.log(`[server] REST API listening on http://localhost:${PORT}`);
-    console.log(`[server]   GET /api/news     — paginated news list`);
-    console.log(`[server]   GET /api/news/:id  — single article`);
-    console.log(`[server]   GET /health        — service health`);
+    console.log(`[server]   GET /api/news            — paginated news list`);
+    console.log(`[server]   GET /api/news/:id         — single article`);
+    console.log(`[server]   GET /api/pipeline/stats   — pipeline dashboard stats`);
+    console.log(`[server]   GET /health               — service health`);
   });
 
   return server;
