@@ -118,12 +118,12 @@ function Semaphore({ status }: { status: 'green' | 'yellow' | 'red' }) {
 
 // ── Stat card ──────────────────────────────────────────────────────────
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({ label, value, accent }: { label: string; value: number | null; accent: string }) {
   return (
     <div className={`rounded-lg border border-slate-700/50 ${accent} p-3`}>
       <p className="text-xs text-slate-400 font-medium">{label}</p>
       <p className="text-xl font-bold text-white tabular-nums mt-1">
-        {value.toLocaleString()}
+        {value != null ? value.toLocaleString() : '—'}
       </p>
     </div>
   );
