@@ -1178,7 +1178,7 @@ async def approval_loop() -> None:
 async def _send_pending_queue_approvals() -> None:
     """Check approval_queue for pending entries and send to Telegram."""
     try:
-        conn = _get_read_conn()
+        conn = _get_writable_conn()
         pending = conn.execute(
             "SELECT id, article_id, draft_tweet, image_url, image_prompt "
             "FROM approval_queue "
@@ -1232,4 +1232,4 @@ async def _send_pending_queue_approvals() -> None:
                 print(f"[approval] ⚠️ Failed to send approval for {article_id[:8]}: {e}")
                 
     except Exception as exc:
-        print(f"[approval] ⚠️ Error in _send_pending_queue_approvals: {exc}")
+        print(f"[approval] Error in _send_pending_queue_approvals: {exc}")

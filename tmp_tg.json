@@ -1,0 +1,1 @@
+{ "chat_id": 1923443777, "text": "📰 *Los muertos que pisamos sin saberlo*\n\n📝 Empleo formal y salario minimo en Argentina\n\n📌 c5n\n\n_Aproba o descarta esta noticia_", "parse_mode": "Markdown", "reply_markup": { "inline_keyboard": [[ {"text": "✅ Aprobar", "callback_data": "approve:test" }, {"text": "❌ Descartar", "callback_data": "reject:test"} ]] } }
