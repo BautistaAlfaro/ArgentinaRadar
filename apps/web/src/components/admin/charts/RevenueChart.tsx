@@ -4,9 +4,36 @@
  * Shows daily revenue + MRR trend line, formatted in USD.
  */
 
-import { motion } from 'framer-motion';
-import {
-  LineChart,
+import { LazyMotion, domAnimation, m } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import type { RevenuePoint } from '../../../services/adminApi';
+
+// Hoist Intl formatter to module scope
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+});
+
+interface RevenueChartProps {
+  data: RevenuePoint[];
+}
+
+function formatUSD(amount: number): string {
+  return usdFormatter.format(amount);
+}
+
+export function RevenueChart({ data }: RevenueChartProps) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
+  if (!R) return null;
+
+  const {
+    LineChart,
   Line,
   Area,
   XAxis,
@@ -14,25 +41,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ComposedChart,
-} from 'recharts';
-import type { RevenuePoint } from '../../../services/adminApi';
-
-interface RevenueChartProps {
-  data: RevenuePoint[];
-}
-
-function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
-
-export function RevenueChart({ data }: RevenueChartProps) {
+  ComposedChart
+  } = R;
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.3 }}
@@ -130,6 +143,12 @@ export function RevenueChart({ data }: RevenueChartProps) {
           MRR Trend
         </span>
       </div>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
+
+
+
+
+

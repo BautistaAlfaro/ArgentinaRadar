@@ -7,7 +7,7 @@
  * Refreshes every 30 seconds (matching the server-side schedule).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { FlightData } from '@shared/types';
@@ -34,7 +34,6 @@ interface Props {
 export function FlightLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('flights');
-  const prevActiveRef = useRef(isActive);
 
   const { data } = useLayerData<FlightResponse>(
     'http://localhost:3007/api/alerts/flights',
@@ -44,15 +43,8 @@ export function FlightLayer({ globe }: Props) {
 
   // Render HTML elements on globe
   useEffect(() => {
-    const prevActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
 
-    if (!isActive) {
-      if (prevActive) {
-        globe.htmlElementsData([]);
-      }
-      return;
-    }
+    if (!isActive) return;
 
     if (flights.length === 0) return;
 
@@ -110,3 +102,4 @@ export function FlightLayer({ globe }: Props) {
 
   return null;
 }
+

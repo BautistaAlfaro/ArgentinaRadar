@@ -27,7 +27,7 @@ type ProvinceFeature = Feature<Polygon, ProvinceProperties>;
 
 interface Props {
   globe: any;
-  containerRef: RefObject<HTMLDivElement | null>;
+  containerRef: RefObject<HTMLElement | null>;
 }
 
 export function ProvinceGlobePopup({ globe, containerRef }: Props) {
@@ -147,7 +147,7 @@ export function ProvinceGlobePopup({ globe, containerRef }: Props) {
           onClick={clearProvinceSelection}
           className="absolute -top-2 -right-2 w-5 h-5 bg-slate-700 hover:bg-slate-600 rounded-full border border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer shadow-md"
           aria-label="Cerrar"
-        >
+         type="button">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
             <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
           </svg>
@@ -192,13 +192,13 @@ export function ProvinceGlobePopup({ globe, containerRef }: Props) {
 
         {/* Quick actions */}
         <div className="flex gap-1.5">
-          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-blue-600/60 hover:bg-blue-600/80 text-blue-100 rounded-md transition-colors cursor-pointer">
+          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-blue-600/60 hover:bg-blue-600/80 text-blue-100 rounded-md transition-colors cursor-pointer" type="button">
             Ver noticias
           </button>
-          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-emerald-600/60 hover:bg-emerald-600/80 text-emerald-100 rounded-md transition-colors cursor-pointer">
+          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-emerald-600/60 hover:bg-emerald-600/80 text-emerald-100 rounded-md transition-colors cursor-pointer" type="button">
             Ver economía
           </button>
-          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-amber-600/60 hover:bg-amber-600/80 text-amber-100 rounded-md transition-colors cursor-pointer">
+          <button className="flex-1 text-[10px] font-medium py-1.5 px-2 bg-amber-600/60 hover:bg-amber-600/80 text-amber-100 rounded-md transition-colors cursor-pointer" type="button">
             Ver alertas
           </button>
         </div>
@@ -206,3 +206,4 @@ export function ProvinceGlobePopup({ globe, containerRef }: Props) {
     </>
   );
 }
+

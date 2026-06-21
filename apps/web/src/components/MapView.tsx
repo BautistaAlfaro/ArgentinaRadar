@@ -32,7 +32,7 @@ const TEXTURE_BACKGROUND = '//unpkg.com/three-globe/example/img/night-sky.png';
 const TEXTURE_CLOUDS = 'https://threejs.org/examples/textures/planets/earth_clouds_1024.png';
 
 export function MapView() {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLButtonElement>(null);
   const globeRef = useRef<GlobeInstance | null>(null);
   const cloudMeshRef = useRef<THREE.Mesh | null>(null);
   const [globeReady, setGlobeReady] = useState(false);
@@ -235,13 +235,12 @@ export function MapView() {
   };
 
   return (
-    <div
+    <button
       ref={containerRef}
+      type="button"
       className="w-full h-full relative"
       style={{ minHeight: 0 }}
       onClick={handleContainerClick}
-      role="button"
-      tabIndex={0}
       onKeyDown={handleKeyDown}
       aria-label="Clear map selection"
     >
@@ -260,6 +259,6 @@ export function MapView() {
           <FlightLayer globe={globeRef.current} />
         </>
       )}
-    </div>
+    </button>
   );
 }

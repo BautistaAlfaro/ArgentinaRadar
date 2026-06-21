@@ -5,18 +5,8 @@
  * toggle visibility. Expects arbitrary metric key (cpu / memory).
  */
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { useState, useEffect } from 'react';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { SystemMetric } from '../../../services/adminApi';
 
 const SERVICE_COLORS = [
@@ -41,6 +31,11 @@ export function SystemHealthChart({
   dimension = 'cpu',
 }: SystemHealthChartProps) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
 
   // Build chart data: each entry = { index: number, serviceName: value, ... }
   const maxPoints = Math.max(...metrics.map((m) => m.cpuHistory.length));
@@ -65,8 +60,13 @@ export function SystemHealthChart({
   const unit = dimension === 'cpu' ? '%' : 'MB';
   const title = dimension === 'cpu' ? 'CPU Usage' : 'Memory Usage';
 
+  if (!R) return null;
+
+  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } = R;
+
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.4 }}
@@ -124,7 +124,7 @@ export function SystemHealthChart({
 
             <Legend
               wrapperStyle={{ fontSize: '11px', color: '#94a3b8', paddingTop: '8px' }}
-              onClick={(e) => toggleLine(e.value as string)}
+              onClick={(e: any) => toggleLine(e.value as string)}
             />
 
             {metrics.map((m, i) => (
@@ -144,6 +144,9 @@ export function SystemHealthChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
+
+

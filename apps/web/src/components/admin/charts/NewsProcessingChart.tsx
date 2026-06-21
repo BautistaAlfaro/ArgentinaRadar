@@ -5,17 +5,8 @@
  * with an interactive tooltip and framer-motion entrance.
  */
 
-import { motion } from 'framer-motion';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { useEffect, useState } from 'react';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { DailyStat } from '../../../services/adminApi';
 
 const STAGES = [
@@ -30,8 +21,28 @@ interface NewsProcessingChartProps {
 }
 
 export function NewsProcessingChart({ data }: NewsProcessingChartProps) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
+  if (!R) return null;
+
+  const {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    Legend,
+  } = R;
+
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.2 }}
@@ -108,6 +119,9 @@ export function NewsProcessingChart({ data }: NewsProcessingChartProps) {
           </AreaChart>
         </ResponsiveContainer>
       </div>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
+
+

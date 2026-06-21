@@ -9,7 +9,7 @@
  *   - 15s refresh interval
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { ProtestsResponse } from '../../services/api';
@@ -56,7 +56,6 @@ function formatTimeSince(startedAt: string): string {
 export function ProtestLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('protests');
-  const prevActiveRef = useRef(isActive);
 
   const { data } = useLayerData<ProtestsResponse>(
     'http://localhost:3008/api/events/protests?status=active',
@@ -66,15 +65,8 @@ export function ProtestLayer({ globe }: Props) {
 
   // Render HTML elements on globe
   useEffect(() => {
-    const prevActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
 
-    if (!isActive) {
-      if (prevActive) {
-        globe.htmlElementsData([]);
-      }
-      return;
-    }
+    if (!isActive) return;
 
     if (protests.length === 0) return;
 
@@ -158,3 +150,4 @@ export function ProtestLayer({ globe }: Props) {
 
   return null;
 }
+

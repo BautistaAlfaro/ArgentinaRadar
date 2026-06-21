@@ -63,7 +63,7 @@ function ProtestCard({ protest, onSelect }: ProtestCardProps) {
   const statusColor = STATUS_COLORS[protest.status] ?? STATUS_COLORS.active;
 
   return (
-    <button
+    <button type="button"
       onClick={() => onSelect(protest)}
       className="w-full text-left p-3 rounded-lg border border-slate-700/50 bg-slate-800/40 hover:bg-slate-700/40 transition-colors cursor-pointer"
     >
@@ -198,3 +198,5 @@ export function ProtestPanel({ onFlyTo }: Props) {
     </div>
   );
 }
+
+

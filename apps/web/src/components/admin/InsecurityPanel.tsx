@@ -56,7 +56,7 @@ function DetailView({ stat, onClose, period }: DetailViewProps) {
         <button
           onClick={onClose}
           className="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
-        >
+         type="button">
           ✕ Cerrar
         </button>
       </div>
@@ -141,7 +141,7 @@ export function InsecurityPanel() {
         {/* Category filter */}
         <div className="flex flex-wrap gap-1">
           {CRIME_CATEGORIES.map((cat) => (
-            <button
+            <button type="button"
               key={cat.value}
               onClick={() => setSelectedCategory(cat.value)}
               className={`px-2 py-0.5 text-xs rounded-full transition-colors cursor-pointer ${
@@ -158,7 +158,7 @@ export function InsecurityPanel() {
         {/* Period toggle */}
         <div className="flex rounded-lg border border-slate-700/50 bg-slate-800/60 p-0.5 w-fit">
           {(['7d', '30d'] as const).map((opt) => (
-            <button
+            <button type="button"
               key={opt}
               onClick={() => setPeriod(opt)}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
@@ -206,7 +206,7 @@ export function InsecurityPanel() {
 
               return (
                 <div key={stat.province}>
-                  <button
+                  <button type="button"
                     onClick={() => handleProvinceClick(stat)}
                     className={`w-full text-left p-2 rounded-md transition-colors cursor-pointer hover:bg-slate-700/40 ${
                       isSelected ? 'bg-slate-700/40' : ''
@@ -256,3 +256,5 @@ export function InsecurityPanel() {
     </div>
   );
 }
+
+

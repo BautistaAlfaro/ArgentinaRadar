@@ -38,7 +38,7 @@ export function Layout({ header, sidebar, map, ticker }: LayoutProps) {
           onClick={toggleSidebar}
           className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-6 h-12 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/50 rounded-r-md flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
           aria-label={sidebarCollapsed ? 'Abrir panel lateral' : 'Cerrar panel lateral'}
-        >
+         type="button">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
@@ -60,3 +60,4 @@ export function Layout({ header, sidebar, map, ticker }: LayoutProps) {
     </div>
   );
 }
+

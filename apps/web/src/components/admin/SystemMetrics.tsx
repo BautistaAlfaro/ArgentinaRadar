@@ -8,8 +8,8 @@
  * - Last seen timestamp
  */
 
-import { motion } from 'framer-motion';
-import { Area, AreaChart, ResponsiveContainer } from 'recharts';
+import { LazyMotion, domAnimation, m as motion } from 'framer-motion';
+import { useState, useEffect } from 'react';
 import type { SystemMetric } from '../../services/adminApi';
 
 interface SystemMetricsProps {
@@ -23,7 +23,17 @@ const STATUS_CONFIG = {
 } as const;
 
 function SparklineMini({ data, color }: { data: number[]; color: string }) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
   const chartData = data.map((v, i) => ({ i, v }));
+
+  if (!R) return <div className="h-8 w-20 bg-slate-700/40 rounded animate-pulse" />;
+
+  const { ResponsiveContainer, AreaChart, Area } = R;
   return (
     <div className="h-8 w-20">
       <ResponsiveContainer width="100%" height="100%">
@@ -74,6 +84,7 @@ const item = {
 
 export function SystemMetrics({ metrics }: SystemMetricsProps) {
   return (
+    <LazyMotion features={domAnimation}>
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -144,5 +155,6 @@ export function SystemMetrics({ metrics }: SystemMetricsProps) {
         })}
       </motion.div>
     </motion.div>
+    </LazyMotion>
   );
 }

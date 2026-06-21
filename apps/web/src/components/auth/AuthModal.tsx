@@ -5,11 +5,10 @@
  * and smooth framer-motion entry/exit.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { LoginForm } from './LoginForm';
 import { RegisterForm } from './RegisterForm';
-import { useAuthStore } from '../../stores/authStore';
 
 type AuthView = 'login' | 'register';
 
@@ -38,25 +37,15 @@ const panelVariants = {
 
 export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalProps) {
   const [view, setView] = useState<AuthView>(initialView);
-  const clearError = useAuthStore((s) => s.clearError);
 
-  // Reset view and error when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setView(initialView);
-      clearError();
-    }
-  }, [isOpen, initialView, clearError]);
-
-  // Close on Escape key
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose],
-  );
+  // Close on Escape key — use ref pattern to avoid re-subscribing
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
@@ -65,13 +54,14 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]);
 
   return (
+    <LazyMotion features={domAnimation}>
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          key="auth-modal-backdrop"
+        <m.div
+          key={`modal-${initialView}`}
           variants={backdropVariants}
           initial="hidden"
           animate="visible"
@@ -82,7 +72,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
             if (e.target === e.currentTarget) onClose();
           }}
         >
-          <motion.div
+          <m.div
             key="auth-modal-panel"
             variants={panelVariants}
             initial="hidden"
@@ -93,6 +83,7 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
           >
             {/* Close button */}
             <button
+              type="button"
               onClick={onClose}
               className="absolute top-4 right-4 p-1 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-700/50 cursor-pointer"
               aria-label="Cerrar"
@@ -108,9 +99,11 @@ export function AuthModal({ isOpen, onClose, initialView = 'login' }: AuthModalP
             ) : (
               <RegisterForm onSuccess={onClose} onSwitchToLogin={() => setView('login')} />
             )}
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
+    </LazyMotion>
   );
 }
+

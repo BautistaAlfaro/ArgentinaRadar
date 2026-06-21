@@ -101,7 +101,7 @@ function TrendingRow({ entity }: TrendingRowProps) {
     <button
       onClick={handleClick}
       className="w-full text-left p-3 border-b border-slate-700/30 hover:bg-slate-700/40 transition-colors cursor-pointer group focus:outline-none focus:bg-slate-700/40"
-    >
+     type="button">
       {/* Entity name + type badge */}
       <div className="flex items-center gap-2 mb-1.5">
         <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors truncate">
@@ -144,3 +144,4 @@ function TrendingRow({ entity }: TrendingRowProps) {
     </button>
   );
 }
+

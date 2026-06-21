@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { MapView } from './components/MapView';
@@ -11,43 +12,51 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { UserMenu } from './components/auth/UserMenu';
 import { useAuthStore } from './stores/authStore';
 
-function MainLayout() {
+function Header() {
   const role = useAuthStore((s) => s.user?.role ?? null);
+  return (
+    <header className="flex items-center h-14 px-6 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 shrink-0">
+      <Link to="/" className="hover:opacity-80 transition-opacity">
+        <h1 className="text-xl font-bold tracking-tight text-white">
+          ArgentinaRadar
+        </h1>
+      </Link>
+      <span className="ml-3 text-xs text-slate-400 font-mono">
+        Monitoreo en vivo
+      </span>
+      <nav className="ml-auto flex items-center gap-3">
+        {role === 'ADMIN' && (
+          <Link
+            to="/admin"
+            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            Admin
+          </Link>
+        )}
+        <UserMenu />
+      </nav>
+    </header>
+  );
+}
+
+function MainLayout() {
+  const sidebar = useMemo(() => (
+    <aside className="w-[320px] shrink-0 bg-slate-800/60 border-r border-slate-700/50 overflow-y-auto">
+      <Sidebar />
+    </aside>
+  ), []);
+
+  const map = useMemo(() => <MapView />, []);
+  const ticker = useMemo(() => <EconomicTicker />, []);
 
   return (
     <>
       <ArgentinaTitle />
       <Layout
-        header={
-          <header className="flex items-center h-14 px-6 bg-slate-800/80 backdrop-blur-sm border-b border-slate-700/50 shrink-0">
-            <Link to="/" className="hover:opacity-80 transition-opacity">
-              <h1 className="text-xl font-bold tracking-tight text-white">
-                ArgentinaRadar
-              </h1>
-            </Link>
-            <span className="ml-3 text-xs text-slate-400 font-mono">
-              Monitoreo en vivo
-            </span>
-            <nav className="ml-auto flex items-center gap-3">
-              {role === 'ADMIN' && (
-                <Link
-                  to="/admin"
-                  className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  Admin
-                </Link>
-              )}
-              <UserMenu />
-            </nav>
-          </header>
-        }
-        sidebar={
-          <aside className="w-[320px] shrink-0 bg-slate-800/60 border-r border-slate-700/50 overflow-y-auto">
-            <Sidebar />
-          </aside>
-        }
-        map={<MapView />}
-        ticker={<EconomicTicker />}
+        header={<Header />}
+        sidebar={sidebar}
+        map={map}
+        ticker={ticker}
       />
       <ProvinceDetailPanel />
     </>

@@ -187,7 +187,7 @@ function ArticleCard({ article, onClick }: ArticleCardProps) {
   const timeAgo = getTimeAgo(article.publishedAt);
 
   return (
-    <button
+    <button type="button"
       onClick={() => onClick(article)}
       className="w-full text-left p-3 border-b border-slate-700/30 hover:bg-slate-700/40 transition-colors cursor-pointer group focus:outline-none focus:bg-slate-700/40"
     >
@@ -243,3 +243,5 @@ function getTimeAgo(dateStr: string): string {
 
   return new Date(dateStr).toLocaleDateString('es-AR');
 }
+
+

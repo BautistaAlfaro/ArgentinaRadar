@@ -86,14 +86,17 @@ export function NewsMarkers({ globe, articles }: Props) {
     }
 
     // Filter articles that have valid location data
-    const markers: MarkerDatum[] = articles
-      .filter((a) => a.location && a.location.lat != null && a.location.lng != null)
-      .map((a) => ({
-        article: a,
-        lat: a.location!.lat,
-        lng: a.location!.lng,
-        category: a.category,
-      }));
+    const markers: MarkerDatum[] = articles.reduce<MarkerDatum[]>((acc, a) => {
+      if (a.location && a.location.lat != null && a.location.lng != null) {
+        acc.push({
+          article: a,
+          lat: a.location.lat,
+          lng: a.location.lng,
+          category: a.category,
+        });
+      }
+      return acc;
+    }, []);
 
     if (markers.length === 0) return;
 

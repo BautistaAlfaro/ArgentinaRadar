@@ -43,7 +43,7 @@ export function UserMenu() {
   if (!isAuthenticated || !user) {
     return (
       <>
-        <button
+        <button type="button"
           onClick={() => setShowAuthModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/40 rounded-lg transition-colors cursor-pointer"
         >
@@ -66,7 +66,7 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
+      <button type="button"
         onClick={() => setShowDropdown((prev) => !prev)}
         className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-700/40 transition-colors cursor-pointer"
       >
@@ -115,7 +115,7 @@ export function UserMenu() {
           <button
             disabled
             className="w-full px-3 py-2 text-left text-xs text-slate-400 hover:text-slate-300 hover:bg-slate-700/30 transition-colors cursor-not-allowed flex items-center gap-2"
-          >
+           type="button">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
               <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
             </svg>
@@ -126,7 +126,7 @@ export function UserMenu() {
           <div className="border-t border-slate-700/30 my-1" />
 
           {/* Logout */}
-          <button
+          <button type="button"
             onClick={() => {
               setShowDropdown(false);
               logout();
@@ -152,3 +152,5 @@ export function UserMenu() {
     </div>
   );
 }
+
+

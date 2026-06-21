@@ -10,7 +10,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 import { useRadarStore } from '../../stores/radarStore';
 import { useEvents } from '../../hooks/useEvents';
 import { useNews } from '../../hooks/useNews';
@@ -72,7 +72,8 @@ export function ProvinceDetailPanel() {
   return (
     <AnimatePresence>
       {selectedProvince && (
-        <motion.aside
+        <LazyMotion features={domAnimation}>
+        <m.aside
           key="province-detail-panel"
           initial={{ x: 380 }}
           animate={{ x: 0 }}
@@ -90,7 +91,7 @@ export function ProvinceDetailPanel() {
                 onClick={handleClear}
                 className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer"
                 aria-label="Cerrar panel"
-              >
+               type="button">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                   <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
                 </svg>
@@ -129,19 +130,19 @@ export function ProvinceDetailPanel() {
 
             {/* Quick action buttons */}
             <div className="flex gap-2 mt-3">
-              <button
+              <button type="button"
                 onClick={() => setActiveTab('events')}
                 className="flex-1 text-xs font-medium py-1.5 px-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white rounded-md transition-colors cursor-pointer"
               >
                 Ver noticias
               </button>
-              <button
+              <button type="button"
                 onClick={() => setActiveTab('economy')}
                 className="flex-1 text-xs font-medium py-1.5 px-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white rounded-md transition-colors cursor-pointer"
               >
                 Ver economía
               </button>
-              <button
+              <button type="button"
                 onClick={() => setActiveTab('alerts')}
                 className="flex-1 text-xs font-medium py-1.5 px-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 hover:text-white rounded-md transition-colors cursor-pointer"
               >
@@ -155,7 +156,7 @@ export function ProvinceDetailPanel() {
             {TABS.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
-                <button
+                <button type="button"
                   key={tab.id}
                   role="tab"
                   aria-selected={isActive}
@@ -277,8 +278,11 @@ export function ProvinceDetailPanel() {
               </div>
             )}
           </div>
-        </motion.aside>
+        </m.aside>
+        </LazyMotion>
       )}
     </AnimatePresence>
   );
 }
+
+

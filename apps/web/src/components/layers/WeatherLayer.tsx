@@ -10,7 +10,7 @@
  * Refreshes every 30 minutes (matching the server-side schedule).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { WeatherAlert } from '@shared/types';
@@ -35,7 +35,6 @@ interface Props {
 export function WeatherLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('weather');
-  const prevActiveRef = useRef(isActive);
 
   const { data } = useLayerData<WeatherAlertResponse>(
     'http://localhost:3007/api/alerts/weather',
@@ -45,15 +44,8 @@ export function WeatherLayer({ globe }: Props) {
 
   // Render polygons on globe
   useEffect(() => {
-    const prevActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
 
-    if (!isActive) {
-      if (prevActive) {
-        globe.polygonsData([]);
-      }
-      return;
-    }
+    if (!isActive) return;
 
     // Build polygon data from alerts
     const polygonData: PolygonDatum[] = alerts.flatMap((alert) => {
@@ -121,3 +113,4 @@ export function WeatherLayer({ globe }: Props) {
 
   return null;
 }
+

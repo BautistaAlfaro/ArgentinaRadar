@@ -90,12 +90,15 @@ export function BordersLayer({ globe }: Props) {
     }
 
     // ─── 1. South America country borders as dashed paths ───────────
-    const paths: PathDatum[] = countries.features
-      .filter((f) => f.geometry?.coordinates?.[0])
-      .map((f) => ({
-        feature: f,
-        coordinates: polygonToPathPoints(f.geometry),
-      }));
+    const paths: PathDatum[] = countries.features.reduce<PathDatum[]>((acc, f) => {
+      if (f.geometry?.coordinates?.[0]) {
+        acc.push({
+          feature: f,
+          coordinates: polygonToPathPoints(f.geometry),
+        });
+      }
+      return acc;
+    }, []);
 
     if (paths.length > 0) {
       globe

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { FeatureCollection, Feature, Polygon } from 'geojson';
 import { useRadarStore } from '../../stores/radarStore';
 import provincesData from '@shared/geo/argentina-provinces.geojson';
@@ -26,15 +26,19 @@ export function ProvinceBoundaries({ globe }: Props) {
   const selectedProvinceRef = useRef(selectedProvince);
   const featuresRef = useRef<ProvinceFeature[]>([]);
 
-  // Pulse animation for selected province
-  const [pulseOn, setPulseOn] = useState(false);
+  // Pulse animation for selected province — useRef to avoid re-renders
+  const pulseOnRef = useRef(false);
 
   useEffect(() => {
     if (!selectedProvince) {
-      setPulseOn(false);
+      pulseOnRef.current = false;
+      redrawRef.current();
       return;
     }
-    const timer = setInterval(() => setPulseOn((p) => !p), 800);
+    const timer = setInterval(() => {
+      pulseOnRef.current = !pulseOnRef.current;
+      redrawRef.current();
+    }, 800);
     return () => clearInterval(timer);
   }, [selectedProvince]);
 
@@ -48,7 +52,7 @@ export function ProvinceBoundaries({ globe }: Props) {
 
       const sp = selectedProvinceRef.current;
       if (sp && d.properties.name === sp) {
-        return pulseOn
+        return pulseOnRef.current
           ? 'rgba(255, 210, 60, 0.7)'  // Brighter pulse
           : 'rgba(255, 210, 60, 0.45)'; // Dimmer pulse
       }
@@ -75,7 +79,7 @@ export function ProvinceBoundaries({ globe }: Props) {
     if (isActive) {
       redrawRef.current();
     }
-  }, [pulseOn, selectedProvince, isActive]);
+  }, [selectedProvince, isActive]);
 
   useEffect(() => {
     const data = provincesData as unknown as FeatureCollection<Polygon, ProvinceProperties>;

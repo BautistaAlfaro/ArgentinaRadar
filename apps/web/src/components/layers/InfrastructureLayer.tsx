@@ -89,12 +89,15 @@ export function InfrastructureLayer({ globe }: Props) {
     }
 
     // ─── Gasoductos as paths (semi-transparent yellow lines) ───
-    const gasoductos: PathDatum[] = data.features
-      .filter((f) => f.properties.type === 'gasoducto')
-      .map((f) => ({
-        feature: f,
-        coordinates: (f.geometry as LineGeometry).coordinates as [number, number][],
-      }));
+    const gasoductos: PathDatum[] = data.features.reduce<PathDatum[]>((acc, f) => {
+      if (f.properties.type === 'gasoducto') {
+        acc.push({
+          feature: f,
+          coordinates: (f.geometry as LineGeometry).coordinates as [number, number][],
+        });
+      }
+      return acc;
+    }, []);
 
     if (gasoductos.length > 0) {
       globe
@@ -120,16 +123,17 @@ export function InfrastructureLayer({ globe }: Props) {
     }
 
     // ─── Puertos and Represas as HTML elements ─────────────────
-    const points: PointDatum[] = data.features
-      .filter((f) => f.properties.type === 'puerto' || f.properties.type === 'represa')
-      .map((f) => {
+    const points: PointDatum[] = data.features.reduce<PointDatum[]>((acc, f) => {
+      if (f.properties.type === 'puerto' || f.properties.type === 'represa') {
         const coords = (f.geometry as PointGeometry).coordinates;
-        return {
+        acc.push({
           feature: f,
           lat: coords[1],
           lng: coords[0],
-        };
-      });
+        });
+      }
+      return acc;
+    }, []);
 
     if (points.length > 0) {
       globe

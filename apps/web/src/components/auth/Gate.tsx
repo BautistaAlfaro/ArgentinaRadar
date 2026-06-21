@@ -85,7 +85,7 @@ export function Gate({ requiredRole, children, fallback }: GateProps) {
             )}
           </p>
 
-          <button
+          <button type="button"
             onClick={() => setShowAuthModal(true)}
             className="px-6 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors cursor-pointer"
           >
@@ -98,3 +98,5 @@ export function Gate({ requiredRole, children, fallback }: GateProps) {
     </>
   );
 }
+
+

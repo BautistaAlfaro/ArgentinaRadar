@@ -10,7 +10,7 @@
  * Refreshes every 60 minutes (matching the server-side schedule).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { Earthquake } from '@shared/types';
@@ -30,7 +30,6 @@ interface Props {
 export function EarthquakeLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('earthquakes');
-  const prevActiveRef = useRef(isActive);
 
   const { data } = useLayerData<{ earthquakes: Earthquake[] }>(
     `${ALERTS_API}/api/alerts/earthquakes`,
@@ -40,15 +39,7 @@ export function EarthquakeLayer({ globe }: Props) {
 
   // Render points on globe
   useEffect(() => {
-    const prevActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
-
-    if (!isActive) {
-      if (prevActive) {
-        globe.pointsData([]);
-      }
-      return;
-    }
+    if (!isActive) return;
 
     if (earthquakes.length === 0) return;
 

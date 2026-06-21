@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ function Semaphore({ status }: { status: 'green' | 'yellow' | 'red' }) {
 
   return (
     <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${c.bg}`}>
-      <motion.span
+      <m.span
         animate={{ scale: [1, 1.3, 1] }}
         transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
         className={`w-2.5 h-2.5 rounded-full ${c.dot}`}
@@ -191,41 +191,45 @@ export function MorningBriefing() {
   // ── Loading state ──────────────────────────────────────────────────
   if (loading) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-5"
-      >
-        <Skeleton />
-      </motion.div>
+      <LazyMotion features={domAnimation}>
+        <m.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-5"
+        >
+          <Skeleton />
+        </m.div>
+      </LazyMotion>
     );
   }
 
   // ── Error / unavailable state ──────────────────────────────────────
   if (error || (briefing && !briefing.available)) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8 text-center"
-      >
-        <div className="max-w-md mx-auto">
-          <div className="text-4xl mb-4 text-slate-600">☀️</div>
-          <h2 className="text-lg font-semibold text-slate-300 mb-2">
-            Morning Briefing
-          </h2>
-          <p className="text-sm text-slate-500 mb-4">
-            {error ?? 'No nightly report available yet. The first digest will be generated at 02:00 ART.'}
-          </p>
-          <button
-            onClick={fetchData}
-            className="px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors cursor-pointer"
-            aria-label="Retry briefing"
-          >
-            Retry
-          </button>
-        </div>
-      </motion.div>
+      <LazyMotion features={domAnimation}>
+        <m.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-slate-700/50 bg-slate-800/60 p-8 text-center"
+        >
+          <div className="max-w-md mx-auto">
+            <div className="text-4xl mb-4 text-slate-600">☀️</div>
+            <h2 className="text-lg font-semibold text-slate-300 mb-2">
+              Morning Briefing
+            </h2>
+            <p className="text-sm text-slate-500 mb-4">
+              {error ?? 'No nightly report available yet. The first digest will be generated at 02:00 ART.'}
+            </p>
+            <button
+              onClick={fetchData}
+              className="px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors cursor-pointer"
+              aria-label="Retry briefing"
+             type="button">
+              Retry
+            </button>
+          </div>
+        </m.div>
+      </LazyMotion>
     );
   }
 
@@ -236,7 +240,8 @@ export function MorningBriefing() {
     { articlesIngested: 0, eventsDetected: 0, tweetsPublished: 0 };
 
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -264,7 +269,7 @@ export function MorningBriefing() {
           className="p-2 text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-700/60 cursor-pointer"
           title="Refresh"
           aria-label="Refresh briefing data"
-        >
+         type="button">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
             <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
           </svg>
@@ -279,7 +284,7 @@ export function MorningBriefing() {
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={briefing?.generatedAt ?? 'empty'}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -308,7 +313,7 @@ export function MorningBriefing() {
               </h3>
               <div className="space-y-2">
                 {briefing.digest.topEvents.slice(0, 5).map((event, i) => (
-                  <motion.div
+                  <m.div
                     key={event.id ?? i}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -338,7 +343,7 @@ export function MorningBriefing() {
                         </span>
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </section>
@@ -352,7 +357,7 @@ export function MorningBriefing() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {briefing.predictions.slice(0, 6).map((pred, i) => (
-                  <motion.div
+                  <m.div
                     key={pred.entityName ?? i}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -376,7 +381,7 @@ export function MorningBriefing() {
                     <p className="text-[10px] text-slate-500 leading-relaxed line-clamp-2">
                       {pred.reason}
                     </p>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             </section>
@@ -476,8 +481,10 @@ export function MorningBriefing() {
           <div className="text-[10px] text-slate-600 text-center pt-2 border-t border-slate-700/30">
             Auto-refreshes every 60s · Data from nightly jobs (01:00–05:30 ART)
           </div>
-        </motion.div>
+        </m.div>
       </AnimatePresence>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
+

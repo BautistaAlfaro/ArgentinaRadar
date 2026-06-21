@@ -7,7 +7,7 @@
  * Refreshes every 3 hours (matching the server-side schedule).
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { FireHotspot } from '@shared/types';
@@ -34,7 +34,6 @@ interface Props {
 export function FireLayer({ globe }: Props) {
   const activeLayers = useRadarStore((s) => s.activeLayers);
   const isActive = activeLayers.has('fires');
-  const prevActiveRef = useRef(isActive);
 
   const { data } = useLayerData<{ fires: FireHotspot[] }>(
     `${ALERTS_API}/api/alerts/fires`,
@@ -44,15 +43,8 @@ export function FireLayer({ globe }: Props) {
 
   // Render HTML elements on globe
   useEffect(() => {
-    const prevActive = prevActiveRef.current;
-    prevActiveRef.current = isActive;
 
-    if (!isActive) {
-      if (prevActive) {
-        globe.htmlElementsData([]);
-      }
-      return;
-    }
+    if (!isActive) return;
 
     if (fires.length === 0) return;
 
@@ -94,3 +86,4 @@ export function FireLayer({ globe }: Props) {
 
   return null;
 }
+

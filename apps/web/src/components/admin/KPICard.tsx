@@ -9,9 +9,16 @@
  * - Fade-in entrance animation
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { motion, useInView } from 'framer-motion';
-import { Area, AreaChart, ResponsiveContainer } from 'recharts';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { LazyMotion, domAnimation, m, useInView } from 'framer-motion';
+
+// Hoist Intl formatter to module scope to avoid recreating on every call
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
 interface KPICardProps {
   /** Icon SVG path data */
@@ -83,12 +90,7 @@ function useCountUp(end: number, duration = 1200) {
 function formatValue(value: number, format: KPICardProps['format']): string {
   switch (format) {
     case 'currency':
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(value);
+      return currencyFormatter.format(value);
     case 'compact':
       if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
       if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
@@ -99,9 +101,16 @@ function formatValue(value: number, format: KPICardProps['format']): string {
 }
 
 function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
+  if (!R) return <div className="h-10 w-full bg-slate-800/40 rounded animate-pulse" />;
+
+  const { ResponsiveContainer, AreaChart, Area } = R;
   const chartData = data.map((v, i) => ({ i, v }));
-  const domainMin = Math.min(...data) - 1;
-  const domainMax = Math.max(...data) + 1;
 
   return (
     <div className="h-10 w-full">
@@ -146,7 +155,8 @@ export function KPICard({
   const sparklineColor = isPositive ? '#22c55e' : '#ef4444';
 
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       ref={ref}
       initial={{ opacity: 0, y: 24 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
@@ -195,19 +205,20 @@ export function KPICard({
       </div>
 
       <div className="mb-2">
-        <motion.span
+        <m.span
           key={animatedValue}
           className="text-2xl font-bold text-white tracking-tight tabular-nums"
         >
           {typeof value === 'number'
             ? formatValue(animatedValue, format)
             : value}
-        </motion.span>
+        </m.span>
       </div>
 
       <p className="text-xs text-slate-400 font-medium mb-3">{label}</p>
 
       <Sparkline data={sparkline} color={sparklineColor} />
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }

@@ -11,10 +11,9 @@
  * Data source: trend-analyzer GET /api/trends/political
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Area, AreaChart, ResponsiveContainer } from 'recharts';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import { fetchPoliticalTrends, fetchPoliticalEvents } from '../../services/api';
 import type { PoliticalFigureTrend, PoliticalEventEntry } from '../../services/api';
 
@@ -88,7 +87,8 @@ export function PoliticalRadar() {
   );
 
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -100,7 +100,7 @@ export function PoliticalRadar() {
           Political Radar
         </h2>
         {selectedFigure && (
-          <button
+          <button type="button"
             onClick={() => setSelectedFigure(null)}
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
           >
@@ -174,7 +174,8 @@ export function PoliticalRadar() {
           <p className="text-xs text-slate-500">No events found for {selectedFigure}.</p>
         </div>
       )}
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
 
@@ -187,6 +188,40 @@ interface FigureCardProps {
   index: number;
 }
 
+function FigureCardSparkline({ chartData, chartColor, figureName }: { chartData: { i: number; v: number }[]; chartColor: string; figureName: string }) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
+  if (!R) return <div className="shrink-0 w-16 h-8 bg-slate-700/40 rounded animate-pulse" />;
+  const { ResponsiveContainer, AreaChart, Area } = R;
+  return (
+    <div className="shrink-0 w-16 h-8">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={`pol-spark-${figureName.replace(/\s+/g, '')}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={chartColor} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={chartColor}
+            strokeWidth={1.5}
+            fill={`url(#pol-spark-${figureName.replace(/\s+/g, '')})`}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function FigureCard({ figure, isSelected, onClick, index }: FigureCardProps) {
   const partyStyle = getPartyStyle(figure.party);
   const initials = getInitials(figure.name);
@@ -197,7 +232,8 @@ function FigureCard({ figure, isSelected, onClick, index }: FigureCardProps) {
   const chartColor = growthUp ? '#22c55e' : '#ef4444';
 
   return (
-    <motion.button
+    <LazyMotion features={domAnimation}>
+    <m.button
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, delay: index * 0.05 }}
@@ -279,28 +315,11 @@ function FigureCard({ figure, isSelected, onClick, index }: FigureCardProps) {
         </div>
 
         {/* Sparkline */}
-        <div className="shrink-0 w-16 h-8">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id={`pol-spark-${figure.name.replace(/\s+/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={chartColor} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey="v"
-                stroke={chartColor}
-                strokeWidth={1.5}
-                fill={`url(#pol-spark-${figure.name.replace(/\s+/g, '')})`}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <FigureCardSparkline chartData={chartData} chartColor={chartColor} figureName={figure.name} />
       </div>
-    </motion.button>
+    </m.button>
+    </LazyMotion>
   );
 }
+
+

@@ -5,20 +5,8 @@
  * $2 daily budget. Visual alert when costs approach the limit.
  */
 
-import { motion } from 'framer-motion';
-import {
-  AreaChart,
-  Area,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  ComposedChart,
-  Legend,
-} from 'recharts';
+import { useState, useEffect } from 'react';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import type { DailyStat } from '../../../services/adminApi';
 import { format } from 'date-fns';
 
@@ -30,10 +18,32 @@ interface AICostChartProps {
 }
 
 export function AICostChart({ data }: AICostChartProps) {
+  const [R, setR] = useState<any>(null);
+
+  useEffect(() => {
+    import('recharts').then((mod) => setR(mod));
+  }, []);
+
+  if (!R) return null;
+
+  const {
+    AreaChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  ComposedChart,
+  Legend
+  } = R;
   const nearBudget = data.some((d) => d.aiCost >= BUDGET * WARNING_THRESHOLD);
 
   return (
-    <motion.div
+    <LazyMotion features={domAnimation}>
+    <m.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.5 }}
@@ -148,6 +158,9 @@ export function AICostChart({ data }: AICostChartProps) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-    </motion.div>
+    </m.div>
+    </LazyMotion>
   );
 }
+
+
