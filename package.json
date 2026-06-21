@@ -1,0 +1,22 @@
+{
+  "name": "argentinaradar",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "pm2 start config/pm2.config.cjs",
+    "stop": "pm2 stop all",
+    "logs": "pm2 logs",
+    "build": "npm run build --workspace=@argentinaradar/web"
+  },
+  "devDependencies": {
+    "pm2": "^5.4.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

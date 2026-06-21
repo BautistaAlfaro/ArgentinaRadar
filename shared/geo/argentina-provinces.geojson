@@ -1,0 +1,396 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Buenos Aires",
+      "name_short": "BA",
+      "centroid": [-60.0, -37.0],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-63.5, -41.0], [-56.5, -41.0], [-56.5, -36.5],
+        [-58.0, -36.5], [-58.0, -35.5], [-56.5, -35.5],
+        [-56.5, -33.0], [-62.5, -33.0], [-63.5, -35.0],
+        [-63.5, -41.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "CABA",
+      "name_short": "CABA",
+      "centroid": [-58.4, -34.6],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-58.53, -34.7], [-58.33, -34.7], [-58.33, -34.53],
+        [-58.53, -34.53], [-58.53, -34.7]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Catamarca",
+      "name_short": "CT",
+      "centroid": [-66.5, -27.5],
+      "region": "Noroeste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-68.5, -29.5], [-65.0, -29.5], [-65.0, -26.0],
+        [-66.0, -25.5], [-68.5, -27.0], [-68.5, -29.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Chaco",
+      "name_short": "CH",
+      "centroid": [-61.0, -26.5],
+      "region": "Norte"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-64.0, -28.5], [-58.0, -28.5], [-58.0, -24.5],
+        [-61.0, -24.5], [-64.0, -26.0], [-64.0, -28.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Chubut",
+      "name_short": "CB",
+      "centroid": [-68.0, -44.5],
+      "region": "Patagonia"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-72.0, -46.5], [-63.0, -46.5], [-63.0, -42.0],
+        [-66.0, -42.0], [-68.5, -43.5], [-72.0, -44.5],
+        [-72.0, -46.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Córdoba",
+      "name_short": "CD",
+      "centroid": [-63.5, -32.5],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-65.5, -35.5], [-61.5, -35.5], [-61.5, -29.5],
+        [-65.0, -29.5], [-65.5, -31.0], [-65.5, -35.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Corrientes",
+      "name_short": "CR",
+      "centroid": [-57.5, -28.5],
+      "region": "Noreste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-59.5, -30.5], [-55.5, -30.5], [-55.5, -27.0],
+        [-57.5, -27.0], [-59.5, -28.0], [-59.5, -30.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Entre Ríos",
+      "name_short": "ER",
+      "centroid": [-59.0, -32.0],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-60.5, -34.0], [-57.5, -34.0], [-57.5, -30.0],
+        [-59.5, -30.0], [-60.5, -31.5], [-60.5, -34.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Formosa",
+      "name_short": "FO",
+      "centroid": [-60.0, -24.5],
+      "region": "Norte"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-62.5, -27.0], [-57.5, -27.0], [-57.5, -22.5],
+        [-60.5, -22.5], [-62.5, -24.0], [-62.5, -27.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Jujuy",
+      "name_short": "JY",
+      "centroid": [-65.5, -23.0],
+      "region": "Noroeste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-67.0, -24.5], [-64.0, -24.5], [-64.0, -21.5],
+        [-66.5, -21.5], [-67.0, -22.5], [-67.0, -24.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "La Pampa",
+      "name_short": "LP",
+      "centroid": [-65.5, -37.0],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-68.5, -39.5], [-63.0, -39.5], [-63.0, -35.0],
+        [-65.5, -35.0], [-68.5, -36.5], [-68.5, -39.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "La Rioja",
+      "name_short": "LR",
+      "centroid": [-67.5, -30.0],
+      "region": "Noroeste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-69.5, -32.0], [-65.5, -32.0], [-65.5, -27.5],
+        [-67.5, -27.5], [-69.5, -29.0], [-69.5, -32.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Mendoza",
+      "name_short": "MZ",
+      "centroid": [-68.5, -35.0],
+      "region": "Cuyo"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-70.5, -37.5], [-66.5, -37.5], [-66.5, -32.0],
+        [-68.5, -32.0], [-70.5, -33.5], [-70.5, -37.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Misiones",
+      "name_short": "MI",
+      "centroid": [-55.0, -27.0],
+      "region": "Noreste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-56.5, -28.5], [-53.5, -28.5], [-53.5, -25.5],
+        [-55.0, -25.5], [-56.5, -27.0], [-56.5, -28.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Neuquén",
+      "name_short": "NQ",
+      "centroid": [-69.5, -39.0],
+      "region": "Patagonia"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-71.5, -41.5], [-67.5, -41.5], [-67.5, -36.5],
+        [-70.0, -36.5], [-71.5, -38.5], [-71.5, -41.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Río Negro",
+      "name_short": "RN",
+      "centroid": [-67.0, -40.5],
+      "region": "Patagonia"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-72.0, -43.0], [-62.5, -43.0], [-62.5, -38.5],
+        [-65.5, -38.5], [-68.5, -40.0], [-72.0, -41.0],
+        [-72.0, -43.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Salta",
+      "name_short": "SA",
+      "centroid": [-65.0, -24.0],
+      "region": "Noroeste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-68.5, -26.0], [-62.0, -26.0], [-62.0, -22.0],
+        [-64.5, -22.0], [-66.5, -23.5], [-68.5, -24.5],
+        [-68.5, -26.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "San Juan",
+      "name_short": "SJ",
+      "centroid": [-69.0, -30.5],
+      "region": "Cuyo"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-70.5, -33.0], [-67.5, -33.0], [-67.5, -28.5],
+        [-69.5, -28.5], [-70.5, -30.0], [-70.5, -33.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "San Luis",
+      "name_short": "SL",
+      "centroid": [-67.0, -33.5],
+      "region": "Cuyo"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-69.0, -35.0], [-65.0, -35.0], [-65.0, -31.5],
+        [-66.5, -31.5], [-69.0, -33.0], [-69.0, -35.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Santa Cruz",
+      "name_short": "SC",
+      "centroid": [-69.0, -49.0],
+      "region": "Patagonia"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-73.5, -52.0], [-64.5, -52.0], [-64.5, -46.0],
+        [-68.0, -46.0], [-70.5, -48.0], [-73.5, -49.5],
+        [-73.5, -52.0]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Santa Fe",
+      "name_short": "SF",
+      "centroid": [-60.5, -31.0],
+      "region": "Pampeana"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-62.5, -34.5], [-58.5, -34.5], [-58.5, -28.0],
+        [-60.5, -28.0], [-62.5, -30.0], [-62.5, -34.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Santiago del Estero",
+      "name_short": "SE",
+      "centroid": [-63.5, -27.5],
+      "region": "Norte"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-65.5, -30.5], [-61.5, -30.5], [-61.5, -25.0],
+        [-63.5, -25.0], [-65.5, -27.0], [-65.5, -30.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Tierra del Fuego",
+      "name_short": "TF",
+      "centroid": [-67.5, -54.0],
+      "region": "Patagonia"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-72.0, -55.5], [-63.5, -55.5], [-63.5, -52.5],
+        [-66.5, -52.5], [-68.5, -54.0], [-72.0, -55.0],
+        [-72.0, -55.5]
+      ]]
+    }
+  },
+  {
+    "type": "Feature",
+    "properties": {
+      "name": "Tucumán",
+      "name_short": "TU",
+      "centroid": [-65.2, -27.0],
+      "region": "Noroeste"
+    },
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [[
+        [-66.0, -28.0], [-64.5, -28.0], [-64.5, -26.0],
+        [-65.5, -26.0], [-66.0, -27.0], [-66.0, -28.0]
+      ]]
+    }
+  }
+  ]
+}
