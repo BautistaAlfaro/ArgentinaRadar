@@ -268,7 +268,7 @@ export function ControlCenter() {
     refetchInterval: 10_000, staleTime: 5_000,
   });
 
-  const dailyData     = dailyStats ?? [];
+  const dailyData = Array.isArray(dailyStats) ? dailyStats : [];
   const pipeData      = pipelineStats?.pipeline ?? {};
   const recentActivity= pipelineStats?.recent ?? null;
 
@@ -300,9 +300,9 @@ export function ControlCenter() {
               <Skel h="h-40" /><Skel h="h-40" />
             </div>
           }>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-40"><NewsProcessingChart data={dailyData} /></div>
-              <div className="h-40"><EventDetectionChart data={dailyData} /></div>
+            <div className="grid grid-cols-2 gap-3 min-h-40">
+              <div className="min-h-[160px]"><NewsProcessingChart data={dailyData} /></div>
+              <div className="min-h-[160px]"><EventDetectionChart data={dailyData} /></div>
             </div>
           </Suspense>
 
