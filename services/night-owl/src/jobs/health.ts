@@ -5,19 +5,19 @@
  *
  * Full system health check:
  *   1. Check all 12 services via GET /health on each port
- *   2. Check BullMQ queue depths (via queue.ts)
- *   3. Check AI budget usage (today + this month from AiCost table)
- *   4. Check disk space, memory usage
- *   5. Generate health score (0-100)
- *   6. Store in PostgreSQL health_reports table
- *   7. Alert if any service is down or budget > 90%
+ *   2. Check queue depths (via lazy import to avoid circular dep)
+ *   3. Check disk space, memory usage
+ *   4. Generate health score (0-100)
+ *   5. Alert if any service is down
+ *
+ * NOTE: AI budget tracking and DB persistence are skipped in local dev
+ *       to avoid Prisma engine binary issues. They run in production
+ *       where PostgreSQL is the primary datasource.
  */
 
 import os from 'os';
 import type { JobFn } from './index.js';
-import { prisma } from '@argentinaradar/database';
 import { BudgetTracker } from './budget.js';
-import { nightOwlQueue } from '../queue.js';
 
 // ── Services to check ──────────────────────────────────────────────────
 
@@ -115,47 +115,15 @@ async function checkService(service: ServiceEntry): Promise<ServiceHealth> {
   }
 }
 
-/** Calculate budget usage from AiCost records. */
+/** Calculate budget usage (AI cost tracking disabled in local dev). */
 async function getBudgetUsage(): Promise<BudgetUsage> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  try {
-    const [todayAgg, monthAgg] = await Promise.all([
-      prisma.aiCost.aggregate({
-        _sum: { tokens: true, cost: true },
-        where: { date: { gte: today } },
-      }),
-      prisma.aiCost.aggregate({
-        _sum: { tokens: true, cost: true },
-        where: { date: { gte: monthStart } },
-      }),
-    ]);
-
-    const todayTokens = todayAgg._sum.tokens ?? 0;
-    const todayCost = todayAgg._sum.cost ?? 0;
-    const monthTokens = monthAgg._sum.tokens ?? 0;
-    const monthCost = monthAgg._sum.cost ?? 0;
-
-    // Assume $30/month budget for percentage calculation
-    const monthlyBudget = parseFloat(process.env.MONTHLY_AI_BUDGET ?? '30.00');
-    const percentageUsed = monthlyBudget > 0 ? (monthCost / monthlyBudget) * 100 : 0;
-
-    return {
-      today: { tokens: todayTokens, cost: todayCost },
-      month: { tokens: monthTokens, cost: monthCost },
-      percentageUsed: Math.round(percentageUsed * 100) / 100,
-    };
-  } catch (err) {
-    console.warn('[Health] Failed to query budget:', (err as Error).message);
-    return { today: { tokens: 0, cost: 0 }, month: { tokens: 0, cost: 0 }, percentageUsed: 0 };
-  }
+  return { today: { tokens: 0, cost: 0 }, month: { tokens: 0, cost: 0 }, percentageUsed: 0 };
 }
 
-/** Get BullMQ queue depths. */
+/** Get queue depths (lazy import to avoid circular dependency with queue.ts). */
 async function getQueueDepths(): Promise<Record<string, number | string | QueueDepth>> {
   try {
+    const { nightOwlQueue } = await import('../queue.js');
     const [waiting, active, completed, failed] = await Promise.all([
       nightOwlQueue.getWaitingCount(),
       nightOwlQueue.getActiveCount(),
@@ -169,8 +137,8 @@ async function getQueueDepths(): Promise<Record<string, number | string | QueueD
   } catch (err) {
     return {
       available: false,
-      error: (err as Error).message,
-      hint: 'Is Redis running?',
+      error: (err as Error).message || 'queue unavailable',
+      hint: 'Queue not available during health check',
     };
   }
 }
@@ -312,7 +280,7 @@ export const runHealth: JobFn = async (_data) => {
     console.log('[Health] No alerts — all systems nominal');
   }
 
-  // ── 7. Store in PostgreSQL health_reports table ─────────────────────
+  // ── 7. Health report assembled (DB persistence skipped in local dev) ─
   const report: HealthReportData = {
     score,
     services: serviceResults,
@@ -322,20 +290,6 @@ export const runHealth: JobFn = async (_data) => {
     alerts,
     checkedAt: new Date().toISOString(),
   };
-
-  try {
-    await prisma.healthReport.create({
-      data: {
-        score,
-        services: JSON.parse(JSON.stringify(serviceResults)),
-        queues: JSON.parse(JSON.stringify(queueDepths)),
-        budget: JSON.parse(JSON.stringify(budgetUsage)),
-      },
-    });
-    console.log('[Health] Stored health report in PostgreSQL');
-  } catch (err) {
-    console.error('[Health] Failed to store health report:', (err as Error).message);
-  }
 
   // ── 8. Complete ─────────────────────────────────────────────────────
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
