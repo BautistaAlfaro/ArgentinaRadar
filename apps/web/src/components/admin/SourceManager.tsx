@@ -10,6 +10,7 @@
  * Fetches from the admin API on port 3012.
  */
 
+import { API } from '@shared/apiConfig';
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ interface SourcesResponse {
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
-const ADMIN_API = "http://localhost:3012";
+const ADMIN_API = API.admin;
 
 const CATEGORIES = [
   { value: "", label: "Sin categoría" },

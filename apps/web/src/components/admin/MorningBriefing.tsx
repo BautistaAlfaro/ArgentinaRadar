@@ -16,6 +16,7 @@
  *  - GET /api/admin/daily-stats   (admin backend, port 3012)
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useState, useCallback } from 'react';
 import { LazyMotion, domAnimation, m, AnimatePresence } from 'framer-motion';
 
@@ -61,8 +62,8 @@ interface DailyStatsData {
 
 // ── API URLs ───────────────────────────────────────────────────────────
 
-const NIGHT_OWL_API = 'http://localhost:3011';
-const ADMIN_API = 'http://localhost:3012';
+const NIGHT_OWL_API = API.nightOwl;
+const ADMIN_API = API.admin;
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

@@ -35,6 +35,7 @@ const EMPTY_CATEGORIES: { category: string; count: number }[] = [];
  * └──────────────────────────────────────────────┘
  */
 
+import { API } from '@shared/apiConfig';
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { LazyMotion, domAnimation, m as motion } from "framer-motion";
@@ -119,8 +120,8 @@ interface PipelineStats {
 
 // ─── API fetchers ────────────────────────────────────────────────────
 
-const ADMIN_API = "http://localhost:3012";
-const NEWS_API = "http://localhost:3001";
+const ADMIN_API = API.admin;
+const NEWS_API = API.news;
 
 function generateDateRange(days: number): string[] {
   const dates: string[] = [];

@@ -159,3 +159,9 @@ IMAGE_GEN_PROVIDER: str = os.environ.get("IMAGE_GEN_PROVIDER", "pollinations")
 # --- Brand Colors ---
 BRAND_PRIMARY: str = os.environ.get("BRAND_PRIMARY", "#003087")
 BRAND_GOLD: str = os.environ.get("BRAND_GOLD", "#FFD700")
+
+# --- CORS ---
+ALLOWED_ORIGINS: list[str] = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",")

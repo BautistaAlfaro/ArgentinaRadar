@@ -7,12 +7,13 @@
  * Refreshes every 3 hours (matching the server-side schedule).
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { FireHotspot } from '@shared/types';
 
-const ALERTS_API = 'http://localhost:3007';
+const ALERTS_API = API.alerts;
 
 /** Fire SVG icon as a data URI */
 const FIRE_ICON_SVG = encodeURIComponent(

@@ -16,7 +16,7 @@ const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db'
 const Database = require('better-sqlite3');
 const db = new Database(DB_PATH);
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 

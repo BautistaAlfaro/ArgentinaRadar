@@ -7,14 +7,8 @@
  *   - Economic data (economic service on :3006)
  */
 
+import { API } from '@shared/apiConfig';
 import type { NewsItem, EconomicIndicator, WeatherAlert, Earthquake, FireHotspot, FlightData } from '@shared/types';
-
-const NEWS_API = 'http://localhost:3001';
-const GEO_API = 'http://localhost:3002';
-const ECON_API = 'http://localhost:3006';
-const ALERTS_API = 'http://localhost:3007';
-const EVENT_API = 'http://localhost:3008';
-const TRENDS_API = 'http://localhost:3009';
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -36,7 +30,7 @@ async function fetchNews(params?: {
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
-  const url = `${NEWS_API}/api/news${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.news}/api/news${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch news: ${resp.status} ${resp.statusText}`);
@@ -57,7 +51,7 @@ export async function fetchGeolocatedNews(params?: {
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
-  const url = `${GEO_API}/api/news/geolocated${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.geo}/api/news/geolocated${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch geolocated news: ${resp.status} ${resp.statusText}`);
@@ -76,7 +70,7 @@ async function geolocateText(text: string): Promise<{
   confidence: number;
   label: string | null;
 }> {
-  const resp = await fetch(`${GEO_API}/api/geolocate`, {
+  const resp = await fetch(`${API.geo}/api/geolocate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -89,7 +83,7 @@ async function geolocateText(text: string): Promise<{
 
 // ─── Fetch economic indicators ────────────────────────────────────
 export async function fetchEconomicData(): Promise<EconomicIndicator[]> {
-  const resp = await fetch(`${ECON_API}/api/economic`);
+  const resp = await fetch(`${API.econ}/api/economic`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch economic data: ${resp.status}`);
   }
@@ -145,7 +139,7 @@ export async function fetchEvents(params?: {
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
-  const url = `${EVENT_API}/api/events${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.events}/api/events${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch events: ${resp.status} ${resp.statusText}`);
@@ -154,7 +148,7 @@ export async function fetchEvents(params?: {
 }
 
 export async function fetchEvent(id: string): Promise<EventDetail> {
-  const resp = await fetch(`${EVENT_API}/api/events/${encodeURIComponent(id)}`);
+  const resp = await fetch(`${API.events}/api/events/${encodeURIComponent(id)}`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch event ${id}: ${resp.status} ${resp.statusText}`);
   }
@@ -162,7 +156,7 @@ export async function fetchEvent(id: string): Promise<EventDetail> {
 }
 
 async function fetchTrendingEvents(): Promise<EventItem[]> {
-  const resp = await fetch(`${EVENT_API}/api/events/trending`);
+  const resp = await fetch(`${API.events}/api/events/trending`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch trending events: ${resp.status} ${resp.statusText}`);
   }
@@ -215,7 +209,7 @@ function normalizeEntityType(rawType: string): 'persona' | 'lugar' | 'organizaci
 }
 
 export async function fetchTrends(): Promise<TrendingEntity[]> {
-  const resp = await fetch(`${TRENDS_API}/api/trends`);
+  const resp = await fetch(`${API.trends}/api/trends`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch trends: ${resp.status} ${resp.statusText}`);
   }
@@ -256,7 +250,7 @@ export interface PoliticalFigureTrend {
 }
 
 export async function fetchPoliticalTrends(): Promise<PoliticalFigureTrend[]> {
-  const resp = await fetch(`${TRENDS_API}/api/trends/political`);
+  const resp = await fetch(`${API.trends}/api/trends/political`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch political trends: ${resp.status} ${resp.statusText}`);
   }
@@ -300,7 +294,7 @@ export async function fetchPoliticalEvents(params?: {
   }
   if (params?.limit) searchParams.set('limit', String(params.limit));
 
-  const url = `${EVENT_API}/api/events/political${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.events}/api/events/political${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch political events: ${resp.status} ${resp.statusText}`);
@@ -351,25 +345,25 @@ export interface FlightResponse {
 }
 
 async function fetchWeatherAlerts(): Promise<WeatherAlertResponse> {
-  const resp = await fetch(`${ALERTS_API}/api/alerts/weather`);
+  const resp = await fetch(`${API.alerts}/api/alerts/weather`);
   if (!resp.ok) throw new Error(`Weather alerts fetch failed: ${resp.status}`);
   return resp.json();
 }
 
 async function fetchEarthquakes(): Promise<EarthquakeResponse> {
-  const resp = await fetch(`${ALERTS_API}/api/alerts/earthquakes`);
+  const resp = await fetch(`${API.alerts}/api/alerts/earthquakes`);
   if (!resp.ok) throw new Error(`Earthquakes fetch failed: ${resp.status}`);
   return resp.json();
 }
 
 async function fetchFires(): Promise<FireResponse> {
-  const resp = await fetch(`${ALERTS_API}/api/alerts/fires`);
+  const resp = await fetch(`${API.alerts}/api/alerts/fires`);
   if (!resp.ok) throw new Error(`Fires fetch failed: ${resp.status}`);
   return resp.json();
 }
 
 async function fetchFlights(): Promise<FlightResponse> {
-  const resp = await fetch(`${ALERTS_API}/api/alerts/flights`);
+  const resp = await fetch(`${API.alerts}/api/alerts/flights`);
   if (!resp.ok) throw new Error(`Flights fetch failed: ${resp.status}`);
   return resp.json();
 }
@@ -400,7 +394,7 @@ export async function fetchSecurityStats(params?: {
   if (params?.category) searchParams.set('category', params.category);
   if (params?.period) searchParams.set('period', params.period);
 
-  const url = `${EVENT_API}/api/events/security${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.events}/api/events/security${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch security stats: ${resp.status} ${resp.statusText}`);
@@ -450,7 +444,7 @@ export async function fetchProtests(params?: {
   if (params?.status) searchParams.set('status', params.status);
   if (params?.province) searchParams.set('province', params.province);
 
-  const url = `${EVENT_API}/api/events/protests${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+  const url = `${API.events}/api/events/protests${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
   const resp = await fetch(url);
   if (!resp.ok) {
     throw new Error(`Failed to fetch protests: ${resp.status} ${resp.statusText}`);

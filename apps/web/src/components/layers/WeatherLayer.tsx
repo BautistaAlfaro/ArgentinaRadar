@@ -10,6 +10,7 @@
  * Refreshes every 30 minutes (matching the server-side schedule).
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
@@ -39,7 +40,7 @@ export function WeatherLayer({ globe }: Props) {
   globeRef.current = globe;
 
   const { data } = useLayerData<WeatherAlertResponse>(
-    'http://localhost:3007/api/alerts/weather',
+    `${API.alerts}/api/alerts/weather`,
     30 * 60 * 1000, // 30 min
   );
   const alerts = useMemo(() => data?.alerts ?? [], [data]);

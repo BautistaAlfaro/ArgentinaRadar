@@ -6,6 +6,7 @@
  * color-coded log levels and pagination.
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 // ─── Types ─────────────────────────────────────────────────────────────
@@ -45,7 +46,7 @@ const LEVEL_BADGE_LABELS: Record<string, string> = {
 
 // ─── API ───────────────────────────────────────────────────────────────
 
-const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
+const NEWS_SERVICE_API = API.news;
 
 // ─── Helpers (module scope — stable, no re-render cost) ────────────────
 

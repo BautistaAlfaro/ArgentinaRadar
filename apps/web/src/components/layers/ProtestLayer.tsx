@@ -9,6 +9,7 @@
  *   - 15s refresh interval
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
@@ -60,7 +61,7 @@ export function ProtestLayer({ globe }: Props) {
   globeRef.current = globe;
 
   const { data } = useLayerData<ProtestsResponse>(
-    'http://localhost:3008/api/events/protests?status=active',
+    `${API.events}/api/events/protests?status=active`,
     15 * 1000, // 15 seconds
   );
   const protests = useMemo(() => data?.protests ?? [], [data]);

@@ -6,7 +6,9 @@
  * backend is unavailable.
  */
 
-const ADMIN_API = 'http://localhost:3012';
+import { API } from '@shared/apiConfig';
+
+const ADMIN_API = API.admin;
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -220,7 +222,7 @@ export interface QualityStats {
   };
 }
 
-const NEWS_SERVICE_API = 'http://127.0.0.1:3001';
+const NEWS_SERVICE_API = API.news;
 
 /**
  * Fetch article quality stats from the news-ingestion service.
@@ -429,7 +431,7 @@ function checkServiceHealth(svc: typeof SERVICE_HEALTH_DEFS[number]): Promise<Se
       .catch(() => ({ name: 'telegram', port: 0, status: 'down' as const, label: 'Telegram Notifier' }));
   }
 
-  return fetch(`http://127.0.0.1:${svc.port}/health`, { signal: AbortSignal.timeout(3_000) })
+  return fetch(`http://localhost:${svc.port}/health`, { signal: AbortSignal.timeout(3_000) })
     .then((resp) => ({
       name: svc.name,
       port: svc.port,

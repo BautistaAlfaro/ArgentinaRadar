@@ -7,6 +7,7 @@
  * Refreshes every 30 seconds (matching the server-side schedule).
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
@@ -38,7 +39,7 @@ export function FlightLayer({ globe }: Props) {
   globeRef.current = globe;
 
   const { data } = useLayerData<FlightResponse>(
-    'http://localhost:3007/api/alerts/flights',
+    `${API.alerts}/api/alerts/flights`,
     30 * 1000, // 30 seconds
   );
   const flights = useMemo(() => data?.flights ?? [], [data]);

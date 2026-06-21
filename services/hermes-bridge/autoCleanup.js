@@ -24,8 +24,8 @@ const path = require('path');
 const { createLogger } = require('../../shared/logger');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const CLEANUP_HOUR = parseInt(process.env.AUTO_CLEANUP_HOUR || '3', 10);
 
 const logger = createLogger('auto-cleanup');

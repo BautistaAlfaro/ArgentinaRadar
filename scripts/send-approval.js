@@ -12,7 +12,8 @@ const article = db.prepare(`
 if (!article) { console.log('No articles found'); process.exit(1); }
 
 const ARTICLE_ID = article.id;
-const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const BOT = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Build rich NanoBanana prompt
 const headline = article.title.substring(0, 100).replace(/[*_`[\]()#+-.!]/g, '');
@@ -68,7 +69,7 @@ db.prepare(`INSERT INTO approval_queue (article_id, status, draft_tweet, image_u
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      chat_id: 1923443777,
+      chat_id: parseInt(CHAT_ID, 10),
       photo: imageUrl,
       caption: caption,
       parse_mode: 'Markdown',

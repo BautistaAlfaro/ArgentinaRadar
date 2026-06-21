@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from src.config import (
     AI_MODE,
+    ALLOWED_ORIGINS,
     LOCAL_MODELS,
     OLLAMA_EMBED_MODEL,
     OLLAMA_HOST,
@@ -147,10 +148,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow all origins in development
+# CORS — restrict to configured origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

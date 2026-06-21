@@ -20,8 +20,8 @@ const { execSync } = require('child_process');
 const { createLogger } = require('../../shared/logger');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const INTERVAL = parseInt(process.env.WATCHDOG_INTERVAL || '60000', 10);
 
 const logger = createLogger('watchdog');

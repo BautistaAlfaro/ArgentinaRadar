@@ -11,7 +11,8 @@ if (!article) { console.log('Article not found'); process.exit(0); }
 console.log('Article ID:', article.id);
 console.log('Title:', article.title.substring(0, 80));
 
-const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const BOT = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 (async () => {
   const kb = {inline_keyboard:[[
     {text: '✅ Aprobar', callback_data: 'approve:' + article.id},
@@ -21,7 +22,7 @@ const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      chat_id: 1923443777,
+      chat_id: parseInt(CHAT_ID, 10),
       text: '📰 *' + article.title.substring(0, 200) + '*\n\n📌 ' + article.source + ' | #ArgentinaRadar',
       parse_mode: 'Markdown',
       reply_markup: kb

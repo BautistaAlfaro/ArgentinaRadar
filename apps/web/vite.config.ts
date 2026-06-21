@@ -29,6 +29,11 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, '../../shared'),
     },
   },
+  define: {
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
+      process.env.VITE_API_BASE_URL || 'http://localhost',
+    ),
+  },
   server: {
     port: 5173,
     host: true,

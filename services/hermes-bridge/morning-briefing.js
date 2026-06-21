@@ -22,8 +22,8 @@ const { createLogger } = require('../../shared/logger');
 const logger = createLogger('morning-briefing');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const LAST_BRIEFING_FILE = path.resolve(__dirname, '..', '..', 'data', 'last-briefing.txt');
 const DB_RETRY_DELAY = 1000; // 1 second between DB retries
 const DB_MAX_RETRIES = 3;

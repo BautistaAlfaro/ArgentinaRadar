@@ -10,12 +10,13 @@
  * Refreshes every 60 minutes (matching the server-side schedule).
  */
 
+import { API } from '@shared/apiConfig';
 import { useEffect, useMemo, useRef } from 'react';
 import { useRadarStore } from '../../stores/radarStore';
 import { useLayerData } from '../../hooks/useLayerData';
 import type { Earthquake } from '@shared/types';
 
-const ALERTS_API = 'http://localhost:3007';
+const ALERTS_API = API.alerts;
 
 const MAGNITUDE_COLORS: Record<string, string> = {
   small: '#22c55e',   // green — M3.0–4.9

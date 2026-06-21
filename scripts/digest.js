@@ -16,8 +16,9 @@ const Database = require('better-sqlite3');
 const path = require('path');
 
 const DB_PATH = path.resolve(__dirname, '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const DEFAULT_CHAT_ID = '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+if (!BOT_TOKEN) { console.error('FATAL: TELEGRAM_BOT_TOKEN no configurado'); process.exit(1); }
+const DEFAULT_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // ─── Category helpers (mirrored from morning-briefing.js) ──────────────
 

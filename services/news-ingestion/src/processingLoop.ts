@@ -20,6 +20,7 @@
  *   - AI_PROVIDER=openai|openrouter: calls /api/filter via ai-processor (existing behavior)
  */
 
+import { API } from '../../../shared/apiConfig.js';
 import Database from 'better-sqlite3';
 import path from 'path';
 import { createRequire } from 'module';
@@ -39,8 +40,8 @@ const { increment } = cRequire('../../../shared/metrics.js');
 const logger = createLogger('processing-loop');
 
 const DB_PATH = process.env.DB_PATH ?? path.resolve(process.cwd(), '..', '..', 'data', 'argentina-radar.db');
-const GEO_API = process.env.GEO_API ?? 'http://127.0.0.1:3002';
-const AI_API = process.env.AI_API ?? 'http://127.0.0.1:3013';
+const GEO_API = process.env.GEO_API ?? API.geo;
+const AI_API = process.env.AI_API ?? API.ai;
 const AI_PROVIDER = process.env.AI_PROVIDER ?? 'openai'; // ollama | openai | openrouter
 const POLL_INTERVAL = parseInt(process.env.PROCESS_INTERVAL ?? '30000', 10); // 30 seconds
 
@@ -61,7 +62,7 @@ const MIN_QUALITY_THRESHOLD = parseInt(process.env.MIN_QUALITY_THRESHOLD ?? '40'
 const MIN_ENGAGEMENT_PREDICTION = parseInt(process.env.MIN_ENGAGEMENT_PREDICTION ?? '30', 10);
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
-const TWITTER_PUBLISHER_URL = process.env.TWITTER_PUBLISHER_URL ?? 'http://127.0.0.1:3004';
+const TWITTER_PUBLISHER_URL = process.env.TWITTER_PUBLISHER_URL ?? API.publisher;
 
 let db: Database.Database | null = null;
 let processedCount = 0;

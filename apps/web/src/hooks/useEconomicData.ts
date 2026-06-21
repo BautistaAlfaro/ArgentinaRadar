@@ -4,6 +4,7 @@
  * Polls the economic-data service (port 3006) every 60 seconds.
  */
 
+import { API } from '@shared/apiConfig';
 import { useQuery } from '@tanstack/react-query';
 import { fetchEconomicData } from '../services/api';
 import type { EconomicIndicator } from '@shared/types';
@@ -30,8 +31,7 @@ interface EconomicDataResponse {
  * Fetch enriched economic indicators from the economic-data service.
  */
 async function fetchEnrichedData(): Promise<EconomicDataResponse> {
-  const ECON_API = 'http://localhost:3006';
-  const resp = await fetch(`${ECON_API}/api/economic`);
+  const resp = await fetch(`${API.econ}/api/economic`);
   if (!resp.ok) {
     throw new Error(`Failed to fetch economic data: ${resp.status}`);
   }

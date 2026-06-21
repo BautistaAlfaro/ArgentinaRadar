@@ -21,8 +21,7 @@ const logger = createLogger('alerts');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 
-// Fallback to hardcoded token for backward compatibility
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 // ─── Argentine Provinces ────────────────────────────────────────────────
 

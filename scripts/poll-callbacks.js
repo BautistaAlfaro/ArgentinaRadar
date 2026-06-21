@@ -1,4 +1,4 @@
-const BOT = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
+const BOT = process.env.TELEGRAM_BOT_TOKEN;
 const Database = require('better-sqlite3');
 const DB = new Database('data/argentina-radar.db');
 

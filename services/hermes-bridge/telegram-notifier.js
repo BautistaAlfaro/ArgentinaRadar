@@ -7,6 +7,7 @@
  * 
  * Also serves as the Telegram bot command handler (menu, stats, etc.)
  */
+const { API } = require('../../shared/apiConfig.cjs');
 const Database = require('better-sqlite3');
 const path = require('path');
 const os = require('os');
@@ -22,8 +23,9 @@ function i(t) { return '_' + escapeMd(t) + '_'; }
 function link(d, u) { return '[' + escapeMd(d) + '](' + (u || '') + ')'; }
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
-const BOT_TOKEN = '8653838115:AAFBRBhHEq3VXbfgiZwV1dtNjesBYwvhUqg';
-const CHAT_ID = '1923443777';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+if (!BOT_TOKEN) { console.error('FATAL: TELEGRAM_BOT_TOKEN no configurado'); process.exit(1); }
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const POLL_INTERVAL = 10000; // 10 seconds
 
 const db = new Database(DB_PATH);
@@ -106,7 +108,7 @@ function generateHashtags(title) {
 
 // ─── Rewrite API ─────────────────────────────────────────────────────────
 
-const AI_API = process.env.AI_API || 'http://127.0.0.1:3013';
+const AI_API = process.env.AI_API || API.ai;
 const REWRITE_HEADLINES = process.env.REWRITE_HEADLINES === 'true';
 
 /**
@@ -184,7 +186,7 @@ function formatBlueskyTweet(title, source, category, rewrittenTitle) {
  */
 async function publishToBluesky(articleId, text, imageUrl, url) {
   const doPub = async (label) => {
-    const resp = await fetch('http://127.0.0.1:3004/api/publish-text', {
+      const resp = await fetch(`${API.publisher}/api/publish-text`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ article_id: articleId, text, image_url: imageUrl || null, url: url || null }),
       signal: AbortSignal.timeout(15000),
@@ -330,7 +332,7 @@ async function checkPendingApprovals() {
 
 // ─── Trending / Clusters helpers ───────────────────────────────────────
 
-const NEWS_SERVICE_URL = 'http://127.0.0.1:3001';
+const NEWS_SERVICE_URL = API.news;
 
 async function fetchTrending() {
   try {
