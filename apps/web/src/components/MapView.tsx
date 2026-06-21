@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Globe from 'globe.gl';
+import * as THREE from 'three';
 import { useWebGLDetect } from '../hooks/useWebGLDetect';
 import { useNews } from '../hooks/useNews';
 import { useRadarStore } from '../stores/radarStore';
@@ -14,9 +15,21 @@ import { FlightLayer } from './layers/FlightLayer';
 
 type GlobeInstance = InstanceType<typeof Globe>;
 
+// ---------------------------------------------------------------------------
+// CDN-hosted texture URLs — publicly available on unpkg, threejs.org, etc.
+// ---------------------------------------------------------------------------
+const TEXTURE_BASE = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const TEXTURE_BUMP = '//unpkg.com/three-globe/example/img/earth-topology.png';
+const TEXTURE_NIGHT = '//unpkg.com/three-globe/example/img/earth-night.jpg';
+const TEXTURE_WATER = '//unpkg.com/three-globe/example/img/earth-water.png';
+const TEXTURE_BACKGROUND = '//unpkg.com/three-globe/example/img/night-sky.png';
+// Cloud texture hosted on the official three.js examples CDN
+const TEXTURE_CLOUDS = 'https://threejs.org/examples/textures/planets/earth_clouds_1024.png';
+
 export function MapView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeInstance | null>(null);
+  const cloudMeshRef = useRef<THREE.Mesh | null>(null);
   const [globeReady, setGlobeReady] = useState(false);
   const hasWebGL = useWebGLDetect();
 
@@ -34,19 +47,101 @@ export function MapView() {
     const height = containerRef.current.clientHeight;
 
     const globe = new Globe(containerRef.current)
-      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-      .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+      .globeImageUrl(TEXTURE_BASE)
+      .bumpImageUrl(TEXTURE_BUMP)
+      .backgroundImageUrl(TEXTURE_BACKGROUND)
       .width(width)
       .height(height)
       .pointOfView({ lat: -38.4, lng: -63.6, altitude: 2.5 });
 
-    // Limit rotation to focus on Argentina
+    // ---- Globe-material enhancements (fires once base texture loads) ----
+    const loader = new THREE.TextureLoader();
+
+    globe.onGlobeReady(() => {
+      const baseMaterial = globe.globeMaterial();
+      if (!baseMaterial) return;
+
+      // The default globe material is MeshPhongMaterial (confirmed by three-globe source)
+      const material = baseMaterial as THREE.MeshPhongMaterial;
+
+      // Night lights — emissive glow from urban areas on the dark side
+      loader.load(TEXTURE_NIGHT, (tex: THREE.Texture) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        material.emissiveMap = tex;
+        material.emissive = new THREE.Color(0xffcc88);
+        material.emissiveIntensity = 0.3;
+        material.needsUpdate = true;
+      });
+
+      // Specular water map — makes oceans reflect light
+      loader.load(TEXTURE_WATER, (tex: THREE.Texture) => {
+        material.specularMap = tex;
+        material.specular = new THREE.Color(0x445566);
+        material.shininess = 20;
+        material.needsUpdate = true;
+      });
+
+      // Sharper textures at oblique angles
+      if (material.map) {
+        material.map.anisotropy = 4;
+        material.map.minFilter = THREE.LinearMipmapLinearFilter;
+      }
+      if (material.bumpMap) {
+        material.bumpMap.anisotropy = 4;
+      }
+
+      // More visible terrain relief
+      material.bumpScale = 0.06;
+
+      material.needsUpdate = true;
+
+      // ---- Clouds layer ----
+      const globeRadius = globe.getGlobeRadius();
+      const cloudGeo = new THREE.SphereGeometry(globeRadius * 1.006, 64, 64);
+
+      loader.load(TEXTURE_CLOUDS, (cloudTex: THREE.Texture) => {
+        cloudTex.colorSpace = THREE.SRGBColorSpace;
+
+        const cloudMat = new THREE.MeshPhongMaterial({
+          map: cloudTex,
+          transparent: true,
+          opacity: 0.4,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+        });
+
+        const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+        cloudMeshRef.current = cloudMesh;
+
+        // Attach clouds under the globe mesh so they inherit rotation
+        const scene = globe.scene();
+        scene.traverse((obj: THREE.Object3D) => {
+          if ((obj as THREE.Mesh).isMesh && (obj as THREE.Mesh).material === baseMaterial) {
+            obj.add(cloudMesh);
+          }
+        });
+      });
+    });
+
+    // ---- Enhanced lighting with southern-hemisphere bias ----
+    const ambient = new THREE.AmbientLight(0xcccccc, Math.PI * 0.9);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.5 * Math.PI);
+    mainLight.position.set(0.5, 1, 1).normalize();
+
+    // Fill light from the direction of Argentina to reduce shadow on S. America
+    const fillLight = new THREE.DirectionalLight(0xffeedd, 0.25 * Math.PI);
+    const arPos = globe.getCoords(-34, -64, 5);
+    fillLight.position.set(arPos.x, arPos.y, arPos.z);
+
+    globe.lights([ambient, mainLight, fillLight]);
+
+    // ---- Orbit controls focused on Argentina ----
     const controls = globe.controls();
-    controls.minPolarAngle = Math.PI * 0.3; // ~54° from top (limits north rotation)
-    controls.maxPolarAngle = Math.PI * 0.7; // ~126° from top (limits south rotation)
-    controls.minAzimuthAngle = -Math.PI * 0.4; // limits west rotation
-    controls.maxAzimuthAngle = Math.PI * 0.4; // limits east rotation
+    controls.minPolarAngle = Math.PI * 0.3;
+    controls.maxPolarAngle = Math.PI * 0.7;
+    controls.minAzimuthAngle = -Math.PI * 0.4;
+    controls.maxAzimuthAngle = Math.PI * 0.4;
     controls.enableZoom = true;
     controls.minDistance = 150;
     controls.maxDistance = 500;
@@ -66,6 +161,18 @@ export function MapView() {
     return () => {
       window.removeEventListener('resize', handleResize);
       setGlobeReady(false);
+
+      // Dispose cloud mesh
+      if (cloudMeshRef.current) {
+        cloudMeshRef.current.geometry.dispose();
+        if (Array.isArray(cloudMeshRef.current.material)) {
+          (cloudMeshRef.current.material as THREE.Material[]).forEach((m: THREE.Material) => m.dispose());
+        } else {
+          (cloudMeshRef.current.material as THREE.Material).dispose();
+        }
+        cloudMeshRef.current = null;
+      }
+
       if (globeRef.current) {
         globeRef.current._destructor();
         globeRef.current = null;
