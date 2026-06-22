@@ -157,63 +157,23 @@ function CompactServices() {
   }
 
   return (
-    <div className="space-y-2">
-      {/* Bulk bar */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-on-surface-variant font-jetbrains-mono">
-          {running}/{services.length} running
-        </span>
-        <div className="flex gap-1.5">
-          <button
-            type="button" disabled={bulkBusy} onClick={stopAll}
-            className="px-2 py-0.5 text-[10px] font-medium rounded bg-red-800/60 text-red-300 hover:bg-red-700/70 disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            Stop All
-          </button>
-          <button
-            type="button" disabled={bulkBusy} onClick={startAll}
-            className="px-2 py-0.5 text-[10px] font-medium rounded bg-emerald-800/60 text-emerald-300 hover:bg-emerald-700/70 disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            Start All
-          </button>
-        </div>
-      </div>
-
-      {/* Service pill grid — 3 columns */}
-      <div className="grid grid-cols-3 gap-1.5">
+    <div className="space-y-1">
+      {/* Bulk bar + services inline */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[9px] text-slate-500 font-mono">{running}/{services.length}</span>
+        <button type="button" disabled={bulkBusy} onClick={stopAll} className="px-1.5 py-0.5 text-[9px] rounded bg-red-800/50 text-red-300 hover:bg-red-700/60 disabled:opacity-40 cursor-pointer">Stop</button>
+        <button type="button" disabled={bulkBusy} onClick={startAll} className="px-1.5 py-0.5 text-[9px] rounded bg-emerald-800/50 text-emerald-300 hover:bg-emerald-700/60 disabled:opacity-40 cursor-pointer">Start</button>
         {services.map((svc) => {
           const isRunning = svc.status === 'running';
-          const isBusy    = busy[svc.name] ?? false;
+          const isBusy = busy[svc.name] ?? false;
           return (
-            <button
-              key={svc.name}
-              type="button"
-              disabled={isBusy}
-              onClick={() => toggle(svc.name, svc.status)}
-              title={svc.name}
-              className={`
-                flex items-center gap-1.5 px-2 py-1.5 rounded border text-left
-                transition-all duration-150 cursor-pointer
-                ${isRunning
-                  ? 'border-emerald-500/30 bg-emerald-900/15 hover:bg-emerald-900/25'
-                  : 'border-slate-700/40 bg-slate-800/40 hover:bg-slate-700/40'
-                }
-                ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-              aria-label={`${isRunning ? 'Stop' : 'Start'} ${svc.name}`}
-            >
-              {/* LED */}
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                isRunning ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'bg-red-500'
-              }`} />
-              {/* Icon */}
-              <span className="material-symbols-outlined text-[13px] text-on-surface-variant shrink-0">
-                {SVC_ICONS[svc.name] ?? 'settings'}
-              </span>
-              {/* Name */}
-              <span className="text-[10px] font-medium text-on-surface truncate font-jetbrains-mono">
-                {svcLabel(svc.name)}
-              </span>
+            <button key={svc.name} type="button" disabled={isBusy} onClick={() => toggle(svc.name, svc.status)}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border cursor-pointer transition-colors
+                ${isRunning ? 'border-emerald-500/30 bg-emerald-900/20 text-emerald-300' : 'border-slate-700/40 bg-slate-800/40 text-slate-500'}
+                ${isBusy ? 'opacity-40' : ''}`}>
+              <span className={`w-1 h-1 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-red-500'}`} />
+              <span className="material-symbols-outlined text-[10px]">{SVC_ICONS[svc.name] ?? 'settings'}</span>
+              <span>{svcLabel(svc.name)}</span>
             </button>
           );
         })}
