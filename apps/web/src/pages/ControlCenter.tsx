@@ -314,27 +314,24 @@ export function ControlCenter() {
         </div>
 
         {/* ── RIGHT COLUMN ────────────────────────────────── */}
-        <div className="overflow-hidden pl-3 space-y-2 pb-2">
+        <div className="overflow-hidden pl-3 space-y-1.5 pb-2 flex flex-col" style={{ height: 'calc(100vh - 7rem)' }}>
 
-          {/* Services — compact pill grid */}
-          <div>
-            <SectionLabel>Services</SectionLabel>
+          {/* Services — ultra compact */}
+          <div className="shrink-0">
             <CompactServices />
           </div>
 
-          {/* Approval Queue — compact */}
-          <div>
-            <SectionLabel>Approval Queue</SectionLabel>
-            <Suspense fallback={<Skel h="h-32" />}>
+          {/* Approval Queue — expandable, slim */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <Suspense fallback={<Skel h="h-24" />}>
               <ApprovalQueue />
             </Suspense>
           </div>
 
-          {/* Logs — últimos 5 */}
-          <div className="border-t border-white/10 pt-2">
-            <SectionLabel>Últimos Logs</SectionLabel>
-            <div className="max-h-28 overflow-y-auto text-[10px]">
-              <Suspense fallback={<Skel h="h-12" />}>
+          {/* Logs — fixed 5 lines at bottom */}
+          <div className="shrink-0 border-t border-white/10 pt-1.5 max-h-[120px] overflow-y-auto">
+            <div className="text-[10px]">
+              <Suspense fallback={<Skel h="h-10" />}>
                 <LogViewer limit={5} compact />
               </Suspense>
             </div>

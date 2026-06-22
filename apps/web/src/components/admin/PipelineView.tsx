@@ -1,12 +1,6 @@
 /**
- * PipelineView — Visual representation of the news pipeline stages.
- *
- * Shows articles flowing from ingestion → geolocation → AI processing →
- * pending approval → published, with counts at each stage.
+ * PipelineView — Compact pipeline status bar.
  */
-
-import { LazyMotion, domAnimation, m as motion } from 'framer-motion';
-
 interface PipelineViewProps {
   pipeline: Record<string, number> | null;
   approvalQueue: Record<string, number> | null;
@@ -104,89 +98,30 @@ export function PipelineView({ pipeline, approvalQueue, isLoading }: PipelineVie
   const totalArticles = Object.values(emptyPipeline).reduce((a, b) => a + b, 0);
 
   if (isLoading) {
-    return (
-      <section className="glass-panel rounded-xl p-5">
-        <div className="h-5 w-36 bg-slate-700 rounded animate-pulse mb-4" />
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-24 w-32 bg-slate-700/30 rounded-xl animate-pulse shrink-0" />
-          ))}
-        </div>
-      </section>
-    );
+    return <div className="flex gap-2 items-center text-xs text-slate-500"><span className="w-20 h-4 bg-slate-700/30 rounded animate-pulse" /></div>;
   }
 
   if (!pipeline) {
-    return (
-      <section className="glass-panel rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-slate-400 mb-3">Pipeline Status</h3>
-        <p className="text-xs text-slate-500">Pipeline service unreachable. Showing mock estimates.</p>
-      </section>
-    );
+    return <div className="text-[11px] text-slate-500">Pipeline offline</div>;
   }
 
   return (
-    <LazyMotion features={domAnimation}>
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-panel rounded-xl p-5"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white tracking-tight">
-            Pipeline Status
-          </h3>
-          <span className="text-[11px] text-slate-500 font-mono">
-            {totalArticles} total articles
+    <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+      {STAGES.map((stage, idx) => {
+        const colors = COLOR_MAP[stage.color];
+        const count = stage.getCount(emptyPipeline, emptyAq);
+        const isLast = idx === STAGES.length - 1;
+        return (
+          <span key={stage.key} className="inline-flex items-center gap-0.5">
+            <span className={`${colors.text} ${colors.bg} ${colors.border} border rounded px-1.5 py-0.5 font-medium inline-flex items-center gap-0.5`}>
+              <span className="material-symbols-outlined text-[10px]">{stage.icon}</span>
+              <span className="font-bold">{count}</span>
+              <span className="text-[9px] opacity-70">{stage.label}</span>
+            </span>
+            {!isLast && <span className="text-slate-600 mx-0.5">→</span>}
           </span>
-        </div>
-
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
-          {STAGES.map((stage, idx) => {
-            const colors = COLOR_MAP[stage.color];
-            const count = stage.getCount(emptyPipeline, emptyAq);
-            const isLast = idx === STAGES.length - 1;
-
-            return (
-              <div key={stage.key} className="flex items-center gap-0 shrink-0">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.08 }}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-xl border ${colors.border} ${colors.bg} min-w-[110px] ${colors.glow} shadow-sm`}
-                >
-                  <span className="material-symbols-outlined text-lg" aria-hidden="true">{stage.icon}</span>
-                  <span className={`text-xs font-medium ${colors.text}`}>{stage.label}</span>
-                  <span className={`text-lg font-bold tabular-nums ${colors.badge} px-2 py-0.5 rounded-md`}>
-                    {count}
-                  </span>
-                </motion.div>
-
-                {!isLast && (
-                  <div className="flex items-center mx-1">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-4 h-4 text-slate-600"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <p className="text-[10px] text-slate-600 mt-3 text-center">
-          RSS Feeds → Pipeline → AI Processing → Approval → Publication
-        </p>
-      </motion.section>
-    </LazyMotion>
+        );
+      })}
+    </div>
   );
 }

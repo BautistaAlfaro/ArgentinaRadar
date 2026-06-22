@@ -228,7 +228,7 @@ export function ApprovalQueue() {
   const STATUS_FILTERS: FilterStatus[] = ['pending', 'approved', 'rejected', 'published'];
 
   return (
-    <div className="flex gap-4 h-full min-h-[600px]">
+    <div className="flex gap-2 h-full">
 
       {/* ─── Left: Batch list ────────────────────────────────────────── */}
       <aside className="glass-panel rounded-xl p-4 w-64 shrink-0 flex flex-col gap-2 overflow-y-auto">
