@@ -1,12 +1,13 @@
 ﻿/**
  * Telegram Approval Notifier — ArgentinaRadar
  * 
- * Polls approval_queue, generates NanoBanana news thumbnails,
+ * Polls approval_queue, generates nanoBanana news thumbnails,
  * sends to Telegram with inline approve/reject buttons, and
  * handles callbacks to publish on Bluesky with images.
  * 
  * Also serves as the Telegram bot command handler (menu, stats, etc.)
  */
+require('dotenv').config({ path: require('path').resolve(__dirname, '..', '..', 'config', '.env') });
 const { API } = require('../../shared/apiConfig.cjs');
 const Database = require('better-sqlite3');
 const path = require('path');
