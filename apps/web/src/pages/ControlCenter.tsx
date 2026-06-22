@@ -118,9 +118,14 @@ const SVC_ICONS: Record<string, string> = {
   'alerts': 'notifications', 'night-owl': 'bedtime', 'auth': 'lock',
 };
 
-function svcLabel(name: string) {
-  return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const SVC_DESC: Record<string, string> = {
+  'web-app': 'React frontend en :5173', 'news-ingestion': 'RSS fetcher + pipeline en :3001',
+  'geolocation': 'Gazetteer matcher en :3002', 'ai-processor': 'AI filter + embeddings en :3013',
+  'event-detector': 'Clustering de eventos en :3008', 'trend-analyzer': 'Trend analysis en :3009',
+  'twitter-publisher': 'Bluesky publisher en :3004', 'hermes-bridge': 'Telegram bot bridge en :3005',
+  'economic-data': 'Indicadores económicos en :3006', 'alerts': 'Push notifications en :3007',
+  'night-owl': 'Jobs nocturnos en :3011', 'auth': 'JWT auth en :3010',
+};
 
 // ── Compact Service Grid ──────────────────────────────────────────────
 
@@ -168,12 +173,12 @@ function CompactServices() {
           const isBusy = busy[svc.name] ?? false;
           return (
             <button key={svc.name} type="button" disabled={isBusy} onClick={() => toggle(svc.name, svc.status)}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] border cursor-pointer transition-colors
+              title={SVC_DESC[svc.name] || svc.name}
+              className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] border cursor-pointer transition-colors
                 ${isRunning ? 'border-emerald-500/30 bg-emerald-900/20 text-emerald-300' : 'border-slate-700/40 bg-slate-800/40 text-slate-500'}
                 ${isBusy ? 'opacity-40' : ''}`}>
               <span className={`w-1 h-1 rounded-full ${isRunning ? 'bg-emerald-400' : 'bg-red-500'}`} />
-              <span className="material-symbols-outlined text-[10px]">{SVC_ICONS[svc.name] ?? 'settings'}</span>
-              <span>{svcLabel(svc.name)}</span>
+              <span className="material-symbols-outlined text-[11px]">{SVC_ICONS[svc.name] ?? 'settings'}</span>
             </button>
           );
         })}
