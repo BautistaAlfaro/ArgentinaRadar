@@ -17,7 +17,36 @@ const { sendMorningBriefing, checkAndSendBriefing } = require('./morning-briefin
 const scheduleManager = require('../../shared/scheduleManager');
 const { MSG } = require('../../shared/messages.es');
 
-// ─── OpenRouter Prompt Enhancer ────────────────────────────────────────
+// ─── OpenRouter Image Generation (Gemini) ─────────────────────────────
+
+async function generateImageViaOpenRouter(prompt) {
+  if (!OPENROUTER_KEY || OPENROUTER_KEY === 'your_openrouter_key') return null;
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-image',
+        messages: [{ role: 'user', content: prompt }],
+        modalities: ['image', 'text'],
+        max_tokens: 4096,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const img = data.choices?.[0]?.message?.images?.[0];
+    if (!img?.image_url?.url) return null;
+    // Convert base64 data URL to Buffer for upload
+    const b64 = img.image_url.url.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(b64, 'base64');
+    console.log('[gemini] Generated image:', (buffer.length / 1024).toFixed(0) + 'KB');
+    return { buffer, mimeType: 'image/png' };
+  } catch (e) {
+    console.warn('[gemini] Image generation failed:', e.message);
+    return null;
+  }
+}
 
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'mistralai/mistral-nemo';
