@@ -1236,11 +1236,34 @@ async function checkCallbacks() {
           );
         }
 
-        // Publish to Bluesky (reuse the common helper)
+        // Publish to Bluesky with Gemini-generated image
         if (article) {
           const rewrittenTitle = await maybeRewriteHeadline(article.title, article.source, article.category);
           const tweetText = formatBlueskyTweet(article.title, article.source, article.category, rewrittenTitle);
-          await publishToBluesky(articleId, tweetText, aq?.image_url, article.url);
+          
+          // Generate fresh image via Gemini + OpenRouter for Bluesky
+          const prompt = buildNanoBananaPrompt(article.title, article.source, article.category);
+          const geminiImg = await generateImageViaOpenRouter(prompt);
+          if (geminiImg) {
+            // Upload Gemini image directly to Bluesky as blob
+            try {
+              const { BskyAgent } = require('@atproto/api');
+              const agent = new BskyAgent({ service: 'https://bsky.social' });
+              await agent.login({ identifier: 'sitearsdevs.bsky.social', password: process.env.BSKY_APP_PASSWORD || '5mgb-2fip-7o4g-hu5n' });
+              const blob = await agent.uploadBlob(geminiImg.buffer, { encoding: geminiImg.mimeType });
+              // Post with image embed directly
+              const rt = new (require('@atproto/api').RichText)({ text: tweetText.slice(0, 300) });
+              await rt.detectFacets(agent);
+              await agent.post({ text: rt.text, facets: rt.facets, embed: { $type: 'app.bsky.embed.images', images: [{ image: blob.data.blob, alt: article.title.slice(0, 100) }] } });
+              console.log(`[bluesky] ✅ Published with Gemini image — ${articleId.slice(0, 8)}`);
+            } catch (e) {
+              console.warn(`[bluesky] Gemini publish failed, falling back: ${e.message}`);
+              await publishToBluesky(articleId, tweetText, aq?.image_url, article.url);
+            }
+          } else {
+            // Fallback to Pollinations image URL
+            await publishToBluesky(articleId, tweetText, aq?.image_url, article.url);
+          }
         }
         
         console.log(`Approved: ${articleId}`);
