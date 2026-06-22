@@ -155,7 +155,7 @@ pipelineRouter.post('/approve-batch', (req, res) => {
       if (action === 'approve') {
         const stmt = db.prepare(
           `UPDATE approval_queue
-           SET status = 'approved', approved_at = ?
+           SET status = 'approved', reviewed_at = ?
            WHERE id IN (${placeholders}) AND status = 'pending'`,
         );
         return stmt.run(now, ...numericIds).changes;
@@ -220,7 +220,7 @@ pipelineRouter.post('/publish-batch', (req, res) => {
       if (rows.length === 0) return 0;
 
       const updateQueue = db.prepare(
-        `UPDATE approval_queue SET status = 'published', published_at = ? WHERE id = ?`,
+        `UPDATE approval_queue SET status = 'published' WHERE id = ?`,
       );
       const updateArticle = db.prepare(
         `UPDATE news_items SET status = 'published', published_at = ? WHERE id = ?`,
