@@ -39,22 +39,58 @@ const db = new Database(DB_PATH);
  * Colors: dark blue #003087 + gold #FFD700. Horizontal 16:9 news thumbnail.
  */
 function buildNanoBananaPrompt(title, source, category) {
-  const headline = title.substring(0, 100).replace(/[*_`[\]()#+-.!]/g, '');
-  const sourceName = source.toUpperCase();
-  const catEmoji = category === 'urgente' ? '🚨' : category === 'politica' ? '🗳️' :
-    category === 'economia' ? '💰' : category === 'deportes' ? '⚽' : '📰';
+  const headline = title.substring(0, 120).replace(/[*_`[\]()#+-.!]/g, '');
+  const scene = title.substring(0, 150).replace(/[*_`[\]()#+-.!]/g, '');
+  const catBadge = category === 'urgente' ? '🚨 URGENTE' : category === 'politica' ? '🇦🇷 POLÍTICA' :
+    category === 'economia' ? '📈 ECONOMÍA' : category === 'deportes' ? '⚽ DEPORTES' : '🌎 INTERNACIONAL';
   
-  return [
-    'Professional Argentine news thumbnail, horizontal 16:9 layout.',
-    `Headline: "${headline}".`,
-    'Style: dramatic Argentine TV news ("Only Fonseca" channel style) — high contrast, cinematic lighting, photorealistic.',
-    `Color palette: dark navy blue (#003087) background with gold (#FFD700) accents and text.`,
-    `Source badge: ${sourceName} logo in top corner.`,
-    'Elements: bold news typography, expressive faces if relevant, dramatic shadows.',
-    'Red "ULTIMO MOMENTO" banner element (subtle, professional).',
-    'No cartoon, no illustration — photorealistic news broadcast style.',
-    'Clean modern composition, professional Argentine journalism aesthetic.'
-  ].join(' ');
+  return `Create a professional breaking news graphic for "Argentina Radar".
+
+STYLE:
+- Modern newsroom design
+- Bloomberg + Reuters + CNN aesthetic
+- Premium journalism look
+- Dark navy background (#07111F)
+- Electric blue accents (#00A3FF)
+- White typography
+- High contrast
+- Clean composition
+- Realistic press photography
+- Ultra sharp
+- 4K quality
+
+LAYOUT:
+
+TOP BAR:
+- Argentina Radar logo
+- Small timestamp
+- Thin blue separator line
+
+MAIN IMAGE:
+- Occupies 70% of the canvas
+- Realistic editorial photograph showing: ${scene}
+- Professional news agency style
+- Cinematic lighting
+- Authentic and credible
+
+HEADLINE PANEL:
+- Semi-transparent dark overlay
+- Category badge: ${catBadge}
+- Large bold headline: "${headline}"
+
+FOOTER:
+- Argentina Radar branding
+- @ArgentinaRadar
+- Subtle radar icon
+
+IMPORTANT:
+- No watermarks
+- No logos from other media outlets
+- No blurry text
+- No excessive effects
+- Professional journalistic appearance
+- Looks like a real Reuters/Bloomberg news card
+- Optimized for social media engagement`;
 }
 
 // ─── Bluesky Tweet Formatter ────────────────────────────────────────────
@@ -185,6 +221,11 @@ function formatBlueskyTweet(title, source, category, rewrittenTitle) {
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
 async function publishToBluesky(articleId, text, imageUrl, url) {
+  // 🔒 GUARD: never publish without generated image
+  if (!imageUrl) {
+    console.warn(`[bluesky] 🚫 Skipped ${articleId.slice(0, 8)} — no image`);
+    return { success: false, error: 'Sin imagen generada — publicación bloqueada' };
+  }
   const doPub = async (label) => {
       const resp = await fetch(`${API.publisher}/api/publish-text`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -276,7 +317,7 @@ async function checkPendingApprovals() {
       // Build NanoBanana prompt + image URL (16:9 landscape for Bluesky)
       const category = entry.category || 'general';
       const nanoPrompt = buildNanoBananaPrompt(entry.title, entry.source, category);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
       // Save image_url for later Bluesky publish
       db.prepare('UPDATE approval_queue SET image_url = ?, image_prompt = ? WHERE id = ?')
@@ -532,7 +573,7 @@ async function handleBreakingCommand(title, source, chatId) {
 
   // 3. Generate NanoBanana image
   const nanoPrompt = buildNanoBananaPrompt(title, source, category);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
   // 4. Publish to Bluesky (reuse the common helper)
   const result = await publishToBluesky(articleId, draftTweet, imageUrl, `https://breaking/${articleId}`);

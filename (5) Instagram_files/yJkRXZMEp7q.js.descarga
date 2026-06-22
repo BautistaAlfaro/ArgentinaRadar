@@ -1,0 +1,3 @@
+;/*FB_PKG_DELIM*/
+
+__d("PolarisDynamicExploreResponsiveGridHelper",[],(function(t,n,r,o,a,i){"use strict";var e=.74,l=256,s=3,u=6;function c(t,n){return n?s:Math.min(Math.max(Math.floor(t*e/l),s),u)}function d(e,t){var n=[],r=0;e.forEach(function(e){var t=e.layout_content,o=t.fill_items,a=t.primary_item;if(a!=null&&n.push({mediaIndex:0,sectionalItem:e,uniqueKey:"item-"+r++}),o!=null){var i=a!=null?1:0;o.forEach(function(t,o){n.push({mediaIndex:o+i,sectionalItem:e,uniqueKey:"item-"+r++})})}});for(var o=[],a=0;a<n.length;a+=t)o.push(n.slice(a,a+t));return o}i.calculateColumnsPerRow=c,i.flattenSectionalItemsIntoRows=d}),66);
