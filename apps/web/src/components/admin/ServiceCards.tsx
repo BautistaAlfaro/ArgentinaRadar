@@ -93,51 +93,35 @@ function ServiceCard({ svc, index }: { svc: ServiceInfo; index: number }) {
 
 export function ServiceCards({ services, isLoading }: ServiceCardsProps) {
   if (isLoading) {
-    return (
-      <section className="glass-panel rounded-xl p-5">
-        <div className="h-5 w-32 bg-slate-700 rounded animate-pulse mb-4" />
-        <div className="grid grid-cols-2 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-20 bg-slate-700/30 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </section>
-    );
+    return <div className="flex gap-1.5"><div className="w-16 h-5 bg-slate-700/30 rounded animate-pulse" /></div>;
   }
 
-  if (!services || services.length === 0) {
-    return (
-      <section className="glass-panel rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-slate-400 mb-3">Service Health</h3>
-        <p className="text-xs text-slate-500">No service data available.</p>
-      </section>
-    );
-  }
+  if (!services || services.length === 0) return null;
 
   const upCount = services.filter((s) => s.status === 'up').length;
 
-  return (
-    <LazyMotion features={domAnimation}>
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-panel rounded-xl p-5"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white tracking-tight">
-            Service Health
-          </h3>
-          <span className="text-[11px] text-slate-500 font-mono">
-            {upCount}/{services.length} online
-          </span>
-        </div>
+  const SVC_ICONS: Record<string, string> = {
+    'news-ingestion': '📡', 'publisher': '🚀', 'ai-processor': '🧠',
+    'admin': '⚙️', 'web': '🌐', 'ollama': '🦙',
+  };
+  const SVC_LABEL: Record<string, string> = {
+    'news-ingestion': 'News', 'publisher': 'Pub', 'ai-processor': 'AI',
+    'admin': 'Admin', 'web': 'Web', 'ollama': 'Ollama',
+  };
 
-        <div className="grid grid-cols-2 gap-3">
-          {services.map((svc, idx) => (
-            <ServiceCard key={svc.name} svc={svc} index={idx} />
-          ))}
-        </div>
-      </motion.section>
-    </LazyMotion>
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span className="text-[10px] text-slate-500">{upCount}/{services.length}</span>
+      {services.map((svc) => (
+        <span key={svc.name}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[9px]
+            ${svc.status === 'up' ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400' : 'border-red-500/20 bg-red-500/5 text-red-400'}`}
+        >
+          <span className={`w-1 h-1 rounded-full ${svc.status === 'up' ? 'bg-emerald-400' : 'bg-red-500'}`} />
+          <span>{SVC_ICONS[svc.name] || '•'}</span>
+          <span>{SVC_LABEL[svc.name] || svc.name}</span>
+        </span>
+      ))}
+    </span>
   );
 }

@@ -1,6 +1,6 @@
 /**
- * ControlCenter — Compact unified dashboard.
- * Everything fits in ~50vh — no scroll needed on 1080p.
+ * ControlCenter — Compact dashboard. Fits 1080p without scroll.
+ * Priority: Approval Queue (interactive) > Pipeline > Charts > Activity > Logs > Services
  */
 import { lazy, Suspense } from 'react';
 import { LazyMotion, domAnimation } from 'framer-motion';
@@ -14,13 +14,7 @@ const EventDetectionChart = lazy(() => import('../components/admin/charts/EventD
 const ActivityFeed = lazy(() => import('../components/admin/ActivityFeed').then(m => ({ default: m.ActivityFeed })));
 const LogViewer = lazy(() => import('../components/admin/LogViewer').then(m => ({ default: m.LogViewer })));
 
-function Skel({ h }: { h: string }) {
-  return <div className={`bg-slate-700/20 rounded animate-pulse ${h}`} />;
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[9px] font-bold text-primary tracking-wider uppercase mb-1">{children}</p>;
-}
+function Skel({ h }: { h: string }) { return <div className={`bg-slate-700/20 rounded animate-pulse ${h}`} />; }
 
 export function ControlCenter() {
   const { data: dailyStats } = useDailyStats('7d');
@@ -32,53 +26,45 @@ export function ControlCenter() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <div className="space-y-1.5 text-[11px]" style={{ height: '50vh', overflow: 'hidden' }}>
+      <div className="space-y-2 text-[11px] max-w-full">
 
-        {/* Row 1: Services (1 line pills) + Pipeline (inline) */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="shrink-0"><ServiceCards services={serviceHealth ?? null} isLoading={hl} /></div>
-          <div className="text-[10px] shrink-0">
-            <PipelineView pipeline={pipeData} approvalQueue={pipelineStats?.approvalQueue ?? {}} isLoading={pl} />
-          </div>
+        {/* Row 1: Services (inline pills) */}
+        <div className="text-[10px]">
+          <ServiceCards services={serviceHealth ?? null} isLoading={hl} />
         </div>
 
-        {/* Row 2: Approval Queue (interactive — takes most space) */}
-        <div className="flex-1 min-h-0" style={{ height: 'calc(50vh - 120px)' }}>
-          <Suspense fallback={<Skel h="h-full" />}>
+        {/* Row 2: Pipeline (1 line) */}
+        <div className="text-[10px]">
+          <PipelineView pipeline={pipeData} approvalQueue={pipelineStats?.approvalQueue ?? {}} isLoading={pl} />
+        </div>
+
+        {/* Row 3: Approval Queue — main interactive area */}
+        <div className="min-h-[300px]">
+          <Suspense fallback={<Skel h="h-80" />}>
             <ApprovalQueue />
           </Suspense>
         </div>
 
-        {/* Row 3: Charts + Activity + Logs — compact footer row */}
-        <div className="grid grid-cols-4 gap-2 shrink-0">
-          <div>
-            <SectionLabel>News</SectionLabel>
-            <Suspense fallback={<Skel h="h-20" />}>
-              <NewsProcessingChart data={dailyData} />
+        {/* Row 4: Charts + Activity — side by side */}
+        <div className="grid grid-cols-3 gap-3">
+          <Suspense fallback={<Skel h="h-32" />}>
+            <NewsProcessingChart data={dailyData} />
+          </Suspense>
+          <Suspense fallback={<Skel h="h-32" />}>
+            <EventDetectionChart data={dailyData} />
+          </Suspense>
+          <div className="text-[10px] overflow-hidden">
+            <Suspense fallback={<Skel h="h-32" />}>
+              <ActivityFeed items={recent.slice(0, 5)} isLoading={pl} />
             </Suspense>
           </div>
-          <div>
-            <SectionLabel>Events</SectionLabel>
-            <Suspense fallback={<Skel h="h-20" />}>
-              <EventDetectionChart data={dailyData} />
-            </Suspense>
-          </div>
-          <div>
-            <SectionLabel>Activity</SectionLabel>
-            <div className="text-[9px]">
-              <Suspense fallback={<Skel h="h-20" />}>
-                <ActivityFeed items={recent.slice(0, 3)} isLoading={pl} />
-              </Suspense>
-            </div>
-          </div>
-          <div>
-            <SectionLabel>Logs</SectionLabel>
-            <div className="text-[9px]">
-              <Suspense fallback={<Skel h="h-20" />}>
-                <LogViewer limit={3} compact />
-              </Suspense>
-            </div>
-          </div>
+        </div>
+
+        {/* Row 5: Logs — compact */}
+        <div className="text-[10px]">
+          <Suspense fallback={<Skel h="h-20" />}>
+            <LogViewer limit={5} compact />
+          </Suspense>
         </div>
 
       </div>
