@@ -17,6 +17,45 @@ const { sendMorningBriefing, checkAndSendBriefing } = require('./morning-briefin
 const scheduleManager = require('../../shared/scheduleManager');
 const { MSG } = require('../../shared/messages.es');
 
+// ─── OpenRouter Prompt Enhancer ────────────────────────────────────────
+
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'mistralai/mistral-nemo';
+
+async function enhancePrompt(title, source, category) {
+  if (!OPENROUTER_KEY || OPENROUTER_KEY === 'your_openrouter_key') return null;
+  try {
+    const catBadge = category === 'urgente' ? '🚨 URGENTE' : category === 'politica' ? '🇦🇷 POLÍTICA' :
+      category === 'economia' ? '📈 ECONOMÍA' : category === 'deportes' ? '⚽ DEPORTES' : '🌎 INTERNACIONAL';
+    
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [{
+          role: 'system',
+          content: `You are an expert news graphics designer. Create a SINGLE PARAGRAPH image generation prompt for a breaking news graphic titled "Argentina Radar".
+STYLE: Dark navy background (#07111F), electric blue accents (#00A3FF), Bloomberg/Reuters premium journalism aesthetic, dramatic lighting, photorealistic, 4K quality.
+Include: category badge "${catBadge}", headline, realistic editorial scene. NO watermarks, NO logos from other outlets. Output ONLY the prompt, no explanation.`
+        }, {
+          role: 'user',
+          content: `Create an image generation prompt for this news:\nTitle: "${title}"\nSource: ${source}\nCategory: ${catBadge}\n\nGenerate a one-paragraph prompt describing the scene.`
+        }],
+        max_tokens: 300, temperature: 0.7
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const prompt = data.choices?.[0]?.message?.content?.trim();
+    if (prompt) console.log('[openrouter] Enhanced prompt for', title.slice(0, 40));
+    return prompt || null;
+  } catch (e) {
+    console.warn('[openrouter] Prompt enhancement failed:', e.message);
+    return null;
+  }
+}
+
 // ─── Markdown escaping helpers ────────────────────────────────────────
 function escapeMd(t) { return (t || '').replace(/([_*\[\]()~`>#+\-=|{}.!])/g, '\\$1'); }
 function b(t) { return '*' + escapeMd(t) + '*'; }
@@ -45,6 +84,7 @@ function buildNanoBananaPrompt(title, source, category) {
   const catBadge = category === 'urgente' ? '🚨 URGENTE' : category === 'politica' ? '🇦🇷 POLÍTICA' :
     category === 'economia' ? '📈 ECONOMÍA' : category === 'deportes' ? '⚽ DEPORTES' : '🌎 INTERNACIONAL';
   
+  // Base template — used when OpenRouter fails or is unavailable
   return `Create a professional breaking news graphic for "Argentina Radar".
 
 STYLE:
@@ -92,6 +132,12 @@ IMPORTANT:
 - Professional journalistic appearance
 - Looks like a real Reuters/Bloomberg news card
 - Optimized for social media engagement`;
+}
+
+// Async version that uses OpenRouter to enhance the prompt
+async function buildEnhancedPrompt(title, source, category) {
+  const enhanced = await enhancePrompt(title, source, category);
+  return enhanced || buildNanoBananaPrompt(title, source, category);
 }
 
 // ─── Bluesky Tweet Formatter ────────────────────────────────────────────
@@ -317,7 +363,7 @@ async function checkPendingApprovals() {
 
       // Build NanoBanana prompt + image URL (16:9 landscape for Bluesky)
       const category = entry.category || 'general';
-      const nanoPrompt = buildNanoBananaPrompt(entry.title, entry.source, category);
+      const nanoPrompt = await buildEnhancedPrompt(entry.title, entry.source, category);
       const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
       // Save image_url for later Bluesky publish
@@ -573,7 +619,7 @@ async function handleBreakingCommand(title, source, chatId) {
   `).run(queueId, articleId, draftTweet);
 
   // 3. Generate NanoBanana image
-  const nanoPrompt = buildNanoBananaPrompt(title, source, category);
+  const nanoPrompt = await buildEnhancedPrompt(title, source, category);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
   // 4. Publish to Bluesky (reuse the common helper)
