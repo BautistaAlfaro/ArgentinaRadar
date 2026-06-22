@@ -60,6 +60,7 @@ import { sourcesRouter } from "./routes/sources.js";
 import { actionsRouter } from "./routes/actions.js";
 import { systemRouter } from "./routes/system.js";
 import { pipelineRouter } from "./routes/pipeline.js";
+import { articlesRouter } from "./routes/articles.js";
 import { startCollector } from "./collector.js";
 
 const app = express();
@@ -456,6 +457,7 @@ app.use("/api/admin", servicesRouter);
 app.use("/api/admin", sourcesRouter);
 app.use("/api/admin", actionsRouter);
 app.use("/api/admin", systemRouter);
+app.use("/api/admin", articlesRouter);
 app.use("/api/pipeline", pipelineRouter);
 
 // ─── Health ─────────────────────────────────────────────────────────
@@ -491,6 +493,18 @@ app.listen(config.port, () => {
   console.log(`[admin]   POST /api/pipeline/approve-batch       — Approve or reject items`);
   console.log(`[admin]   POST /api/pipeline/publish-batch       — Mark approved items published`);
   console.log(`[admin]   GET  /api/pipeline/batches             — Batch summary list`);
+  console.log(`[admin]   ├── Article Workflow (Dashboard, replaces Telegram):`);
+  console.log(`[admin]   GET    /api/admin/articles                — List articles with filters`);
+  console.log(`[admin]   GET    /api/admin/articles/:id            — Article detail`);
+  console.log(`[admin]   GET    /api/admin/articles/stats          — Aggregate workflow stats`);
+  console.log(`[admin]   GET    /api/admin/articles/sources        — Source list for filters`);
+  console.log(`[admin]   GET    /api/admin/articles/categories     — Category list for filters`);
+  console.log(`[admin]   POST   /api/admin/articles/:id/approve    — Approve + publish`);
+  console.log(`[admin]   POST   /api/admin/articles/:id/reject     — Reject`);
+  console.log(`[admin]   POST   /api/admin/articles/batch-approve  — Batch approve`);
+  console.log(`[admin]   GET    /api/admin/ai/status               — AI processor status`);
+  console.log(`[admin]   POST   /api/admin/ai/threshold            — Update AI threshold`);
+  console.log(`[admin]   POST   /api/admin/ai/reprocess            — Reprocess batch`);
   console.log(`[admin]   GET  /api/admin/health        — Comprehensive health dashboard`);
   console.log(`[admin]   GET  /api/admin/health/all    — Ecosystem health (all services + Ollama)`);
   console.log(`[admin]   ├── Control Center Actions (ADMIN):`);

@@ -1,16 +1,26 @@
 /**
- * ControlCenter — Grid asimétrico 3 columnas (70% + 30%).
- * Diseñado para 24" 1920x1080 sin scroll externo.
+ * ControlCenter — 3-column dashboard layout replacing Telegram workflow.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ 🤖 ARGENTINA RADAR — Panel de Control                     [Stats]  │
+ * ├───────────────┬─────────────────────────────────┬───────────────────┤
+ * │ WORKFLOW      │ CONTENT PANEL                   │ MONITORING        │
+ * │ (250px)       │ (flex-1)                        │ (300px)           │
+ * │               │                                 │                   │
+ * │ 🔵 Ingest    │   (changes by active phase)      │ 📜 Activity      │
+ * │ 🟡 AI        │   - ArticleTable                 │ 📝 Logs          │
+ * │ 🟢 Approve   │   - AIProcessPanel               │                   │
+ * │ 🟣 Publish   │   - ApprovalPanel                │                   │
+ * │               │   - PublishPanel                 │                   │
+ * └───────────────┴─────────────────────────────────┴───────────────────┘
  */
-import { lazy, Suspense } from 'react';
+
+import { useState, Suspense, lazy } from 'react';
 import { LazyMotion, domAnimation } from 'framer-motion';
-import { PipelineView } from '../components/admin/PipelineView';
-import { ServiceCards } from '../components/admin/ServiceCards';
+import { WorkflowSidebar, type WorkflowPhase } from '../components/workflow/WorkflowSidebar';
+import { WorkflowContent } from '../components/workflow/WorkflowContent';
 import { useDailyStats, usePipelineStats, useServiceHealth } from '../hooks/useAdminData';
 
-const ApprovalQueue = lazy(() => import('../components/admin/ApprovalQueue').then(m => ({ default: m.ApprovalQueue })));
-const NewsProcessingChart = lazy(() => import('../components/admin/charts/NewsProcessingChart').then(m => ({ default: m.NewsProcessingChart })));
-const EventDetectionChart = lazy(() => import('../components/admin/charts/EventDetectionChart').then(m => ({ default: m.EventDetectionChart })));
 const ActivityFeed = lazy(() => import('../components/admin/ActivityFeed').then(m => ({ default: m.ActivityFeed })));
 const LogViewer = lazy(() => import('../components/admin/LogViewer').then(m => ({ default: m.LogViewer })));
 
@@ -20,76 +30,40 @@ function Label({ children }: { children: React.ReactNode }) {
 }
 
 export function ControlCenter() {
-  const { data: dailyStats } = useDailyStats('7d');
+  const [activePhase, setActivePhase] = useState<WorkflowPhase>('ingest');
+
   const { data: pipelineStats, isLoading: pl } = usePipelineStats();
   const { data: serviceHealth, isLoading: hl } = useServiceHealth();
-  const dailyData = Array.isArray(dailyStats) ? dailyStats : [];
-  const pipeData = pipelineStats?.pipeline ?? {};
   const recent = pipelineStats?.recent ?? [];
 
   return (
     <LazyMotion features={domAnimation}>
       {/* Full viewport height — no external scroll */}
-      <div className="flex flex-col" style={{ height: 'calc(100vh - 6rem)' }}>
+      <div className="flex flex-col pb-8" style={{ height: 'calc(100vh - 4rem)' }}>
 
         {/* ===== HEADER ===== */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-slate-700/30 shrink-0">
           <h1 className="text-sm font-bold text-white tracking-tight">🤖 ARGENTINA RADAR — Panel de Control</h1>
-          <span className="text-[10px] text-slate-500 font-mono">
-            {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] text-slate-500 font-mono">
+              {new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
         </div>
 
-        {/* ===== BODY: Grid 70/30 ===== */}
-        <div className="grid grid-cols-[1fr_360px] gap-0 flex-1 min-h-0">
+        {/* ===== BODY: 3 columns ===== */}
+        <div className="flex flex-1 min-h-0">
 
-          {/* ========== LEFT: Core Operativo (70%) ========== */}
-          <div className="flex flex-col p-4 gap-3 overflow-hidden border-r border-slate-700/30">
+          {/* ===== COL 1: Workflow Sidebar (250px) ===== */}
+          <WorkflowSidebar activePhase={activePhase} onPhaseChange={setActivePhase} />
 
-            {/* Row 1: ServiceCards — horizontal flex */}
-            <div className="shrink-0">
-              <ServiceCards services={serviceHealth ?? null} isLoading={hl} />
-            </div>
-
-            {/* Row 2: PipelineView — full width */}
-            <div className="shrink-0 text-[10px]">
-              <PipelineView pipeline={pipeData} approvalQueue={pipelineStats?.approvalQueue ?? {}} isLoading={pl} />
-            </div>
-
-            {/* Row 3: ApprovalQueue — interactive table, takes remaining space */}
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-              <Label>📋 Cola de Aprobación</Label>
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <Suspense fallback={<Skel h="h-full" />}>
-                  <ApprovalQueue />
-                </Suspense>
-              </div>
-            </div>
-
-            {/* Row 4: Charts — 2 columns */}
-            <div className="shrink-0 grid grid-cols-2 gap-3" style={{ height: '180px' }}>
-              <div className="flex flex-col">
-                <Label>📊 News Processing</Label>
-                <div className="flex-1 min-h-0">
-                  <Suspense fallback={<Skel h="h-full" />}>
-                    <NewsProcessingChart data={dailyData} />
-                  </Suspense>
-                </div>
-              </div>
-              <div className="flex flex-col">
-                <Label>📈 Event Detection</Label>
-                <div className="flex-1 min-h-0">
-                  <Suspense fallback={<Skel h="h-full" />}>
-                    <EventDetectionChart data={dailyData} />
-                  </Suspense>
-                </div>
-              </div>
-            </div>
-
+          {/* ===== COL 2: Content Panel (flex-1) ===== */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden border-r border-slate-700/30">
+            <WorkflowContent activePhase={activePhase} />
           </div>
 
-          {/* ========== RIGHT: Sidebar de Monitoreo (30% / 360px) ========== */}
-          <div className="flex flex-col p-4 gap-3 overflow-hidden">
+          {/* ===== COL 3: Monitoring Sidebar (300px) ===== */}
+          <div className="w-[300px] shrink-0 flex flex-col p-4 gap-3 overflow-hidden">
 
             {/* ActivityFeed — top half */}
             <div className="flex-1 min-h-0 flex flex-col">
