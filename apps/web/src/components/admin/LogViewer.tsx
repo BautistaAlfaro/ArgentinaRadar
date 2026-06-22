@@ -107,7 +107,12 @@ function LogDataCell({ data }: { data: string | null }) {
 
 // ─── Component ─────────────────────────────────────────────────────────
 
-export function LogViewer() {
+interface LogViewerProps {
+  limit?: number;
+  compact?: boolean;
+}
+
+export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
   // Grouped data state
   const [data, setData] = useState<{
     logs: LogEntry[];
@@ -125,7 +130,7 @@ export function LogViewer() {
   // UI state
   const [page, setPage] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const pageSize = 50;
+  const pageSize = limit;
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { logs, total, services } = data;

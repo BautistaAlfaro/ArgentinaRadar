@@ -290,33 +290,26 @@ export function ControlCenter() {
             <span className="text-blue-300">Controlá el pipeline desde Telegram: <span className="text-white font-mono">/panel</span> — También: <span className="text-white font-mono">/breaking</span> <span className="text-white font-mono">/search</span> <span className="text-white font-mono">/briefing</span> <span className="text-white font-mono">/alert</span></span>
           </div>
 
-          {/* Mini stats bar */}
-          <MiniPipeStats pipeline={pipeData} />
-
-          {/* Pipeline flow */}
+          {/* Pipeline flow — compact */}
           <PipelineView
             pipeline={pipeData}
             approvalQueue={pipelineStats?.approvalQueue ?? {}}
             isLoading={statsLoading}
           />
 
-          {/* Charts — compact, h-40 */}
-          <Suspense fallback={
+          {/* Charts — equal height, compact */}
+          <Suspense fallback={<div className="grid grid-cols-2 gap-3"><Skel h="h-36" /><Skel h="h-36" /></div>}>
             <div className="grid grid-cols-2 gap-3">
-              <Skel h="h-40" /><Skel h="h-40" />
-            </div>
-          }>
-            <div className="grid grid-cols-2 gap-3 min-h-40">
-              <div className="min-h-[160px]"><NewsProcessingChart data={dailyData} /></div>
-              <div className="min-h-[160px]"><EventDetectionChart data={dailyData} /></div>
+              <div className="min-h-[140px]"><NewsProcessingChart data={dailyData} /></div>
+              <div className="min-h-[140px]"><EventDetectionChart data={dailyData} /></div>
             </div>
           </Suspense>
 
-          {/* Recent Activity — capped height */}
+          {/* Recent Activity — compact, readable */}
           <div>
-            <SectionLabel>Recent Activity</SectionLabel>
-            <div className="max-h-48 overflow-y-auto">
-              <Suspense fallback={<Skel h="h-32" />}>
+            <SectionLabel>Actividad Reciente</SectionLabel>
+            <div className="max-h-40 overflow-y-auto text-xs">
+              <Suspense fallback={<Skel h="h-24" />}>
                 <ActivityFeed items={recentActivity as any} isLoading={false} />
               </Suspense>
             </div>
@@ -324,7 +317,7 @@ export function ControlCenter() {
         </div>
 
         {/* ── RIGHT COLUMN ────────────────────────────────── */}
-        <div className="overflow-y-auto pl-4 space-y-4 pb-4">
+        <div className="overflow-y-auto pl-4 space-y-3 pb-4">
 
           {/* Services — compact pill grid */}
           <div>
@@ -332,26 +325,22 @@ export function ControlCenter() {
             <CompactServices />
           </div>
 
-          {/* Divider */}
-          <div className="border-t border-white/10" />
-
           {/* Approval Queue */}
           <div>
             <SectionLabel>Approval Queue</SectionLabel>
-            <Suspense fallback={<Skel h="h-64" />}>
+            <Suspense fallback={<Skel h="h-40" />}>
               <ApprovalQueue />
             </Suspense>
           </div>
 
-          {/* Divider */}
-          <div className="border-t border-white/10" />
-
-          {/* Logs */}
-          <div>
-            <SectionLabel>Service Logs</SectionLabel>
-            <Suspense fallback={<Skel h="h-48" />}>
-              <LogViewer />
-            </Suspense>
+          {/* Logs — últimos 5 */}
+          <div className="border-t border-white/10 pt-3">
+            <SectionLabel>Últimos Logs</SectionLabel>
+            <div className="max-h-36 overflow-y-auto">
+              <Suspense fallback={<Skel h="h-16" />}>
+                <LogViewer limit={5} compact />
+              </Suspense>
+            </div>
           </div>
 
         </div>

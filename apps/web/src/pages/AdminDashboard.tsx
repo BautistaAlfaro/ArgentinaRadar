@@ -10,7 +10,6 @@ import { ControlCenter } from './ControlCenter';
 import { useKPIs, useDailyStats, useSystemMetrics, useRevenue, usePipelineStats, useServiceHealth } from '../hooks/useAdminData';
 import { ServiceCards } from '../components/admin/ServiceCards';
 import { QualityMetrics } from '../components/admin/QualityMetrics';
-import { LogViewer } from '../components/admin/LogViewer';
 const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
 const PipelineView = lazy(() => import('../components/admin/PipelineView').then(m => ({ default: m.PipelineView })));
 const CategoryChart = lazy(() => import('../components/admin/CategoryChart').then(m => ({ default: m.CategoryChart })));
@@ -25,7 +24,6 @@ const SystemMetrics = lazy(() => import('../components/admin/SystemMetrics').the
 const InsecurityPanel = lazy(() => import('../components/admin/InsecurityPanel').then(m => ({ default: m.InsecurityPanel })));
 const ProtestPanel = lazy(() => import('../components/admin/ProtestPanel').then(m => ({ default: m.ProtestPanel })));
 const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').then(m => ({ default: m.PoliticalRadar })));
-const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
 const ServiceControlPanel = lazy(() => import('../components/admin/ServiceControlPanel').then(m => ({ default: m.ServiceControlPanel })));
 const SourceManager = lazy(() => import('../components/admin/SourceManager').then(m => ({ default: m.SourceManager })));
 
@@ -37,7 +35,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'control-center' | 'overview' | 'quality' | 'sources' | 'logs';
+type Tab = 'control-center' | 'overview' | 'quality' | 'sources';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -50,7 +48,6 @@ const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'overview', label: 'Estadísticas', icon: 'monitoring' },
   { value: 'quality', label: 'Quality', icon: 'star' },
   { value: 'sources', label: 'Fuentes', icon: 'rss_feed' },
-  { value: 'logs', label: 'Logs', icon: 'list' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -332,12 +329,6 @@ export function AdminDashboard() {
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <SourceManager />
               </Suspense>
-            </div>
-          )}
-
-          {activeTab === 'logs' && (
-            <div>
-              <LogViewer />
             </div>
           )}
 
