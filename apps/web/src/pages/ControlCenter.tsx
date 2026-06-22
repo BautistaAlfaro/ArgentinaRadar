@@ -303,13 +303,11 @@ export function ControlCenter() {
           </Suspense>
 
           {/* Recent Activity — compact */}
-          <div>
+          <div className="flex-1 min-h-0">
             <SectionLabel>Actividad Reciente</SectionLabel>
-            <div className="max-h-32 overflow-y-auto text-[10px]">
-              <Suspense fallback={<Skel h="h-20" />}>
-                <ActivityFeed items={recentActivity as any} isLoading={false} />
-              </Suspense>
-            </div>
+            <Suspense fallback={<Skel h="h-20" />}>
+              <ActivityFeed items={recentActivity as any} isLoading={false} />
+            </Suspense>
           </div>
         </div>
 
@@ -321,16 +319,16 @@ export function ControlCenter() {
             <CompactServices />
           </div>
 
-          {/* Approval Queue — expandable, slim */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          {/* Approval Queue — limited height */}
+          <div className="shrink-0" style={{ maxHeight: '40%' }}>
             <Suspense fallback={<Skel h="h-24" />}>
               <ApprovalQueue />
             </Suspense>
           </div>
 
-          {/* Logs — fixed 5 lines at bottom */}
-          <div className="shrink-0 border-t border-white/10 pt-1.5 max-h-[120px] overflow-y-auto">
-            <div className="text-[10px]">
+          {/* Logs — fills remaining space */}
+          <div className="flex-1 min-h-0 border-t border-white/10 pt-1.5 overflow-hidden">
+            <div className="text-[10px] h-full">
               <Suspense fallback={<Skel h="h-10" />}>
                 <LogViewer limit={5} compact />
               </Suspense>

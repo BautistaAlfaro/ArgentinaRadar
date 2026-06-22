@@ -142,7 +142,7 @@ export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
           <span className="text-[11px] text-slate-500">{items.length} articles</span>
         </div>
 
-        <div className="divide-y divide-slate-700/30 max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700">
+        <div className="divide-y divide-slate-700/30">
           {items.map((item, idx) => (
             <ActivityRow key={item.id} item={item} index={idx} />
           ))}
