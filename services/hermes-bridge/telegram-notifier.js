@@ -1249,7 +1249,7 @@ async function checkCallbacks() {
             try {
               const { BskyAgent } = require('@atproto/api');
               const agent = new BskyAgent({ service: 'https://bsky.social' });
-              await agent.login({ identifier: 'sitearsdevs.bsky.social', password: process.env.BSKY_APP_PASSWORD || '5mgb-2fip-7o4g-hu5n' });
+              await agent.login({ identifier: 'sitearsdevs.bsky.social', password: process.env.BSKY_APP_PASSWORD });
               const blob = await agent.uploadBlob(geminiImg.buffer, { encoding: geminiImg.mimeType });
               // Post with image embed directly
               const rt = new (require('@atproto/api').RichText)({ text: tweetText.slice(0, 300) });
