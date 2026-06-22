@@ -26,7 +26,7 @@ async function generateImageViaOpenRouter(prompt) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image',
+        model: 'google/gemini-3-pro-image',
         messages: [{ role: 'user', content: prompt }],
         modalities: ['image', 'text'],
         max_tokens: 4096,
