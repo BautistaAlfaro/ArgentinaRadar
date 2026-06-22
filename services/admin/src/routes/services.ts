@@ -145,6 +145,19 @@ servicesRouter.post("/services/:name/start", async (req, res) => {
     return;
   }
 
+  // Check if already running (port in use before starting)
+  if (svc.port !== null) {
+    const alreadyRunning = await getServiceStatus(svc);
+    if (alreadyRunning === 'running') {
+      res.json({
+        message: `'${svc.name}' is already running on port ${svc.port} — no action taken`,
+        service: svc.name,
+        alreadyRunning: true,
+      });
+      return;
+    }
+  }
+
   try {
     const { stdout, stderr } = await execCmd(
       `pm2 start ${PM2_CONFIG_PATH} --only ${svc.pm2Name}`,
@@ -153,6 +166,7 @@ servicesRouter.post("/services/:name/start", async (req, res) => {
     res.json({
       message: `Start command issued for '${svc.name}'`,
       service: svc.name,
+      alreadyRunning: false,
       stdout,
       stderr,
     });
@@ -203,10 +217,41 @@ servicesRouter.post("/services/:name/stop", async (req, res) => {
 
 servicesRouter.post("/services/start-all", async (_req, res) => {
   try {
-    const { stdout, stderr } = await execCmd(`pm2 start ${PM2_CONFIG_PATH}`, 60_000);
+    // Check which services are already running by port
+    const statusResults = await Promise.all(
+      SERVICES.map(async (svc) => ({
+        ...svc,
+        running: svc.port !== null && await getServiceStatus(svc) === 'running',
+      })),
+    );
+
+    const alreadyRunning = statusResults.filter((s) => s.running).map((s) => s.name);
+    const toStart = statusResults.filter((s) => !s.running);
+
+    let stdout = '', stderr = '';
+    const started: string[] = [];
+
+    if (toStart.length === 0) {
+      res.json({
+        message: "All services are already running — no action taken",
+        alreadyRunning,
+        started: [],
+      });
+      return;
+    }
+
+    // Start only the services that are not already running
+    // PM2 --only accepts a comma-separated list of process names
+    const pm2Names = toStart.map((s) => s.pm2Name).join(',');
+    const result = await execCmd(`pm2 start ${PM2_CONFIG_PATH} --only ${pm2Names}`, 60_000);
+    stdout = result.stdout;
+    stderr = result.stderr;
+    started.push(...toStart.map((s) => s.name));
 
     res.json({
-      message: "Start-all command issued",
+      message: `Started ${started.length} service(s) — ${alreadyRunning.length} already running`,
+      alreadyRunning,
+      started,
       stdout,
       stderr,
     });

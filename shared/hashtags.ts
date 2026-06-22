@@ -4,34 +4,82 @@
  * Extracts keywords from article titles and maps them to
  * relevant Spanish hashtags for the Argentine context.
  *
+ * Provides 30+ thematic hashtag categories plus province/city
+ * detection. Always generates at most 3 hashtags per call.
+ *
  * @module hashtags
  */
 
 // ---------------------------------------------------------------------------
-// Keyword → Hashtag map
+// Keyword → Hashtag map — 30+ trending Argentine hashtag categories
 // ---------------------------------------------------------------------------
 
 const KEYWORD_HASHTAG_MAP: Array<{ keywords: string[]; hashtag: string }> = [
-  // Economy
+  // Economy & Finance
   { keywords: ['dólar', 'dolar', 'inflación', 'inflacion', 'fmi', 'blue', 'bcra', 'economía', 'economia'], hashtag: '#EconomíaArgentina' },
-  // Politics
+  { keywords: ['merval', 'bolsa', 'acciones', 'mercado', 'finanzas', 'inversión', 'inversion'], hashtag: '#MercadoAR' },
+  { keywords: ['tarifas', 'subsidio', 'aumento', 'precios', 'canasta básica', 'canasta basica'], hashtag: '#PreciosAR' },
+  { keywords: ['dólar blue', 'dolar blue', 'dólar ccl', 'dolar ccl', 'dólar tarjeta', 'dolar tarjeta', 'dólar qatar', 'dolar qatar'], hashtag: '#DólarBlue' },
+  { keywords: ['salario', 'sueldo', 'paritaria', 'convenio colectivo', 'aumento salarial'], hashtag: '#SalariosAR' },
+  { keywords: ['jubilación', 'jubilacion', 'haberes', 'anses', 'moratoria'], hashtag: '#JubiladosAR' },
+
+  // Politics & Government
   { keywords: ['milei', 'presidente', 'gobierno', 'casa rosada', 'congreso', 'senado', 'diputados', 'elecciones', 'política', 'politica'], hashtag: '#PolíticaAR' },
+  { keywords: ['decreto', 'ley', 'dnu', 'votación', 'votacion', 'sesión', 'sesion', 'bicameral'], hashtag: '#LegislativoAR' },
+  { keywords: ['oposición', 'oposicion', 'kirchner', 'peronismo', 'radical', 'coalición', 'coalicion', 'frente de todos'], hashtag: '#OposiciónAR' },
+  { keywords: ['provincia', 'municipio', 'gobernador', 'intendente', 'gestión', 'gestion provincial'], hashtag: '#ProvinciasAR' },
+
+  // International Relations
+  { keywords: ['internacional', 'mundo', 'eeuu', 'china', 'brasil', 'europa', 'guerra', 'exterior'], hashtag: '#ArgentinaEnElMundo' },
+  { keywords: ['mercosur', 'comercio exterior', 'exportación', 'exportacion', 'importación', 'importacion', 'aduana'], hashtag: '#ComercioAR' },
+  { keywords: ['fmi', 'fondo monetario', 'deuda', 'acuerdo', 'stand by', 'desembolso'], hashtag: '#FMIAR' },
+
   // Sports
   { keywords: ['messi', 'selección', 'seleccion', 'fútbol', 'futbol', 'scaloneta', 'river', 'boca', 'primera división'], hashtag: '#FútbolArgentino' },
-  // Weather
-  { keywords: ['clima', 'tormenta', 'lluvia', 'temporal', 'alerta meteorológico', 'alerta'], hashtag: '#ClimaAR' },
-  // Technology
-  { keywords: ['tecnología', 'tecnologia', 'vaca muerta', 'litio', 'energía', 'energia', 'petróleo', 'petroleo', 'gas'], hashtag: '#TecnologíaAR' },
-  // Society
-  { keywords: ['sociedad', 'salud', 'educación', 'educacion', 'derechos', 'universidad'], hashtag: '#SociedadAR' },
-  // Security
+  { keywords: ['mundial', 'eliminatorias', 'copa', 'sudamericana', 'libertadores', 'champions'], hashtag: '#MundialAR' },
+  { keywords: ['tenis', 'basquet', 'rugby', 'hockey', 'voley', 'boxeo', 'automovilismo', 'padel'], hashtag: '#DeportesAR' },
+  { keywords: ['olimpíadas', 'olimpiadas', 'juegos olímpicos', 'juegos olimpicos', 'medalla', 'podio'], hashtag: '#JJOOAR' },
+
+  // Security & Justice
   { keywords: ['seguridad', 'policial', 'delito', 'robo', 'asalt', 'homicidio', 'detenido'], hashtag: '#SeguridadAR' },
-  // International
-  { keywords: ['internacional', 'mundo', 'eeuu', 'china', 'brasil', 'europa', 'guerra'], hashtag: '#InternacionalAR' },
-  // Justice
-  { keywords: ['justicia', 'juez', 'tribunal', 'corte suprema', 'fallo', 'condena'], hashtag: '#JusticiaAR' },
-  // Agriculture
+  { keywords: ['justicia', 'juez', 'tribunal', 'corte suprema', 'fallo', 'condena', 'sentencia'], hashtag: '#JusticiaAR' },
+  { keywords: ['narcotráfico', 'narco', 'drogas', 'cartel', 'mafia', 'lavado de dinero', 'narcotrafico'], hashtag: '#NarcotráficoAR' },
+  { keywords: ['cárcel', 'carcel', 'preso', 'penitenciario', 'libertad', 'indulto', 'reclusión'], hashtag: '#SistemaPenalAR' },
+
+  // Society & Culture
+  { keywords: ['sociedad', 'salud', 'educación', 'educacion', 'derechos', 'universidad'], hashtag: '#SociedadAR' },
+  { keywords: ['cultura', 'espectáculo', 'espectaculo', 'cine', 'teatro', 'música', 'musica', 'show', 'recital'], hashtag: '#CulturaAR' },
+  { keywords: ['protesta', 'manifestación', 'manifestacion', 'marcha', 'movilización', 'movilizacion', 'paro', 'huelga'], hashtag: '#MovilizaciónAR' },
+
+  // Weather & Environment
+  { keywords: ['clima', 'tormenta', 'lluvia', 'temporal', 'alerta meteorológico', 'alerta'], hashtag: '#ClimaAR' },
+  { keywords: ['sequía', 'sequia', 'inundación', 'inundacion', 'incendio', 'calor', 'ola de calor', 'helada'], hashtag: '#ClimaExtremoAR' },
+  { keywords: ['ambiente', 'ecología', 'ecologia', 'naturaleza', 'biodiversidad', 'contaminación', 'contaminacion'], hashtag: '#AmbienteAR' },
+
+  // Technology & Energy
+  { keywords: ['tecnología', 'tecnologia', 'vaca muerta', 'litio', 'energía', 'energia', 'petróleo', 'petroleo', 'gas'], hashtag: '#TecnologíaAR' },
+  { keywords: ['ciencia', 'investigación', 'investigacion', 'conicet', 'innovación', 'innovacion', 'desarrollo'], hashtag: '#CienciaAR' },
+  { keywords: ['internet', 'conectividad', 'fibra óptica', 'fibra optica', '5g', 'digital', 'aplicación', 'startup'], hashtag: '#DigitalAR' },
+
+  // Agriculture & Production
   { keywords: ['campo', 'agro', 'soja', 'trigo', 'maíz', 'maiz', 'ganadería', 'ganaderia'], hashtag: '#CampoAR' },
+  { keywords: ['cosecha', 'granos', 'exportaciones agro', 'producción', 'produccion rural', 'alimentos'], hashtag: '#AgroAR' },
+
+  // Health & Education
+  { keywords: ['hospital', 'médico', 'medico', 'vacuna', 'enfermedad', 'pandemia', 'covid', 'salud pública'], hashtag: '#SaludAR' },
+  { keywords: ['educación', 'educacion', 'colegio', 'escuela', 'docente', 'alumno', 'universidad', 'facultad'], hashtag: '#EducaciónAR' },
+
+  // Emergency
+  { keywords: ['urgente', 'último momento', 'ultimo momento', 'emergencia', 'catástrofe', 'catastrofe', 'accidente', 'tragedia'], hashtag: '#UrgenteAR' },
+  { keywords: ['terremoto', 'sismo', 'explosión', 'explosion', 'derrumbe', 'alud', 'evacuación', 'evacuacion'], hashtag: '#EmergenciaAR' },
+
+  // Transport & Infrastructure
+  { keywords: ['transporte', 'subte', 'colectivo', 'tren', 'ómnibus', 'omnibus', 'avión', 'avion', 'vuelo'], hashtag: '#TransporteAR' },
+  { keywords: ['ruta', 'autopista', 'camino', 'obra pública', 'obra publica', 'infraestructura', 'vialidad'], hashtag: '#ObraPúblicaAR' },
+
+  // Tourism
+  { keywords: ['turismo', 'viaje', 'vacaciones', 'hotel', 'destino', 'patagonia', 'cataratas', 'iglazú'], hashtag: '#TurismoAR' },
+  { keywords: ['verano', 'invierno', 'temporada', 'playa', 'montaña', 'costa atlántica', 'costa atlantica'], hashtag: '#TemporadaAR' },
 ];
 
 // Argentine provinces and major cities mapping
@@ -81,6 +129,9 @@ const LOCATION_MAP: Record<string, string> = {
  *
  * Always includes `#ArgentinaRadar` as the primary tag, plus 1-2
  * contextual tags based on keyword matching against the title.
+ * Province/city mentions add location hashtags.
+ *
+ * **Maximum 3 hashtags total** — enforced by the `slice(0, 3)`.
  *
  * @param title - The article headline.
  * @returns Array of hashtag strings (e.g. `["#ArgentinaRadar", "#EconomíaArgentina"]`).
@@ -107,7 +158,8 @@ export function generateHashtags(title: string): string[] {
     }
   }
 
-  // Deduplicate: always #ArgentinaRadar first, then 1-2 contextual tags
+  // Deduplicate: always #ArgentinaRadar first, then 1-2 contextual tags.
+  // Max 3 total hashtags.
   const result = ['#ArgentinaRadar', ...found.filter((t) => t !== '#ArgentinaRadar')];
   return result.slice(0, 3);
 }

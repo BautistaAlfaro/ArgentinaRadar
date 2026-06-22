@@ -282,7 +282,8 @@ export interface PoliticalEventEntry {
   publishedAt: string;
 }
 
-export async function fetchPoliticalEvents(params?: {
+/** @internal */
+async function fetchPoliticalEvents(params?: {
   figure?: string;
   sentiment_min?: number;
   limit?: number;
@@ -384,7 +385,8 @@ export interface SecurityStatsResponse {
   count: number;
 }
 
-export async function fetchSecurityStats(params?: {
+/** @internal */
+async function fetchSecurityStats(params?: {
   province?: string;
   category?: string;
   period?: string;
@@ -436,7 +438,8 @@ export interface ProtestsResponse {
   count: number;
 }
 
-export async function fetchProtests(params?: {
+/** @internal */
+async function fetchProtests(params?: {
   status?: ProtestStatus;
   province?: string;
 }): Promise<ProtestsResponse> {

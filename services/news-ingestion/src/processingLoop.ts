@@ -28,6 +28,7 @@ import { categorizeArticle } from '../../../shared/categorizer';
 import { scoreArticleQuality } from '../../../shared/qualityScorer';
 import { predictEngagement } from '../../../shared/engagementPredictor';
 import { clusterArticles } from '../../../shared/clustering.js';
+import { isArgentinaRelevant } from '../../../shared/curator.js';
 import type { NewsItem } from '../../../shared/types/index.js';
 import { detectLanguage } from '../../../shared/language';
 
@@ -52,9 +53,18 @@ const TRANSLATION_PROVIDER = process.env.TRANSLATION_PROVIDER ?? 'google';
 // ─── AI Summarizer ─────────────────────────────────────────────────────
 const AUTO_SUMMARIZE = process.env.AUTO_SUMMARIZE === 'true';
 
+// ─── Batch Processing Control ─────────────────────────────────────────
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE ?? '5', 10);
+
 // ─── Periodic Clustering ────────────────────────────────────────────────
 const CLUSTER_INTERVAL = parseInt(process.env.CLUSTER_INTERVAL ?? '1800000', 10); // 30 min
 const CLUSTER_WINDOW = parseInt(process.env.CLUSTER_WINDOW ?? '2', 10); // hours to look back
+
+// ─── Night Mode (00:00–06:00 ART) ───────────────────────────────────────
+const NIGHT_MODE = process.env.NIGHT_MODE === 'true';
+const NIGHT_BATCH_SIZE = parseInt(process.env.NIGHT_BATCH_SIZE ?? '20', 10);
+const NIGHT_AUTO_APPROVE_QUALITY = parseInt(process.env.NIGHT_AUTO_APPROVE_QUALITY ?? '70', 10);
+const MORNING_REPORT_HOUR_ART = parseInt(process.env.MORNING_REPORT_HOUR ?? '6', 10);
 
 // ─── High-Impact Auto-Publish ──────────────────────────────────────────
 const AUTO_PUBLISH_THRESHOLD = parseInt(process.env.AUTO_PUBLISH_THRESHOLD ?? '80', 10);
@@ -66,6 +76,7 @@ const TWITTER_PUBLISHER_URL = process.env.TWITTER_PUBLISHER_URL ?? API.publisher
 
 let db: Database.Database | null = null;
 let processedCount = 0;
+let batchNumber = 0;
 
 function getDb(): Database.Database {
   if (db) return db;
@@ -219,17 +230,93 @@ async function autoPublishArticle(article: Article, aiResult: Record<string, unk
   await sendTelegram(`🚨 *Auto-publicado:* ${article.title}\n📰 ${article.source} | Impacto alto`);
 }
 
+// ─── Night Mode Helpers ─────────────────────────────────────────────────
+
+/**
+ * Check if the current time is within night mode window (00:00–06:00 ART).
+ *
+ * Uses America/Argentina/Buenos_Aires timezone. When NIGHT_MODE is
+ * disabled, always returns `false` so the caller can use this as a
+ * gating condition regardless of the env var.
+ */
+function isNightModeART(): boolean {
+  if (!NIGHT_MODE) return false;
+
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    });
+    const hour = parseInt(formatter.format(now), 10);
+    return hour >= 0 && hour < 6;
+  } catch {
+    // Fallback: UTC-based approximation (ART = UTC-3)
+    const utcHour = new Date().getUTCHours();
+    const artHour = (utcHour - 3 + 24) % 24;
+    return artHour >= 0 && artHour < 6;
+  }
+}
+
+/**
+ * Count articles processed during the night for the morning report.
+ * Reset at 06:00 ART.
+ */
+let nightProcessedCount = 0;
+let lastMorningReportDay: string | null = null;
+
+/**
+ * Send a morning report summarising the night's processing activity.
+ * Called once at ~06:00 ART when the first batch of the day runs.
+ */
+async function sendMorningReport(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Only send once per day
+  if (lastMorningReportDay === today) return;
+  lastMorningReportDay = today;
+
+  const report = [
+    `🌅 *Buenos días — Reporte Nocturno*`,
+    ``,
+    `📊 *Resumen de la noche*`,
+    `Artículos procesados: ${nightProcessedCount}`,
+    `Modo nocturno activo: ${isNightModeART() ? '✅' : '❌'}`,
+  ].join('\n');
+
+  await sendTelegram(report);
+  logger.info('Morning report sent', { processed: nightProcessedCount });
+
+  // Reset counter for the next night
+  nightProcessedCount = 0;
+}
+
 async function processBatch(): Promise<void> {
   try {
-    // 1. Fetch unprocessed ingested articles
+    // ── Determine batch size for current window ────────────────
+    const isNight = isNightModeART();
+    const effectiveBatchSize = isNight ? NIGHT_BATCH_SIZE : BATCH_SIZE;
+
+    // ── Morning report at 06:00 ────────────────────────────────
+    if (!isNight && nightProcessedCount > 0) {
+      // Just exited night window — send morning report if not already sent today
+      try { await sendMorningReport(); } catch { /* best-effort */ }
+    }
+
+    // ── Fetch unprocessed ingested articles ────────────────────
     const d = getDb();
     const articles = d.prepare(
-      `SELECT * FROM news_items WHERE status = 'ingested' LIMIT 50`
-    ).all() as Article[];
+      `SELECT * FROM news_items WHERE status = 'ingested' LIMIT ?`
+    ).all(effectiveBatchSize) as Article[];
 
     if (articles.length === 0) return;
 
-    logger.info('Processing articles', { count: articles.length });
+    batchNumber++;
+    const totalPendingRow = d.prepare("SELECT COUNT(*) as c FROM news_items WHERE status = 'ingested'").get() as { c: number };
+    const totalBatches = Math.max(1, Math.ceil(totalPendingRow.c / BATCH_SIZE));
+
+    logger.info(`Processing batch ${batchNumber} of ${totalBatches} — ${articles.length} articles this cycle`);
     increment('articles_ingested', articles.length);
 
     for (const article of articles) {
@@ -329,8 +416,9 @@ async function processBatch(): Promise<void> {
         }
 
         // ── 1b. Quality scoring + engagement prediction ──────────────
+        let qualityScore = 50; // default if scoring fails
         try {
-          const quality = scoreArticleQuality(article.title, article.summary || '', article.source);
+          qualityScore = scoreArticleQuality(article.title, article.summary || '', article.source);
 
           // Parse sources JSON safely
           let sourcesList: string[] | undefined;
@@ -350,17 +438,17 @@ async function processBatch(): Promise<void> {
 
           d.prepare(
             `UPDATE news_items SET quality_score = ?, engagement_score = ? WHERE id = ?`
-          ).run(quality, engagement, article.id);
+          ).run(qualityScore, engagement, article.id);
 
           // Auto-discard low-quality articles early
-          if (quality < MIN_QUALITY_THRESHOLD) {
+          if (qualityScore < MIN_QUALITY_THRESHOLD) {
             d.prepare("UPDATE news_items SET status = ? WHERE id = ?")
               .run('discarded', article.id);
-            logger.warn('Artículo descartado por baja calidad', { articleId: article.id.slice(0, 8), quality, threshold: MIN_QUALITY_THRESHOLD });
+            logger.warn('Artículo descartado por baja calidad', { articleId: article.id.slice(0, 8), quality: qualityScore, threshold: MIN_QUALITY_THRESHOLD });
             continue; // skip remaining processing for this article
           }
 
-          logger.info('Quality scored', { articleId: article.id.slice(0, 8), quality, engagement });
+          logger.info('Quality scored', { articleId: article.id.slice(0, 8), quality: qualityScore, engagement });
         } catch (e) {
           logger.warn('Error al puntuar calidad', { articleId: article.id.slice(0, 8), error: (e as Error).message });
         }
@@ -528,7 +616,17 @@ async function processBatch(): Promise<void> {
                 }
               }
 
-              // ── Check for high-impact auto-publish ──────────────
+              // ── Auto-publish rules ─────────────────────────────────
+              //
+              // Priority 1: quality > 80 AND urgente → immediate publish
+              // Priority 2: quality > 70 AND (politica|economia) → night mode auto-approve
+              // Priority 3: clarin|lanacion|infobae AND quality > 60 → priority queue
+              //
+              // Night mode (00:00–06:00 ART):
+              //   - quality > 70 → auto-approve directly, skip Telegram
+              //   - BATCH_SIZE increased to 20 for faster throughput
+              //   - Morning report at 06:00
+              //
               const impact = Math.round((combined / 10) * 100);
               const isUrgent =
                 (scores.political ?? 0) >= 8 &&
@@ -536,22 +634,71 @@ async function processBatch(): Promise<void> {
                 (scores.social ?? 0) >= 8 &&
                 (scores.urgency ?? 0) >= 8;
 
-              if (impact >= AUTO_PUBLISH_THRESHOLD || isUrgent) {
+              const isNight = isNightModeART();
+              const category = article.category || 'general';
+              const sourceLower = article.source.toLowerCase().trim();
+              const isPrioritySource = ['clarin', 'lanacion', 'infobae'].includes(sourceLower);
+
+              // Determine auto-publish disposition
+              const shouldAutoPublish = impact >= AUTO_PUBLISH_THRESHOLD || isUrgent;
+              const shouldNightAutoApprove =
+                isNight && qualityScore > NIGHT_AUTO_APPROVE_QUALITY;
+              const shouldNightCategoryPublish =
+                isNight && qualityScore > 70 && (category === 'politica' || category === 'economia');
+              const shouldPriorityQueue =
+                isPrioritySource && qualityScore > 60;
+
+              if (shouldAutoPublish) {
+                // Rule: quality > 80 AND urgente → immediate (or high AI impact)
                 await autoPublishArticle(article, aiResult);
+                if (isNight) nightProcessedCount++;
                 processedCount++;
-              } else {
-                const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
+
+              } else if (shouldNightAutoApprove || shouldNightCategoryPublish) {
+                // Night mode: auto-approve without Telegram notification
+                const tweetText = formatBlueskyTweet(article.title, article.source, category);
                 const queueId = `q_${article.id.slice(0, 12)}`;
 
                 d.prepare(
-                  `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status)
-                   VALUES (?, ?, ?, 'pending')`
-                ).run(queueId, article.id, draftTweet);
+                  `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, image_url, image_prompt, status, reviewed_at)
+                   VALUES (?, ?, ?, ?, ?, 'approved', datetime('now'))`
+                ).run(
+                  queueId,
+                  article.id,
+                  tweetText,
+                  null,
+                  null,
+                );
 
                 d.prepare('UPDATE news_items SET status = ?, ai_score = ? WHERE id = ?')
                   .run('pending_approval', JSON.stringify(aiResult), article.id);
 
-                logger.info('Article pending approval', { articleId: article.id.slice(0, 8), impact });
+                logger.info('Night auto-approved', { articleId: article.id.slice(0, 8), quality: qualityScore, category });
+                nightProcessedCount++;
+                processedCount++;
+
+              } else {
+                const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
+                const queueId = `q_${article.id.slice(0, 12)}`;
+
+                // Priority source with quality > 60 → marked as priority in status
+                const status = shouldPriorityQueue ? 'priority_approval' : 'pending_approval';
+
+                d.prepare(
+                  `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status)
+                   VALUES (?, ?, ?, ?)`
+                ).run(queueId, article.id, draftTweet, status === 'priority_approval' ? 'pending' : 'pending');
+
+                d.prepare('UPDATE news_items SET status = ?, ai_score = ? WHERE id = ?')
+                  .run(status, JSON.stringify(aiResult), article.id);
+
+                logger.info('Article pending approval', {
+                  articleId: article.id.slice(0, 8),
+                  impact,
+                  quality: qualityScore,
+                  priority: shouldPriorityQueue,
+                });
+                if (isNight) nightProcessedCount++;
                 processedCount++;
               }
             } else {

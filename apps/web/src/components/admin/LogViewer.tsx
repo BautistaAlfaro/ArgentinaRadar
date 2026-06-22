@@ -7,7 +7,7 @@
  */
 
 import { API } from '@shared/apiConfig';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useReducer, useCallback } from 'react';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -105,6 +105,49 @@ function LogDataCell({ data }: { data: string | null }) {
   );
 }
 
+// ─── Reducer ─────────────────────────────────────────────────────────
+
+interface LogViewerState {
+  logs: LogEntry[];
+  total: number;
+  services: string[];
+  filterService: string;
+  filterLevel: string;
+  search: string;
+  page: number;
+  autoRefresh: boolean;
+}
+
+type LogViewerAction =
+  | { type: 'SET_RESULT'; items: LogEntry[]; total: number; services: string[] }
+  | { type: 'SET_FILTER'; filter: { service?: string; level?: string; search?: string } }
+  | { type: 'SET_PAGE'; page: number }
+  | { type: 'TOGGLE_AUTO_REFRESH' };
+
+function logViewerReducer(state: LogViewerState, action: LogViewerAction): LogViewerState {
+  switch (action.type) {
+    case 'SET_RESULT':
+      return {
+        ...state,
+        logs: action.items,
+        total: action.total,
+        services: action.services.length > 0 ? action.services : state.services,
+      };
+    case 'SET_FILTER':
+      return {
+        ...state,
+        filterService: action.filter.service ?? state.filterService,
+        filterLevel: action.filter.level ?? state.filterLevel,
+        search: action.filter.search ?? state.search,
+        page: 0,
+      };
+    case 'SET_PAGE':
+      return { ...state, page: action.page };
+    case 'TOGGLE_AUTO_REFRESH':
+      return { ...state, autoRefresh: !state.autoRefresh };
+  }
+}
+
 // ─── Component ─────────────────────────────────────────────────────────
 
 interface LogViewerProps {
@@ -112,64 +155,68 @@ interface LogViewerProps {
   compact?: boolean;
 }
 
-export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
-  // Grouped data state
-  const [data, setData] = useState<{
-    logs: LogEntry[];
-    total: number;
-    services: string[];
-  }>({ logs: [], total: 0, services: [] });
-
-  // Grouped filter state
-  const [filters, setFilters] = useState({
-    service: '',
-    level: '',
+export function LogViewer({ limit = 50 }: LogViewerProps) {
+  const [state, dispatch] = useReducer(logViewerReducer, {
+    logs: [],
+    total: 0,
+    services: [],
+    filterService: '',
+    filterLevel: '',
     search: '',
+    page: 0,
+    autoRefresh: true,
   });
 
-  // UI state
-  const [page, setPage] = useState(0);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const { logs, total, services, filterService, filterLevel, search, page, autoRefresh } = state;
   const pageSize = limit;
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { logs, total, services } = data;
-  const { service: filterService, level: filterLevel, search } = filters;
+  // Ref to hold latest filter values so auto-refresh doesn't re-subscribe
+  const filtersRef = useRef({ filterService, filterLevel, search, page });
+  filtersRef.current = { filterService, filterLevel, search, page };
 
-  const loadLogs = useCallback(async () => {
+  const loadLogs = useCallback(async (
+    svc: string,
+    lvl: string,
+    srch: string,
+    pg: number,
+  ) => {
     try {
       const result = await fetchLogs({
-        service: filterService || undefined,
-        level: filterLevel || undefined,
-        search: search || undefined,
+        service: svc || undefined,
+        level: lvl || undefined,
+        search: srch || undefined,
         limit: pageSize,
-        offset: page * pageSize,
+        offset: pg * pageSize,
       });
-      setData((prev) => ({
-        logs: result.items,
+      dispatch({
+        type: 'SET_RESULT',
+        items: result.items,
         total: result.total,
-        services: result.services.length > 0 ? result.services : prev.services,
-      }));
+        services: result.services,
+      });
     } catch {
       // Silently handle fetch errors
     }
-  }, [filterService, filterLevel, search, page]);
+  }, [pageSize]);
 
-  // Initial load + auto-refresh
+  // Load on mount and when filters/page change
   useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
+    loadLogs(filterService, filterLevel, search, page);
+  }, [filterService, filterLevel, search, page, loadLogs]);
 
+  // Keep ref to latest loadLogs so interval doesn't re-subscribe
+  const loadLogsRef = useRef(loadLogs);
+  loadLogsRef.current = loadLogs;
+
+  // Auto-refresh — reads from stable refs, never re-subscribes
   useEffect(() => {
-    if (autoRefresh) {
-      intervalRef.current = setInterval(loadLogs, 5000);
-      return () => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-      };
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-  }, [autoRefresh, loadLogs]);
+    if (!autoRefresh) return;
+    const id = setInterval(() => {
+      const f = filtersRef.current;
+      loadLogsRef.current(f.filterService, f.filterLevel, f.search, f.page);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [autoRefresh]);
 
   const totalPages = Math.ceil(total / pageSize);
 
@@ -186,7 +233,7 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => { setAutoRefresh(!autoRefresh); }}
+            onClick={() => dispatch({ type: 'TOGGLE_AUTO_REFRESH' })}
             className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
               autoRefresh
                 ? 'bg-blue-600 text-white'
@@ -197,7 +244,7 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
           </button>
           <button
             type="button"
-            onClick={loadLogs}
+            onClick={() => loadLogs(filterService, filterLevel, search, page)}
             className="px-2.5 py-1 text-xs font-medium rounded-md bg-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-600 transition-all cursor-pointer"
           >
             Refresh now
@@ -210,8 +257,9 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
         {/* Service filter */}
         <select
           value={filterService}
-          onChange={(e) => { setFilters((prev) => ({ ...prev, service: e.target.value })); setPage(0); }}
+          onChange={(e) => dispatch({ type: 'SET_FILTER', filter: { service: e.target.value } })}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500"
+          aria-label="Filter by service"
         >
           <option value="">All services</option>
           {services.map((svc) => (
@@ -222,8 +270,9 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
         {/* Level filter */}
         <select
           value={filterLevel}
-          onChange={(e) => { setFilters((prev) => ({ ...prev, level: e.target.value })); setPage(0); }}
+          onChange={(e) => dispatch({ type: 'SET_FILTER', filter: { level: e.target.value } })}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-300 focus:outline-none focus:border-blue-500"
+          aria-label="Filter by log level"
         >
           <option value="">All levels</option>
           <option value="debug">DEBUG</option>
@@ -238,7 +287,7 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
           aria-label="Search log messages"
           placeholder="Search in messages..."
           value={search}
-          onChange={(e) => { setFilters((prev) => ({ ...prev, search: e.target.value })); setPage(0); }}
+          onChange={(e) => dispatch({ type: 'SET_FILTER', filter: { search: e.target.value } })}
           className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-300 placeholder-slate-500 focus:outline-none focus:border-blue-500 min-w-[200px]"
         />
       </div>
@@ -298,7 +347,7 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
             <button
               type="button"
               disabled={page === 0}
-              onClick={() => setPage(Math.max(0, page - 1))}
+              onClick={() => dispatch({ type: 'SET_PAGE', page: Math.max(0, page - 1) })}
               className="px-3 py-1 text-xs rounded-md bg-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               Previous
@@ -306,7 +355,7 @@ export function LogViewer({ limit = 50, compact = false }: LogViewerProps) {
             <button
               type="button"
               disabled={page >= totalPages - 1}
-              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+              onClick={() => dispatch({ type: 'SET_PAGE', page: Math.min(totalPages - 1, page + 1) })}
               className="px-3 py-1 text-xs rounded-md bg-slate-700 text-slate-400 hover:text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               Next

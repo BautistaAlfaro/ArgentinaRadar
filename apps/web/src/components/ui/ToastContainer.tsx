@@ -11,7 +11,10 @@ interface ToastContainerProps {
   onRemove?: (id: string) => void;
 }
 
-export function ToastContainer({ toasts = [], onRemove = () => {} }: ToastContainerProps) {
+const EMPTY_TOASTS: ToastMessage[] = [];
+const NOOP = () => {};
+
+export function ToastContainer({ toasts = EMPTY_TOASTS, onRemove = NOOP }: ToastContainerProps) {
   if (toasts.length === 0) return null;
 
   return (

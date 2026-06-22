@@ -1,6 +1,6 @@
 import { useEconomicData } from '../../hooks/useEconomicData';
 import { useAuthStore } from '../../stores/authStore';
-import { motion } from 'framer-motion';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 
 function getDelta(current: number, previous: number | null): { arrow: string; direction: 'up' | 'down' | 'flat'; color: string } {
   if (previous === null || previous === 0) {
@@ -55,7 +55,7 @@ function IndicatorBlock({ label, value, previousValue, format, metadata }: Indic
 
   return (
     <div className="flex items-center gap-3 px-4 py-1 shrink-0 font-inter text-xs">
-      <span className={`material-symbols-outlined ${iconColor} text-[18px]`}>{icon}</span>
+      <span className={`material-symbols-outlined ${iconColor} text-[18px]`} aria-hidden="true">{icon}</span>
       <span className="font-label-caps text-slate-400 uppercase font-bold tracking-wider">{label}</span>
       <span className="font-label-data text-white font-mono font-bold">{formattedValue}</span>
       {extraValue && (
@@ -108,30 +108,31 @@ export function EconomicTicker() {
   );
 
   return (
+    <LazyMotion features={domAnimation}>
     <footer
       className="fixed bottom-0 left-0 w-full z-50 h-10 bg-surface-dim/90 backdrop-blur-md border-t border-white/10 shadow-[0_-4px_20px_rgba(0,165,114,0.1)] flex items-center overflow-hidden shrink-0"
     >
       {/* Live Status Badge */}
       {role === 'VIP' ? (
         <div className="flex items-center gap-2 border-r border-white/20 pr-4 mr-4 pl-4 shrink-0 bg-surface-dim z-10 h-full">
-          <span className="material-symbols-outlined text-secondary text-lg animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }}>sensors</span>
+          <span className="material-symbols-outlined text-secondary text-lg animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">sensors</span>
           <span className="font-label-caps text-[10px] font-bold text-secondary font-inter tracking-wider">VIP FEED LIVE</span>
         </div>
       ) : role === 'ADMIN' ? (
         <div className="flex items-center gap-2 border-r border-white/20 pr-4 mr-4 pl-4 shrink-0 bg-surface-dim z-10 h-full">
-          <span className="material-symbols-outlined text-primary text-lg animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }}>wifi_tethering</span>
+          <span className="material-symbols-outlined text-primary text-lg animate-pulse" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true">wifi_tethering</span>
           <span className="font-label-caps text-[10px] font-bold text-primary font-inter tracking-wider">LIVE DATASTREAM</span>
         </div>
       ) : (
         <div className="flex items-center gap-2 border-r border-white/20 pr-4 mr-4 pl-4 shrink-0 bg-surface-dim z-10 h-full">
-          <motion.span
+          <m.span
             className="material-symbols-outlined text-slate-400 text-lg"
             style={{ fontVariationSettings: "'FILL' 1'", display: 'inline-block' }}
             animate={{ rotate: 360 }}
             transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
           >
             radar
-          </motion.span>
+          </m.span>
           <span className="font-label-caps text-[10px] font-bold text-slate-400 font-inter tracking-wider">ECONÓMICO</span>
         </div>
       )}
@@ -147,7 +148,7 @@ export function EconomicTicker() {
 
         {isError && (
           <div className="flex items-center gap-2 px-4 text-red-400 font-inter text-xs">
-            <span className="material-symbols-outlined text-sm">warning</span>
+            <span className="material-symbols-outlined text-sm" aria-hidden="true">warning</span>
             <span>Error en indicadores financieros</span>
           </div>
         )}
@@ -161,5 +162,6 @@ export function EconomicTicker() {
         )}
       </div>
     </footer>
+    </LazyMotion>
   );
 }

@@ -33,7 +33,8 @@ const SERVICE_POLL_INTERVAL = 5_000; // 5 seconds for service status
 
 // ─── KPIs ────────────────────────────────────────────────────────────
 
-export function useKPIs(range: string) {
+// Unused — kept for reference
+function useKPIs(range: string) {
   return useQuery<KPIData>({
     queryKey: ['admin', 'kpis', range],
     queryFn: () => fetchKPIs(range),
@@ -55,7 +56,8 @@ export function useDailyStats(range: string) {
 
 // ─── System Metrics ──────────────────────────────────────────────────
 
-export function useSystemMetrics(service?: string, range?: string) {
+// Unused — kept for reference
+function useSystemMetrics(service?: string, range?: string) {
   return useQuery<SystemMetric[]>({
     queryKey: ['admin', 'system-metrics', service, range],
     queryFn: () => fetchSystemMetrics(service, range),
@@ -66,7 +68,8 @@ export function useSystemMetrics(service?: string, range?: string) {
 
 // ─── Revenue ─────────────────────────────────────────────────────────
 
-export function useRevenue() {
+// Unused — kept for reference
+function useRevenue() {
   return useQuery<RevenuePoint[]>({
     queryKey: ['admin', 'revenue'],
     queryFn: fetchRevenueData,
@@ -77,7 +80,8 @@ export function useRevenue() {
 
 // ─── Services ─────────────────────────────────────────────────────────
 
-export function useServices() {
+// Unused — kept for reference
+function useServices() {
   return useQuery<ServicesResponse>({
     queryKey: ['admin', 'services'],
     queryFn: fetchServices,
@@ -135,7 +139,8 @@ export function useServiceHealth() {
 
 const QUALITY_POLL_INTERVAL = 30_000; // 30 seconds
 
-export function useQualityStats() {
+// Unused — kept for reference
+function useQualityStats() {
   return useQuery<QualityStats | null>({
     queryKey: ['admin', 'quality-stats'],
     queryFn: fetchQualityStats,
@@ -146,7 +151,8 @@ export function useQualityStats() {
 
 // ─── Trending Topics ─────────────────────────────────────────────────
 
-export function useTrendingTopics() {
+// Unused — kept for reference
+function useTrendingTopics() {
   return useQuery({
     queryKey: ['news', 'trending', 'clusters'],
     queryFn: fetchTrendingData,

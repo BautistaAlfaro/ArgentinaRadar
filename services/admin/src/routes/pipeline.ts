@@ -59,6 +59,8 @@ interface ApprovalQueueRow {
   title: string | null;
   source: string | null;
   url: string | null;
+  image_url: string | null;
+  category: string | null;
 }
 
 interface BatchSummaryRow {
@@ -107,7 +109,9 @@ pipelineRouter.get('/approval-queue', (req, res) => {
              aq.batch_id,
              ni.title,
              ni.source,
-             ni.url
+             ni.url,
+             aq.image_url,
+             ni.category
            FROM approval_queue aq
            LEFT JOIN news_items ni ON ni.id = aq.article_id
            WHERE ${where}

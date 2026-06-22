@@ -2,11 +2,12 @@
  * Service Watchdog — ArgentinaRadar
  *
  * Health-checks all core services every 60 seconds. If a service is down
- * for 2 consecutive checks, attempts to restart it via PM2. If the restart
- * fails twice, escalates with a Telegram alert.
+ * for 2 consecutive checks, sends a Telegram alert and logs the incident.
+ *
+ * No automatic restart — PM2 is not available. Alert-only watchdog.
  *
  * Controlled via:
- *   - env: WATCHDOG_ENABLED, WATCHDOG_INTERVAL
+ *   - env: WATCHDOG_ENABLED, WATCHDOG_INTERVAL, WATCHDOG_TIMEOUT
  *   - automations.json: watchdog (true/false)
  *
  * Usage:
@@ -16,13 +17,13 @@
 
 const Database = require('better-sqlite3');
 const path = require('path');
-const { execSync } = require('child_process');
 const { createLogger } = require('../../shared/logger');
 
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const INTERVAL = parseInt(process.env.WATCHDOG_INTERVAL || '60000', 10);
+const HEALTH_CHECK_TIMEOUT = parseInt(process.env.WATCHDOG_TIMEOUT || '3000', 10);
 
 const logger = createLogger('watchdog');
 
@@ -41,9 +42,6 @@ const SERVICES = [
 /** @type {Object<string, number>} Consecutive health-check failures per service */
 const failureCounts = {};
 
-/** @type {Object<string, number>} Consecutive failed restart attempts per service */
-const restartAttempts = {};
-
 let lastRun = 0;
 
 // ─── DB helpers ────────────────────────────────────────────────────────────
@@ -59,7 +57,7 @@ function ensureIncidentsTable() {
       CREATE TABLE IF NOT EXISTS service_incidents (
         id            INTEGER PRIMARY KEY AUTOINCREMENT,
         service       TEXT    NOT NULL,
-        incident_type TEXT,            -- 'down', 'restart_success', 'restart_failed', 'high_memory'
+        incident_type TEXT,            -- 'down', 'recovered'
         details       TEXT,
         created_at    TEXT    DEFAULT (datetime('now'))
       )
@@ -124,26 +122,10 @@ async function sendTelegram(text) {
 async function healthCheck(service) {
   try {
     const resp = await fetch(`http://127.0.0.1:${service.port}/health`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
     });
     return resp.ok;
   } catch {
-    return false;
-  }
-}
-
-/**
- * Attempt to restart a service via PM2.
- * @param {string} serviceName
- * @returns {boolean}
- */
-function attemptRestart(serviceName) {
-  try {
-    execSync(`pm2 restart ${serviceName}`, { timeout: 15000, stdio: 'pipe' });
-    logger.info(`PM2 restart succeeded for ${serviceName}`);
-    return true;
-  } catch (e) {
-    logger.warn(`PM2 restart failed for ${serviceName}`, { error: e.message });
     return false;
   }
 }
@@ -155,6 +137,10 @@ function attemptRestart(serviceName) {
  *
  * Called from the main notifier loop. Never throws — all errors are caught
  * and logged internally.
+ *
+ * If 2 consecutive health checks fail (each ~60s apart), sends a Telegram
+ * alert and logs an incident. Does NOT attempt auto-restart — PM2 is not
+ * available in this environment.
  */
 async function runWatchdog() {
   const now = Date.now();
@@ -168,9 +154,13 @@ async function runWatchdog() {
       const alive = await healthCheck(service);
 
       if (alive) {
-        // Service is healthy — reset counters
+        // Service is healthy — reset counter, log recovery if previously down
         if (failureCounts[service.name] && failureCounts[service.name] >= 2) {
           logger.info(`${service.name} recovered — health OK`);
+          logIncident(service.name, 'recovered', `Service back online on port ${service.port}`);
+          await sendTelegram(
+            `✅ *Watchdog — ${service.name}*\n\nEl servicio se recuperó y responde correctamente.\n📌 *Puerto:* ${service.port}`
+          );
         }
         failureCounts[service.name] = 0;
         continue;
@@ -185,38 +175,12 @@ async function runWatchdog() {
         continue;
       }
 
-      // 2+ consecutive failures — attempt restart
-      const attempt = (restartAttempts[service.name] || 0) + 1;
-      restartAttempts[service.name] = attempt;
-
+      // 2+ consecutive failures — escalate with alert
       logIncident(service.name, 'down', `Port ${service.port} unreachable after ${failureCounts[service.name]} consecutive failures`);
 
-      if (attempt > 2) {
-        // Already tried twice — escalate
-        await sendTelegram(
-          `🚨 *Watchdog — ${service.name}*\n\nEl servicio cayó y no pudo reiniciarse tras varios intentos.\n\n📌 *Puerto:* ${service.port}\n⚠️ *Se requiere intervención manual.*`
-        );
-        logIncident(service.name, 'restart_failed', `Escalated after ${attempt} failed restart attempts`);
-        restartAttempts[service.name] = 0; // Reset to avoid re-escalating every cycle
-        continue;
-      }
-
-      // Try to restart
       await sendTelegram(
-        `🔴 *${service.name}* cayó (puerto ${service.port}). Reiniciando... (intento ${attempt})`
+        `🔴 *Watchdog — ${service.name}*\n\nEl servicio no responde en el puerto ${service.port} tras ${failureCounts[service.name]} chequeos consecutivos.\n\n⚠️ *Se requiere intervención manual.*`
       );
-
-      const restarted = attemptRestart(service.name);
-
-      if (restarted) {
-        logIncident(service.name, 'restart_success', `Service restarted on attempt ${attempt}`);
-        await sendTelegram(`✅ *${service.name}* reiniciado correctamente.`);
-        failureCounts[service.name] = 0;
-        restartAttempts[service.name] = 0;
-      } else {
-        logIncident(service.name, 'restart_failed', `Restart attempt ${attempt} failed`);
-        // Next cycle with still-failing health check will trigger another attempt or escalation
-      }
     } catch (e) {
       logger.error(`Error processing ${service.name}`, { error: e.message });
     }

@@ -29,7 +29,7 @@
  *
  *
  * Ecosystem Health (public, no auth):
- *   GET   /api/admin/health/all                     — Check all ecosystem services + Ollama
+ *   GET   /api/admin/health/all                     — Check all ecosystem services + Ollama (returns {services, ollama: bool})
  *
  * Service Health:
  *   GET   /health                                   — Service health
@@ -47,7 +47,6 @@ process.on('unhandledRejection', (reason) => {
 import express from "express";
 import cors from "cors";
 import net from "net";
-import { exec } from "child_process";
 import { config } from "./config.js";
 import { requireAuth, requireAdmin } from "@argentinaradar/auth-middleware";
 import { kpiRouter } from "./routes/kpis.js";
@@ -296,22 +295,21 @@ app.get('/api/admin/health', async (_req, res) => {
 });
 
 // ─── GET /api/admin/health/all ──────────────────────────────────────
-// Checks ALL ecosystem services (the 6 defined in ecosystem.config.cjs)
-// plus Ollama, using HTTP health endpoints where available and PM2 status
-// for non-HTTP services (e.g., notifier).
+// Checks ALL ecosystem services (ports 3001, 3004, 3012, 3013, 5173)
+// plus Ollama (port 11434), using HTTP /health endpoints with TCP
+// socket fallback for services that respond without a health route.
 
 interface EcosystemServiceHealth {
   name: string;
   status: 'running' | 'stopped' | 'down' | 'degraded';
-  port?: number | null;
+  port?: number;
   uptime?: number | null;
   error?: string;
 }
 
-const ECOSYSTEM_SERVICE_PORTS: Record<string, number | null> = {
+const ECOSYSTEM_SERVICE_PORTS: Record<string, number> = {
   'news-ingestion': 3001,
   'publisher': 3004,
-  'notifier': null, // no HTTP endpoint — checked via PM2
   'ai-processor': 3013,
   'admin': 3012,
   'web': 5173,
@@ -322,8 +320,7 @@ app.get('/api/admin/health/all', async (_req, res) => {
   const errors: string[] = [];
 
   // 1. Check HTTP services via /health endpoint
-  const httpServices = Object.entries(ECOSYSTEM_SERVICE_PORTS)
-    .filter(([, port]) => port !== null) as [string, number][];
+  const httpServices = Object.entries(ECOSYSTEM_SERVICE_PORTS) as [string, number][];
 
   const httpResults = await Promise.allSettled(
     httpServices.map(async ([name, port]) => {
@@ -388,44 +385,7 @@ app.get('/api/admin/health/all', async (_req, res) => {
     }
   }
 
-  // 2. Check notifier via PM2 jlist (no HTTP endpoint)
-  try {
-    const pm2Status = await new Promise<string>((resolve, reject) => {
-      exec('pm2 jlist', { cwd: process.cwd(), shell: 'cmd.exe', timeout: 5_000 }, (err, stdout) => {
-        if (err) { reject(err); return; }
-        resolve(stdout);
-      });
-    });
-
-    const pm2Apps = JSON.parse(pm2Status) as Array<{ name: string; pm2_env?: { status?: string; uptime?: number }; monit?: { memory?: number; cpu?: number } }>;
-    const notifierApp = pm2Apps.find((a) => a.name === 'notifier');
-
-    if (notifierApp) {
-      services.push({
-        name: 'notifier',
-        status: notifierApp.pm2_env?.status === 'online' ? 'running' : 'stopped',
-        port: null,
-        uptime: notifierApp.pm2_env?.uptime ?? null,
-      });
-    } else {
-      services.push({
-        name: 'notifier',
-        status: 'down',
-        port: null,
-        error: 'Not found in PM2 process list',
-      });
-    }
-  } catch (err) {
-    services.push({
-      name: 'notifier',
-      status: 'down',
-      port: null,
-      error: (err as Error).message,
-    });
-    errors.push(`PM2 jlist failed: ${(err as Error).message}`);
-  }
-
-  // 3. Check Ollama
+  // 2. Check Ollama
   try {
     const ollamaResp = await fetch('http://127.0.0.1:11434', {
       signal: AbortSignal.timeout(3_000),
@@ -447,6 +407,7 @@ app.get('/api/admin/health/all', async (_req, res) => {
   // 4. Build response
   const healthyCount = services.filter((s) => s.status === 'running').length;
   const totalCount = services.length;
+  const ollamaService = services.find((s) => s.name === 'ollama');
 
   res.json({
     status: healthyCount === totalCount ? 'ok' : 'degraded',
@@ -454,6 +415,7 @@ app.get('/api/admin/health/all', async (_req, res) => {
     healthyCount,
     totalCount,
     services,
+    ollama: ollamaService?.status === 'running',
     errors: errors.length > 0 ? errors : undefined,
   });
 });

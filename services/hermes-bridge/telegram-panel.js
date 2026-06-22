@@ -208,11 +208,16 @@ function backKB(cd) { return { inline_keyboard: [[{ text: '🔙 Volver', callbac
 
 async function handleIngestion(action, chatId, msgId, em) {
   if (action === 'ing-refresh') {
-    await em('⏳ Refrescando...', { inline_keyboard: [] });
+    await em('⏳ Forzando refresh RSS...', { inline_keyboard: [] });
     try {
-      const r = await fetch('http://127.0.0.1:3001/api/pipeline/stats', { signal: AbortSignal.timeout(5000) });
-      if (r.ok) await em('✅ Refresh completado. Pipeline activo.', backKB());
-      else await em('⚠️ Refresh solicitado.', backKB());
+      const r = await fetch('http://127.0.0.1:3012/api/admin/actions/refresh-rss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (data.success) await em('✅ ' + escapeMd(data.message || 'RSS refresh completado.'), backKB());
+      else await em('⚠️ ' + escapeMd(data.message || 'Refresh solicitado, verificar después.'), backKB());
     } catch (e) { await em('⚠️ ' + escapeMd(e.message), backKB()); }
     return;
   }

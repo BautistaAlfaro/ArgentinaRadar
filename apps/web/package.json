@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
-    "date-fns": "^4.4.0",
     "framer-motion": "^12.40.0",
     "globe.gl": "^2.34.0",
     "maplibre-gl": "^4.7.0",

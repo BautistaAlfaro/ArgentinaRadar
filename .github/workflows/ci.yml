@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TypeScript type-check: apps/web + all services with tsconfig.json
+  # ─────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: TypeCheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeCheck apps/web
+        run: npx tsc --noEmit -p apps/web/tsconfig.json
+
+      - name: TypeCheck services/news-ingestion
+        run: npx tsc --noEmit -p services/news-ingestion/tsconfig.json
+
+      - name: TypeCheck services/twitter-publisher
+        run: npx tsc --noEmit -p services/twitter-publisher/tsconfig.json
+
+      - name: TypeCheck services/geolocation
+        run: npx tsc --noEmit -p services/geolocation/tsconfig.json
+
+      - name: TypeCheck services/event-detector
+        run: npx tsc --noEmit -p services/event-detector/tsconfig.json
+
+      - name: TypeCheck services/admin
+        run: npx tsc --noEmit -p services/admin/tsconfig.json
+
+      - name: TypeCheck services/auth
+        run: npx tsc --noEmit -p services/auth/tsconfig.json
+
+      - name: TypeCheck services/night-owl
+        run: npx tsc --noEmit -p services/night-owl/tsconfig.json
+
+      - name: TypeCheck services/alerts
+        run: npx tsc --noEmit -p services/alerts/tsconfig.json
+
+      - name: TypeCheck services/economic-data
+        run: npx tsc --noEmit -p services/economic-data/tsconfig.json
+
+      - name: TypeCheck services/trend-analyzer
+        run: npx tsc --noEmit -p services/trend-analyzer/tsconfig.json
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # React Doctor — audit apps/web for perf, security, and architecture
+  # ─────────────────────────────────────────────────────────────────────────
+  react-doctor:
+    name: React Doctor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run react-doctor on apps/web
+        working-directory: apps/web
+        run: npx react-doctor@latest

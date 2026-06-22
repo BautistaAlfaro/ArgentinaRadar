@@ -16,6 +16,8 @@
 import { Router } from "express";
 import { exec } from "child_process";
 import { config } from "../config.js";
+import fs from "fs";
+import path from "path";
 
 export const actionsRouter = Router();
 
@@ -106,35 +108,50 @@ actionsRouter.post("/actions/auto-approve", async (_req, res) => {
 
 // ─── POST /api/admin/actions/reprocess ───────────────────────────────
 
-actionsRouter.post("/actions/reprocess", async (_req, res) => {
-  const result = await triggerServiceAction(
-    `${config.newsServiceUrl}/api/admin/actions/reprocess`,
-  );
+actionsRouter.post("/actions/reprocess", async (req, res) => {
+  try {
+    const limit = (req.query.limit as string) || "50";
+    const result = await triggerServiceAction(
+      `${config.newsServiceUrl}/api/admin/actions/reprocess?limit=${limit}`,
+    );
 
-  res.json({
-    success: result.ok,
-    message: result.ok
-      ? "🔄 Reprocess batch started. Articles are being re-evaluated."
-      : `Reprocess failed: ${result.message}`,
-  });
+    res.json({
+      success: result.ok,
+      message: result.ok
+        ? `🔄 Reprocess batch started. Reprocessing last ${limit} articles.`
+        : `Reprocess failed: ${result.message}`,
+    });
+  } catch (err) {
+    res.json({
+      success: false,
+      message: `Reprocess failed: ${(err as Error).message}`,
+    });
+  }
 });
 
 // ─── POST /api/admin/actions/backup ───────────────────────────────────
 
 actionsRouter.post("/actions/backup", async (_req, res) => {
   try {
-    // Run a pg_dump backup to the data directory
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupFile = `data/backups/argentinaradar_${timestamp}.sql`;
+    const dbPath =
+      process.env.DB_PATH ??
+      path.resolve(process.cwd(), "..", "data", "argentina-radar.db");
 
-    await execCmd(
-      `pg_dump -h 127.0.0.1 -U postgres -d argentinaradar -f "${backupFile}"`,
-      60_000,
-    );
+    const backupDir = path.resolve(process.cwd(), "data", "backups");
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const dest = path.join(backupDir, `argentina-radar-${timestamp}.db`);
+
+    fs.copyFileSync(dbPath, dest);
+
+    const sizeMB = (fs.statSync(dest).size / 1024 / 1024).toFixed(1);
 
     res.json({
       success: true,
-      message: `💾 Database backup completed successfully: ${backupFile}`,
+      message: `💾 Database backup completed: ${sizeMB} MB — ${dest}`,
     });
   } catch (err) {
     res.json({

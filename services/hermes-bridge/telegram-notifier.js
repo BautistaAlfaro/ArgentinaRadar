@@ -15,12 +15,21 @@ const os = require('os');
 const { addAlert, removeAlert, listAlerts, PROVINCES } = require('./alerts');
 const { sendMorningBriefing, checkAndSendBriefing } = require('./morning-briefing.js');
 const scheduleManager = require('../../shared/scheduleManager');
+const { buildCategoryPrompt } = require('../../shared/prompts.cjs');
+const fs = require('fs');
 const { MSG } = require('../../shared/messages.es');
 
 // ─── OpenRouter Image Generation (Gemini) ─────────────────────────────
 
-async function generateImageViaOpenRouter(prompt) {
+async function generateImageViaOpenRouter(prompt, articleId) {
   if (!OPENROUTER_KEY || OPENROUTER_KEY === 'your_openrouter_key') return null;
+
+  // Check cache first if articleId provided
+  if (articleId) {
+    const cached = readImageFromCache(articleId);
+    if (cached) return cached;
+  }
+
   try {
     const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -41,6 +50,10 @@ async function generateImageViaOpenRouter(prompt) {
     const b64 = img.image_url.url.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(b64, 'base64');
     console.log('[gemini] Generated image:', (buffer.length / 1024).toFixed(0) + 'KB');
+
+    // Save to cache if articleId provided
+    if (articleId) saveImageToCache(articleId, buffer);
+
     return { buffer, mimeType: 'image/png' };
   } catch (e) {
     console.warn('[gemini] Image generation failed:', e.message);
@@ -91,6 +104,48 @@ function b(t) { return '*' + escapeMd(t) + '*'; }
 function i(t) { return '_' + escapeMd(t) + '_'; }
 function link(d, u) { return '[' + escapeMd(d) + '](' + (u || '') + ')'; }
 
+// ─── Image Cache ────────────────────────────────────────────────────────
+
+function ensureImageCacheDir() {
+  if (!fs.existsSync(IMAGE_CACHE_DIR)) {
+    fs.mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+  }
+}
+
+function getImageCachePath(articleId) {
+  return path.join(IMAGE_CACHE_DIR, `${articleId}.png`);
+}
+
+function readImageFromCache(articleId) {
+  try {
+    const cachePath = getImageCachePath(articleId);
+    if (fs.existsSync(cachePath)) {
+      const stats = fs.statSync(cachePath);
+      if (Date.now() - stats.mtimeMs < 7 * 24 * 60 * 60 * 1000) {
+        const buffer = fs.readFileSync(cachePath);
+        console.log(`[cache] HIT ${articleId.slice(0, 8)} (${(buffer.length / 1024).toFixed(0)}KB)`);
+        return { buffer, mimeType: 'image/png' };
+      }
+      console.log(`[cache] EXPIRED ${articleId.slice(0, 8)} — older than 7 days`);
+    }
+    return null;
+  } catch (e) {
+    console.warn(`[cache] Read error ${articleId.slice(0, 8)}: ${e.message}`);
+    return null;
+  }
+}
+
+function saveImageToCache(articleId, buffer) {
+  try {
+    ensureImageCacheDir();
+    const cachePath = getImageCachePath(articleId);
+    fs.writeFileSync(cachePath, buffer);
+    console.log(`[cache] SAVED ${articleId.slice(0, 8)} (${(buffer.length / 1024).toFixed(0)}KB)`);
+  } catch (e) {
+    console.warn(`[cache] Write error ${articleId.slice(0, 8)}: ${e.message}`);
+  }
+}
+
 const DB_PATH = path.resolve(__dirname, '..', '..', 'data', 'argentina-radar.db');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 if (!BOT_TOKEN) { console.error('FATAL: TELEGRAM_BOT_TOKEN no configurado'); process.exit(1); }
@@ -98,6 +153,11 @@ const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const POLL_INTERVAL = 10000; // 10 seconds
 
 const db = new Database(DB_PATH);
+
+// ─── Image Provider Config ───────────────────────────────────────────
+
+const IMAGE_PROVIDER = (process.env.IMAGE_PROVIDER || 'auto').toLowerCase();
+const IMAGE_CACHE_DIR = path.resolve(__dirname, '..', '..', 'data', 'images');
 
 // ─── NanoBanana Prompt Builder ──────────────────────────────────────────
 
@@ -390,8 +450,15 @@ async function checkPendingApprovals() {
         `DELETE FROM approval_queue WHERE article_id = ? AND id != ? AND status = 'pending'`
       ).run(entry.article_id, entry.id);
 
-      // Build NanoBanana prompt + image URL (16:9 landscape for Bluesky)
+      // Build prompt + image URL
       const category = entry.category || 'general';
+
+      // Pre-cache Gemini image if configured (ready for when article is approved)
+      const geminiPrompt = buildCategoryPrompt(category, entry.title, entry.source);
+      if (IMAGE_PROVIDER === 'gemini' || IMAGE_PROVIDER === 'auto') {
+        generateImageViaOpenRouter(geminiPrompt, entry.article_id).catch(() => {});
+      }
+
       const nanoPrompt = await buildEnhancedPrompt(entry.title, entry.source, category);
       const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
@@ -647,7 +714,15 @@ async function handleBreakingCommand(title, source, chatId) {
     VALUES (?, ?, ?, 'approved', datetime('now'))
   `).run(queueId, articleId, draftTweet);
 
-  // 3. Generate NanoBanana image
+  // 3. Generate image using configured provider
+  const prompt = buildCategoryPrompt(category, title, source);
+
+  // Try Gemini for cache (non-blocking — doesn't delay the fast path)
+  if (IMAGE_PROVIDER === 'gemini' || IMAGE_PROVIDER === 'auto') {
+    generateImageViaOpenRouter(prompt, articleId).catch(() => {});
+  }
+
+  // Generate Pollinations URL for immediate Bluesky publish
   const nanoPrompt = await buildEnhancedPrompt(title, source, category);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1080&height=1350&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
@@ -1241,16 +1316,25 @@ async function checkCallbacks() {
           const rewrittenTitle = await maybeRewriteHeadline(article.title, article.source, article.category);
           const tweetText = formatBlueskyTweet(article.title, article.source, article.category, rewrittenTitle);
           
-          // Generate fresh image via Gemini + OpenRouter for Bluesky
-          const prompt = buildNanoBananaPrompt(article.title, article.source, article.category);
-          const geminiImg = await generateImageViaOpenRouter(prompt);
-          if (geminiImg) {
+          // Generate image using configured provider
+          const prompt = buildCategoryPrompt(article.category, article.title, article.source);
+          let blueskyImg = null;
+
+          if (IMAGE_PROVIDER === 'gemini' || IMAGE_PROVIDER === 'auto') {
+            blueskyImg = await generateImageViaOpenRouter(prompt, articleId);
+          }
+          if (!blueskyImg && (IMAGE_PROVIDER === 'pollinations' || IMAGE_PROVIDER === 'auto')) {
+            // Fallback to Pollinations image URL (already stored in DB)
+            console.log(`[bluesky] Using Pollinations image for ${articleId.slice(0, 8)}`);
+          }
+
+          if (blueskyImg) {
             // Upload Gemini image directly to Bluesky as blob
             try {
               const { BskyAgent } = require('@atproto/api');
               const agent = new BskyAgent({ service: 'https://bsky.social' });
               await agent.login({ identifier: 'sitearsdevs.bsky.social', password: process.env.BSKY_APP_PASSWORD });
-              const blob = await agent.uploadBlob(geminiImg.buffer, { encoding: geminiImg.mimeType });
+              const blob = await agent.uploadBlob(blueskyImg.buffer, { encoding: blueskyImg.mimeType });
               // Post with image embed directly
               const rt = new (require('@atproto/api').RichText)({ text: tweetText.slice(0, 300) });
               await rt.detectFacets(agent);
@@ -1311,6 +1395,111 @@ async function checkScheduledBriefing() {
     console.log('[scheduler] 8:00 AM — checking morning briefing...');
     await checkAndSendBriefing();
   }
+}
+
+// ─── Core Service Auto-Recovery ──────────────────────────────────────────
+
+/**
+ * In-memory tracking of core service downtime for /panel display.
+ *
+ * @type {Object<string, { firstDown: number | null, alerted: boolean }>}
+ */
+const serviceDowntime = {};
+
+let lastCoreCheck = 0;
+const CORE_CHECK_INTERVAL = 300000; // 5 minutes
+const DOWNTIME_ALERT_THRESHOLD = 600000; // 10 minutes
+
+const CORE_SERVICES = [
+  { name: 'news-ingestion', port: 3001 },
+  { name: 'publisher',      port: 3004 },
+  { name: 'admin',          port: 3012 },
+];
+
+/**
+ * Check core services every 5 minutes. If a service has been down for more
+ * than 10 consecutive minutes, send a Telegram alert.
+ *
+ * Tracks state in-memory in `serviceDowntime` for /panel queries.
+ * Never throws — all errors are caught and logged.
+ */
+async function checkCoreServicesHealth() {
+  const now = Date.now();
+  if (now - lastCoreCheck < CORE_CHECK_INTERVAL) return;
+  lastCoreCheck = now;
+
+  for (const svc of CORE_SERVICES) {
+    try {
+      const resp = await fetch(`http://127.0.0.1:${svc.port}/health`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        // Service is healthy — reset tracking
+        if (serviceDowntime[svc.name]?.firstDown !== null) {
+          const downMs = now - serviceDowntime[svc.name]?.firstDown;
+          console.log(`[recovery] ${svc.name} is back online after ${Math.round(downMs / 1000)}s`);
+        }
+        serviceDowntime[svc.name] = { firstDown: null, alerted: false };
+      } else {
+        // Service responded but with error status
+        if (!serviceDowntime[svc.name] || serviceDowntime[svc.name].firstDown === null) {
+          serviceDowntime[svc.name] = { firstDown: now, alerted: false };
+        }
+      }
+    } catch {
+      // Service is unreachable
+      if (!serviceDowntime[svc.name] || serviceDowntime[svc.name].firstDown === null) {
+        serviceDowntime[svc.name] = { firstDown: now, alerted: false };
+      }
+    }
+
+    // Check if we need to send an alert
+    const tracked = serviceDowntime[svc.name];
+    if (tracked && tracked.firstDown !== null && !tracked.alerted) {
+      const downDuration = now - tracked.firstDown;
+      if (downDuration >= DOWNTIME_ALERT_THRESHOLD) {
+        tracked.alerted = true;
+        const minutes = Math.round(downDuration / 60000);
+        console.log(`[recovery] ⚠️ ${svc.name} down for ${minutes} min — sending alert`);
+
+        try {
+          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: parseInt(CHAT_ID),
+              text: `⚠️ *Auto-Recovery — ${svc.name}*\n\nEl servicio lleva más de ${minutes} minutos sin responder.\n📌 Puerto: ${svc.port}\n🔧 Se requiere intervención manual.`,
+              parse_mode: 'Markdown',
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+        } catch (e) {
+          console.error(`[recovery] Failed to send alert: ${e.message}`);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Get the current service downtime map for /panel display.
+ * @returns {Object<string, { status: string, downSince: number | null, downMinutes: number, alerted: boolean }>}
+ */
+function getServiceDowntimeStatus() {
+  const now = Date.now();
+  const result = {};
+  for (const svc of CORE_SERVICES) {
+    const tracked = serviceDowntime[svc.name];
+    const isDown = tracked && tracked.firstDown !== null;
+    result[svc.name] = {
+      status: isDown ? 'down' : 'running',
+      port: svc.port,
+      downSince: tracked?.firstDown ?? null,
+      downMinutes: isDown ? Math.round((now - tracked.firstDown) / 60000) : 0,
+      alerted: tracked?.alerted ?? false,
+    };
+  }
+  return result;
 }
 
 // ─── Schedule Processor ────────────────────────────────────────────────
@@ -1458,7 +1647,7 @@ async function handlePanelCallback(a, chatId, msgId) {
       case 'publish': { const s = getPipelineStats(); let st = 'Sin programaciones.'; try { const as = scheduleManager.getScheduledPosts().filter(p => p.status === 'scheduled').slice(0, 5); if (as.length) st = as.map(p => '• #' + p.id + ' ' + new Date(p.scheduled_for).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }) + ' — ' + escapeMd(p.text.substring(0, 40))).join('\n'); } catch (e) {} await em('🚀 *Panel de PUBLICACIÓN*\n\nBluesky: 🟢 OK\nPublicados hoy: ' + b('' + s.todayPublished) + '\nProgramados: ' + b('' + s.scheduledCount) + '\n\n📅 ' + st, { inline_keyboard: [[{ text: '📤 Publicar borrador', callback_data: 'panel:publish-draft' }], [{ text: '⏰ Programados', callback_data: 'panel:publish-scheduled' }], [{ text: '🔄 Reintentar fallidos', callback_data: 'panel:publish-retry' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
       case 'monitor': { const sys = getSystemInfo(); const ps = [{ n: 'news-ingestion', p: 3001 }, { n: 'geo', p: 3002 }, { n: 'publisher', p: 3004 }, { n: 'ai', p: 3013 }, { n: 'admin', p: 3012 }, { n: 'frontend', p: 5173 }]; const res = await Promise.all(ps.map(p => checkSvc(p.n, p.p))); const svc = res.map(r => (r.s === 'ok' ? '🟢' : r.s === 'deg' ? '🟡' : '🔴') + ' ' + r.n + ' (' + r.p + ')').join('\n'); await em('📊 *Panel de MONITOREO*\n\n🖥️ CPU: ' + sys.cpuPct + '% (' + sys.cpuCores + 'c) | RAM: ' + sys.memUsed + 'GB/' + sys.memTotal + 'GB (' + sys.memPct + '%) | Up: ' + sys.uptimeStr + '\n\n🌐 *Servicios*\n' + svc, { inline_keyboard: [[{ text: '🩺 Health check', callback_data: 'panel:health-detail' }], [{ text: '📈 Stats', callback_data: 'panel:stats-detail' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
       case 'config': { const s = getPipelineStats(); const al = listAlerts(chatId); await em('⚙️ *Panel de CONFIGURACIÓN*\n\n📡 Fuentes: ' + b('' + s.sources) + '\n🔔 Alertas: ' + b('' + al.length) + '\n💾 Backup DB\n🔄 Reiniciar servicios', { inline_keyboard: [[{ text: '📡 Fuentes (' + s.sources + ')', callback_data: 'panel:cfg-sources' }], [{ text: '🔔 Alertas (' + al.length + ')', callback_data: 'panel:cfg-alerts' }], [{ text: '💾 Backup DB', callback_data: 'panel:cfg-backup' }], [{ text: '🔄 Reiniciar', callback_data: 'panel:cfg-restart' }], [{ text: '🤖 Cambiar modelo', callback_data: 'panel:ai-model' }], [{ text: '🔙 Volver', callback_data: 'panel:main' }]] }); break; }
-      case 'ing-refresh': { await em('⏳ Refrescando...', { inline_keyboard: [] }); try { const r = await fetch('http://127.0.0.1:3001/api/pipeline/stats', { signal: AbortSignal.timeout(5000) }); if (r.ok) await em('✅ Refresh completado. Pipeline activo.', { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); else await em('⚠️ Refresh solicitado.', { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
+      case 'ing-refresh': { await em('⏳ Forzando refresh RSS...', { inline_keyboard: [] }); try { const r = await fetch('http://127.0.0.1:3012/api/admin/actions/refresh-rss', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000) }); const data = await r.json().catch(() => ({})); if (data.success) await em('✅ ' + escapeMd(data.message || 'RSS refresh completado.'), { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); else await em('⚠️ ' + escapeMd(data.message || 'Refresh solicitado.'), { inline_keyboard: [[{ text: '🔄 Panel', callback_data: 'panel:main' }]] }); } catch (e) { await em('⚠️ ' + escapeMd(e.message), { inline_keyboard: [[{ text: '🔙 Panel', callback_data: 'panel:main' }]] }); } break; }
       case 'ing-pause': { await em('⏸️ *Pausa*\n\nPara pausar: `pm2 stop news-ingestion`\nPara reanudar: `pm2 start news-ingestion`', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ingestion' }]] }); break; }
       case 'ai-threshold': { await em('⚙️ *Threshold*\n\nActual: 5.0 | Calidad min: 40\n\nEditá `config/.env`:\nAI_THRESHOLD=5.0\nMIN_QUALITY_THRESHOLD=40\n\nLuego `pm2 restart ai-processor`', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ai' }]] }); break; }
       case 'ai-model': { await em('🤖 *Modelo AI*\n\nActual: qwen2.5:7b\n\nOpciones:\n• qwen2.5:7b\n• llama3\n• llama3.1\n• openrouter\n\nEditá AI_MODEL en config/.env y reiniciá.', { inline_keyboard: [[{ text: '🔙 Volver', callback_data: 'panel:ai' }]] }); break; }
@@ -1490,6 +1679,7 @@ async function main() {
     try { await checkCallbacks(); } catch (e) { console.error('[main] Callbacks:', e.message); }
     try { await checkScheduledBriefing(); } catch (e) { console.error('[main] Briefing:', e.message); }
     try { await processScheduledPosts(); } catch (e) { console.error('[main] Scheduler:', e.message); }
+    try { await checkCoreServicesHealth(); } catch (e) { console.error('[main] Core services:', e.message); }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 }

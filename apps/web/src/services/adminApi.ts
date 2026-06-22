@@ -164,24 +164,34 @@ async function fetchWithFallback<T>(
 // ─── Public API ──────────────────────────────────────────────────────
 
 export async function fetchKPIs(range: string): Promise<KPIData> {
-  // Always use mock data — real API format differs
-  return MOCK_KPIS[range] ?? MOCK_KPIS['7d'];
+  return fetchWithFallback(
+    `${ADMIN_API}/api/admin/kpis?range=${range}`,
+    MOCK_KPIS[range] ?? MOCK_KPIS['7d'],
+  );
 }
 
 export async function fetchDailyStats(range: string): Promise<DailyStat[]> {
-  // Always use mock — real API format differs
-  return generateDailyStats(range === '90d' ? 90 : range === '30d' ? 30 : 7);
+  return fetchWithFallback(
+    `${ADMIN_API}/api/admin/daily-stats?range=${range}`,
+    generateDailyStats(range === '90d' ? 90 : range === '30d' ? 30 : 7),
+  );
 }
 
 export async function fetchSystemMetrics(
   _service?: string,
   _range?: string,
 ): Promise<SystemMetric[]> {
-  return MOCK_SYSTEM_METRICS;
+  return fetchWithFallback(
+    `${ADMIN_API}/api/admin/system-metrics`,
+    MOCK_SYSTEM_METRICS,
+  );
 }
 
 export async function fetchRevenueData(): Promise<RevenuePoint[]> {
-  return generateRevenue(90);
+  return fetchWithFallback(
+    `${ADMIN_API}/api/admin/revenue`,
+    generateRevenue(90),
+  );
 }
 
 // ─── Quality Stats ───────────────────────────────────────────────────
@@ -551,7 +561,8 @@ export async function fetchServices(): Promise<ServicesResponse> {
  * Start a service by name.
  * Throws on failure — caller must handle errors.
  */
-export async function startService(name: string): Promise<ServiceActionResponse> {
+/** @internal */
+async function startService(name: string): Promise<ServiceActionResponse> {
   return authFetch<ServiceActionResponse>(
     `${ADMIN_API}/api/admin/services/${encodeURIComponent(name)}/start`,
     { method: 'POST' },
@@ -562,7 +573,8 @@ export async function startService(name: string): Promise<ServiceActionResponse>
  * Stop a service by name.
  * Throws on failure — caller must handle errors.
  */
-export async function stopService(name: string): Promise<ServiceActionResponse> {
+/** @internal */
+async function stopService(name: string): Promise<ServiceActionResponse> {
   return authFetch<ServiceActionResponse>(
     `${ADMIN_API}/api/admin/services/${encodeURIComponent(name)}/stop`,
     { method: 'POST' },
@@ -572,7 +584,8 @@ export async function stopService(name: string): Promise<ServiceActionResponse> 
 /**
  * Start all services via PM2.
  */
-export async function startAllServices(): Promise<ServiceActionResponse> {
+/** @internal */
+async function startAllServices(): Promise<ServiceActionResponse> {
   return authFetch<ServiceActionResponse>(
     `${ADMIN_API}/api/admin/services/start-all`,
     { method: 'POST' },
@@ -582,7 +595,8 @@ export async function startAllServices(): Promise<ServiceActionResponse> {
 /**
  * Stop all services (excluding admin itself) via PM2.
  */
-export async function stopAllServices(): Promise<ServiceActionResponse> {
+/** @internal */
+async function stopAllServices(): Promise<ServiceActionResponse> {
   return authFetch<ServiceActionResponse>(
     `${ADMIN_API}/api/admin/services/stop-all`,
     { method: 'POST' },
