@@ -11,8 +11,6 @@ import { useKPIs, useDailyStats, useSystemMetrics, useRevenue, usePipelineStats,
 import { ServiceCards } from '../components/admin/ServiceCards';
 import { QualityMetrics } from '../components/admin/QualityMetrics';
 import { LogViewer } from '../components/admin/LogViewer';
-
-// Lazy-load admin components (kept for legacy overview tab)
 const KPICard = lazy(() => import('../components/admin/KPICard').then(m => ({ default: m.KPICard })));
 const PipelineView = lazy(() => import('../components/admin/PipelineView').then(m => ({ default: m.PipelineView })));
 const CategoryChart = lazy(() => import('../components/admin/CategoryChart').then(m => ({ default: m.CategoryChart })));
@@ -30,7 +28,6 @@ const PoliticalRadar = lazy(() => import('../components/admin/PoliticalRadar').t
 const MorningBriefing = lazy(() => import('../components/admin/MorningBriefing').then(m => ({ default: m.MorningBriefing })));
 const ServiceControlPanel = lazy(() => import('../components/admin/ServiceControlPanel').then(m => ({ default: m.ServiceControlPanel })));
 const SourceManager = lazy(() => import('../components/admin/SourceManager').then(m => ({ default: m.SourceManager })));
-const TrendingTopics = lazy(() => import('../components/admin/TrendingTopics').then(m => ({ default: m.TrendingTopics })));
 
 // ─── Suspense fallbacks ──────────────────────────────────────────
 const EMPTY_ARRAY: [] = [];
@@ -40,7 +37,7 @@ function LoadingSkeleton({ className }: { className?: string }) {
 }
 
 type Range = '7d' | '30d' | '90d';
-type Tab = 'control-center' | 'overview' | 'briefing' | 'trending' | 'quality' | 'sources';
+type Tab = 'control-center' | 'overview' | 'quality' | 'sources' | 'logs';
 
 const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: '7d', label: '7 days' },
@@ -50,11 +47,10 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
 
 const TABS: { value: Tab; label: string; icon: string }[] = [
   { value: 'control-center', label: 'Panel de Control', icon: 'terminal' },
-  { value: 'overview', label: 'Overview', icon: 'monitoring' },
-  { value: 'briefing', label: 'Morning Briefing', icon: 'sunny' },
-  { value: 'trending', label: 'Trending', icon: 'trending_up' },
+  { value: 'overview', label: 'Estadísticas', icon: 'monitoring' },
   { value: 'quality', label: 'Quality', icon: 'star' },
   { value: 'sources', label: 'Fuentes', icon: 'rss_feed' },
+  { value: 'logs', label: 'Logs', icon: 'list' },
 ];
 
 // Inline SVG icons (lucide-compatible style)
@@ -325,22 +321,6 @@ export function AdminDashboard() {
           </div>
           )}
 
-          {activeTab === 'briefing' && (
-            <div>
-              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
-                <MorningBriefing />
-              </Suspense>
-            </div>
-          )}
-
-          {activeTab === 'trending' && (
-            <div>
-              <Suspense fallback={<LoadingSkeleton className="h-96" />}>
-                <TrendingTopics />
-              </Suspense>
-            </div>
-          )}
-
           {activeTab === 'quality' && (
             <div>
               <QualityMetrics />
@@ -352,6 +332,12 @@ export function AdminDashboard() {
               <Suspense fallback={<LoadingSkeleton className="h-96" />}>
                 <SourceManager />
               </Suspense>
+            </div>
+          )}
+
+          {activeTab === 'logs' && (
+            <div>
+              <LogViewer />
             </div>
           )}
 

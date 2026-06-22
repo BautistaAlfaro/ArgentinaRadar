@@ -284,6 +284,12 @@ export function ControlCenter() {
         {/* ── LEFT COLUMN ─────────────────────────────────── */}
         <div className="overflow-y-auto pr-4 lg:border-r lg:border-white/10 space-y-3 pb-4">
 
+          {/* Telegram Bot Hint */}
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 flex items-center gap-2 text-xs">
+            <span className="material-symbols-outlined text-blue-400 text-base">info</span>
+            <span className="text-blue-300">Controlá el pipeline desde Telegram: <span className="text-white font-mono">/panel</span> — También: <span className="text-white font-mono">/breaking</span> <span className="text-white font-mono">/search</span> <span className="text-white font-mono">/briefing</span> <span className="text-white font-mono">/alert</span></span>
+          </div>
+
           {/* Mini stats bar */}
           <MiniPipeStats pipeline={pipeData} />
 
