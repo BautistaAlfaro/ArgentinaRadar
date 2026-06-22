@@ -73,7 +73,7 @@ const PHASES: PhaseDef[] = [
     colorBorder: 'border-sky-500/30',
     getCount: (s) => {
       if (!s) return '...';
-      return `${s.totalArticles} arts · ${s.totalSources} fuentes`;
+      return `${s.totalArticles} en DB · ${s.totalSources} fuentes`;
     },
   },
   {
@@ -85,7 +85,7 @@ const PHASES: PhaseDef[] = [
     colorBorder: 'border-amber-500/30',
     getCount: (s) => {
       if (!s) return '...';
-      return `${s.aiModel} · th: ${s.aiThreshold}`;
+      return `${s.ingestedToday} hoy · ${s.aiModel}`;
     },
   },
   {
@@ -97,9 +97,14 @@ const PHASES: PhaseDef[] = [
     colorBorder: 'border-emerald-500/30',
     getCount: (s) => {
       if (!s) return '...';
-      return `${s.pendingApproval} pend.`;
+      const isAuto = s.pendingApproval === 0 && s.publishedToday > 0;
+      return isAuto ? '0 (auto)' : `${s.pendingApproval} pend.`;
     },
-    badge: (s) => s?.pendingApproval ?? null,
+    badge: (s) => {
+      if (!s) return null;
+      // In auto mode, don't show badge
+      return s.pendingApproval > 0 ? s.pendingApproval : null;
+    },
   },
   {
     key: 'publish',

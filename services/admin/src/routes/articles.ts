@@ -596,6 +596,73 @@ articlesRouter.post('/ai/threshold', (req, res) => {
   }
 });
 
+// ── GET /api/admin/sessions ─────────────────────────────────────────────
+// Returns all session summaries ordered by most recent first
+
+articlesRouter.get('/sessions', (_req, res) => {
+  try {
+    const sessions = withDb((db) => {
+      return db.prepare(
+        `SELECT id, started_at, ended_at, articles_processed, articles_published,
+                articles_failed, images_generated, status
+         FROM session_summaries
+         ORDER BY id DESC
+         LIMIT 50`
+      ).all();
+    });
+    res.json({ sessions });
+  } catch (err) {
+    console.error('[articles] GET /sessions error:', (err as Error).message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── GET /api/admin/sessions/current ─────────────────────────────────────
+// Returns the current running session, if any
+
+articlesRouter.get('/sessions/current', (_req, res) => {
+  try {
+    const current = withDb((db) => {
+      return db.prepare(
+        `SELECT id, started_at, ended_at, articles_processed, articles_published,
+                articles_failed, images_generated, status
+         FROM session_summaries
+         WHERE status = 'running'
+         ORDER BY id DESC
+         LIMIT 1`
+      ).get() || null;
+    });
+
+    if (!current) {
+      res.json({ session: null });
+      return;
+    }
+
+    // Calculate elapsed time and estimated ETA
+    const started = new Date(current.started_at + 'Z').getTime();
+    const elapsed = Date.now() - started;
+    const elapsedMinutes = Math.floor(elapsed / 60000);
+    const elapsedSeconds = Math.floor((elapsed % 60000) / 1000);
+
+    // Estimate articles per minute pace
+    const pace = elapsed > 0
+      ? Math.round((current.articles_processed / elapsed) * 60000)
+      : 0;
+
+    res.json({
+      session: {
+        ...current,
+        elapsed_minutes: elapsedMinutes,
+        elapsed_seconds: elapsedSeconds,
+        pace: pace, // articles per minute
+      },
+    });
+  } catch (err) {
+    console.error('[articles] GET /sessions/current error:', (err as Error).message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ── POST /api/admin/ai/reprocess ──────────────────────────────────────
 // Triggers reprocessing of articles via the news-ingestion service
 

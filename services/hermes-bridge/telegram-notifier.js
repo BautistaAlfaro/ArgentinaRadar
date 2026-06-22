@@ -18,6 +18,7 @@ const scheduleManager = require('../../shared/scheduleManager');
 const { buildCategoryPrompt } = require('../../shared/prompts.cjs');
 const fs = require('fs');
 const { MSG } = require('../../shared/messages.es');
+const { runAutoCleanup } = require('./autoCleanup');
 
 // ─── OpenRouter Image Generation (Gemini) ─────────────────────────────
 
@@ -431,6 +432,8 @@ async function sendPhoto(caption, imageUrl, keyboard) {
 }
 
 async function checkPendingApprovals() {
+  // Skip Telegram approval when using dashboard or auto mode
+  if (process.env.APPROVAL_MODE === 'dashboard' || process.env.APPROVAL_MODE === 'auto') return;
   try {
     const pending = db.prepare(
       `SELECT aq.id, aq.article_id, aq.draft_tweet, n.title, n.source, n.category, n.url
@@ -1671,15 +1674,20 @@ async function handlePanelCallback(a, chatId, msgId) {
 
 // Main loop
 async function main() {
+  const isAutoMode = process.env.APPROVAL_MODE === 'auto';
   console.log('Telegram Approval Notifier started');
+  if (isAutoMode) console.log('⚠️  APPROVAL_MODE=auto — approval notifications disabled');
   console.log(`Bot: @ArgRadarBot | Chat: ${CHAT_ID}`);
   console.log(`Polling every ${POLL_INTERVAL / 1000}s`);
   while (true) {
-    try { await checkPendingApprovals(); } catch (e) { console.error('[main] Pending approvals:', e.message); }
+    if (!isAutoMode) {
+      try { await checkPendingApprovals(); } catch (e) { console.error('[main] Pending approvals:', e.message); }
+    }
     try { await checkCallbacks(); } catch (e) { console.error('[main] Callbacks:', e.message); }
     try { await checkScheduledBriefing(); } catch (e) { console.error('[main] Briefing:', e.message); }
     try { await processScheduledPosts(); } catch (e) { console.error('[main] Scheduler:', e.message); }
     try { await checkCoreServicesHealth(); } catch (e) { console.error('[main] Core services:', e.message); }
+    try { await runAutoCleanup(); } catch (e) { console.error('[main] AutoCleanup:', e.message); }
     await new Promise(r => setTimeout(r, POLL_INTERVAL));
   }
 }

@@ -66,6 +66,9 @@ const NIGHT_BATCH_SIZE = parseInt(process.env.NIGHT_BATCH_SIZE ?? '20', 10);
 const NIGHT_AUTO_APPROVE_QUALITY = parseInt(process.env.NIGHT_AUTO_APPROVE_QUALITY ?? '70', 10);
 const MORNING_REPORT_HOUR_ART = parseInt(process.env.MORNING_REPORT_HOUR ?? '6', 10);
 
+// ─── Auto-Publish All (night mode / batch mode) ─────────────────────────
+const AUTO_PUBLISH_ALL = process.env.AUTO_PUBLISH_ALL === 'true';
+
 // ─── High-Impact Auto-Publish ──────────────────────────────────────────
 const AUTO_PUBLISH_THRESHOLD = parseInt(process.env.AUTO_PUBLISH_THRESHOLD ?? '80', 10);
 const MIN_QUALITY_THRESHOLD = parseInt(process.env.MIN_QUALITY_THRESHOLD ?? '40', 10);
@@ -640,6 +643,13 @@ async function processBatch(): Promise<void> {
               const isPrioritySource = ['clarin', 'lanacion', 'infobae'].includes(sourceLower);
 
               // Determine auto-publish disposition
+              //
+              // Priority 0: AUTO_PUBLISH_ALL=true → publish EVERYTHING directly
+              // Priority 1: quality > 80 AND urgente → immediate publish
+              // Priority 2: quality > 70 AND (politica|economia) → night mode auto-approve
+              // Priority 3: clarin|lanacion|infobae AND quality > 60 → priority queue
+              //
+              const shouldAutoPublishAll = AUTO_PUBLISH_ALL;
               const shouldAutoPublish = impact >= AUTO_PUBLISH_THRESHOLD || isUrgent;
               const shouldNightAutoApprove =
                 isNight && qualityScore > NIGHT_AUTO_APPROVE_QUALITY;
@@ -648,8 +658,9 @@ async function processBatch(): Promise<void> {
               const shouldPriorityQueue =
                 isPrioritySource && qualityScore > 60;
 
-              if (shouldAutoPublish) {
-                // Rule: quality > 80 AND urgente → immediate (or high AI impact)
+              if (shouldAutoPublishAll || shouldAutoPublish) {
+                // Rule: AUTO_PUBLISH_ALL overrides everything — publish all articles directly
+                // Falls back to high-impact auto-publish rules if AUTO_PUBLISH_ALL is false
                 await autoPublishArticle(article, aiResult);
                 if (isNight) nightProcessedCount++;
                 processedCount++;
@@ -708,20 +719,54 @@ async function processBatch(): Promise<void> {
               increment('articles_rejected');
             }
           } else {
-            // AI not available — set all to pending_approval for manual review
-            const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
-            const queueId = `q_${article.id.slice(0, 12)}`;
+            if (AUTO_PUBLISH_ALL) {
+              // AUTO_PUBLISH_ALL: publish even without AI filter (best-effort)
+              const tweetText = formatBlueskyTweet(article.title, article.source, article.category || 'general');
+              const queueId = `q_${article.id.slice(0, 12)}`;
+              const nanoPrompt = buildNanoBananaPrompt(article.title, article.source, article.category || 'general');
+              const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(nanoPrompt)}?width=1280&height=720&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
 
-            d.prepare(
-              `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status)
-               VALUES (?, ?, ?, 'pending')`
-            ).run(queueId, article.id, draftTweet);
+              d.prepare(
+                `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, image_url, image_prompt, status, reviewed_at)
+                 VALUES (?, ?, ?, ?, ?, 'approved', datetime('now'))`
+              ).run(queueId, article.id, tweetText, imageUrl, nanoPrompt);
 
-            d.prepare('UPDATE news_items SET status = ? WHERE id = ?')
-              .run('pending_approval', article.id);
+              d.prepare("UPDATE news_items SET status = ? WHERE id = ?")
+                .run('auto_published', article.id);
 
-            logger.warn('AI unavailable — article pending approval', { articleId: article.id.slice(0, 8) });
-            processedCount++;
+              try {
+                const pubResp = await fetch(`${TWITTER_PUBLISHER_URL}/api/publish-text`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ article_id: article.id, text: tweetText, image_url: imageUrl }),
+                  signal: AbortSignal.timeout(15_000),
+                });
+                const pubResult: Record<string, unknown> = await pubResp.json();
+                if (pubResult.success) {
+                  logger.info('AUTO-PUBLISHED (no AI filter)', { articleId: article.id.slice(0, 8) });
+                } else {
+                  logger.warn('Auto-publish failed (no AI filter)', { articleId: article.id.slice(0, 8), error: pubResult.error });
+                }
+              } catch (e) {
+                logger.warn('Auto-publish network error (no AI filter)', { articleId: article.id.slice(0, 8), error: (e as Error).message });
+              }
+              processedCount++;
+            } else {
+              // AI not available — set all to pending_approval for manual review
+              const draftTweet = `🇦🇷 ${article.title.slice(0, 250)} | 📰 ${article.source} #ArgentinaRadar`;
+              const queueId = `q_${article.id.slice(0, 12)}`;
+
+              d.prepare(
+                `INSERT OR IGNORE INTO approval_queue (id, article_id, draft_tweet, status)
+                 VALUES (?, ?, ?, 'pending')`
+              ).run(queueId, article.id, draftTweet);
+
+              d.prepare('UPDATE news_items SET status = ? WHERE id = ?')
+                .run('pending_approval', article.id);
+
+              logger.warn('AI unavailable — article pending approval', { articleId: article.id.slice(0, 8) });
+              processedCount++;
+            }
           }
         } catch (e) {
           logger.error('AI filter error', { articleId: article.id.slice(0, 8), error: (e as Error).message });
