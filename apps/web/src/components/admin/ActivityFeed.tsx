@@ -139,11 +139,11 @@ export function ActivityFeed({ items, isLoading }: ActivityFeedProps) {
           <h3 className="text-sm font-semibold text-white tracking-tight">
             Recent Activity
           </h3>
-          <span className="text-[11px] text-slate-500">{items.length} articles</span>
+          <span className="text-[11px] text-slate-500">{Math.min(items.length, 5)} de {items.length}</span>
         </div>
 
         <div className="divide-y divide-slate-700/30">
-          {items.map((item, idx) => (
+          {items.slice(0, 5).map((item, idx) => (
             <ActivityRow key={item.id} item={item} index={idx} />
           ))}
         </div>
